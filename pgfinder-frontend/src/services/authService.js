@@ -6,7 +6,7 @@ const authService = {
     const res = await authApi.login(credentials)
     // backend responds with { result: "success"|"fail", msg: string, data: <user|null> }
     if (res && (res.result === 'success' || res.result === 'login Successfully')) {
-      return { token: null, user: res.data }
+      return { token: null, user: res.data || res.user }
     }
     const message = res?.msg || 'Login failed'
     const err = new Error(message)

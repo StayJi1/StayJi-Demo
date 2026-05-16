@@ -26,28 +26,38 @@ const readStoredAuth = () => {
   }
 }
 
+const normalizeRole = (rawRole) => {
+  if (!rawRole) return 'user'
+  const normalized = rawRole.toString().trim().toLowerCase()
+  const roleMap = {
+    personal: 'user',
+    student: 'user',
+    user: 'user',
+    owner: 'vendor',
+    host: 'vendor',
+    hostel: 'vendor',
+    vendor: 'vendor',
+    admin: 'admin',
+  }
+  return roleMap[normalized] || normalized
+}
+
 const normalizeUser = (user) => {
   if (!user) return user
   const firstName = user.firstName || user.userFname || user.userName || ''
   const lastName = user.lastName || user.userLname || ''
   const name = user.name || [firstName, lastName].filter(Boolean).join(' ') || user.userEmail || ''
   const rawRole = (user.role || user.userType || '').toString().toLowerCase()
-  const role = rawRole === 'personal' ? 'user' : rawRole === 'owner' ? 'vendor' : rawRole
+  const role = normalizeRole(rawRole)
   return { ...user, firstName, lastName, name, role }
 }
 
 export const AuthProvider = ({ children }) => {
   const storedAuth = readStoredAuth()
   const storedUser = storedAuth?.user ? normalizeUser(storedAuth.user) : null
-  const [user, setUser] = useState(() => {
-    return storedUser
-  })
-  const [token, setToken] = useState(() => {
-    return storedAuth?.token || null
-  })
-  const [role, setRole] = useState(() => {
-    return storedAuth?.role || storedUser?.role || 'user'
-  })
+  const [user, setUser] = useState(() => storedUser)
+  const [token, setToken] = useState(() => storedAuth?.token || null)
+  const [role, setRole] = useState(() => normalizeRole(storedAuth?.role || storedUser?.role || 'user'))
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState(null)
 

@@ -21,13 +21,20 @@ function LoginPage() {
     setForm((current) => ({ ...current, [name]: value }))
   }
 
+  const normalizeRole = (value) => {
+    const rawRole = value?.toString().toLowerCase() || 'user'
+    if (['owner', 'host', 'hostel'].includes(rawRole)) return 'vendor'
+    if (['personal', 'student'].includes(rawRole)) return 'user'
+    return rawRole
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     try {
       const response = await login(form)
       const rawRole = response.user?.role || response.user?.userType?.toLowerCase() || form.role
-      const actualRole = rawRole === 'owner' ? 'vendor' : rawRole
-      navigate(`/dashboard/${actualRole}`)
+      const actualRole = normalizeRole(rawRole)
+      navigate(`/dashboard/${actualRole}`, { replace: true })
     } catch {
       // handled in context
     }
@@ -45,6 +52,19 @@ function LoginPage() {
           <div className="grid gap-4">
             <Input label="Email" type="email" name="email" value={form.email} onChange={handleChange} required />
             <Input label="Password" type="password" name="password" value={form.password} onChange={handleChange} required />
+            <label className="block text-sm font-medium text-slate-200">
+              Account type
+              <select
+                name="role"
+                value={form.role}
+                onChange={handleChange}
+                className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm text-slate-200 outline-none transition focus:border-brand-500"
+              >
+                <option value="user">Student / User</option>
+                <option value="vendor">Host / Vendor</option>
+                <option value="admin">Admin</option>
+              </select>
+            </label>
           </div>
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}
           <Button type="submit" className="w-full">{status === 'loading' ? 'Signing in…' : 'Continue'}</Button>

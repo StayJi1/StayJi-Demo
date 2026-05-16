@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { FiHeart, FiMapPin, FiStar } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import propertyService from '../../services/propertyService'
+import { formatDistance } from '../../utils/distance'
 
 function PropertyCard({ property }) {
   const { user, isAuthenticated } = useAuth()
@@ -47,7 +48,7 @@ function PropertyCard({ property }) {
       <div className="space-y-4 p-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-accent-500">{property.type || 'PG / Hostel'}</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-accent-500">{property.category || property.type || 'PG'}</p>
             <h3 className="mt-2 text-xl font-semibold text-white">{property.name}</h3>
           </div>
           <button
@@ -65,12 +66,18 @@ function PropertyCard({ property }) {
         <div className="flex items-center gap-2 text-sm text-slate-400">
           <FiMapPin className="h-4 w-4" />
           <span>{property.locationLabel || property.city}</span>
+          {property.distanceKm !== undefined ? <span>• {formatDistance(property.distanceKm)}</span> : null}
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <span className="rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">{property.gender || 'Co-ed'}</span>
           <span className="rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">{property.rent ? `₹${property.rent}/mo` : '₹8,500'}</span>
-          <span className="rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">{property.foodIncluded ? 'Food included' : 'No food'}</span>
+          <span className="rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">{property.depositAmount ? `₹${property.depositAmount} deposit` : 'No deposit'}</span>
         </div>
+        {property.perDayCheckIn ? (
+          <p className="rounded-3xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+            Per-day check-in available{property.dailyRate ? ` at ₹${property.dailyRate}/day` : ''}
+          </p>
+        ) : null}
         <div className="flex items-center justify-between gap-3 text-slate-300">
           <div className="inline-flex items-center gap-2 text-sm">
             <FiStar className="text-amber-400" />

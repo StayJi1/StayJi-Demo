@@ -13,7 +13,9 @@ const navItems = [
 function Navbar() {
   const [open, setOpen] = useState(false)
   const { isAuthenticated, logout, role } = useAuth()
-  const dashboardRole = role || 'user'
+  const dashboardRole = ['owner', 'host', 'hostel'].includes(role)
+    ? 'vendor'
+    : role || 'user'
   const visibleNavItems = isAuthenticated ? navItems.filter((item) => !['/login', '/signup'].includes(item.to)) : navItems
 
   return (

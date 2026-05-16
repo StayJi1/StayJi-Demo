@@ -52,7 +52,18 @@ function SignupPage() {
                 Creating a vendor account for listing PGs.
               </div>
             ) : (
-              <input type="hidden" name="role" value="user" />
+              <label className="block text-sm text-slate-200">
+                Account type
+                <select
+                  name="role"
+                  value={form.role}
+                  onChange={handleChange}
+                  className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400"
+                >
+                  <option value="user">Student / User</option>
+                  <option value="vendor">Host / Vendor</option>
+                </select>
+              </label>
             )}
           </div>
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}

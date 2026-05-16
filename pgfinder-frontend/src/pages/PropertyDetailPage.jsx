@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FiArrowLeft, FiClock, FiMapPin, FiPhone, FiShield } from 'react-icons/fi'
-import { GoogleMap, MarkerF, useLoadScript } from '@react-google-maps/api'
 import Loader from '../components/common/Loader'
 import Button from '../components/common/Button'
+import PropertyMap from '../components/map/PropertyMap'
 import propertyService from '../services/propertyService'
 import { useAuth } from '../context/AuthContext'
+import useCurrentLocation from '../hooks/useCurrentLocation'
+import { formatDistance, getDistanceKm } from '../utils/distance'
 
 function PropertyDetailPage() {
   const { id } = useParams()
@@ -13,7 +15,7 @@ function PropertyDetailPage() {
   const [property, setProperty] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const { isLoaded } = useLoadScript({ googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '' })
+  const { position, loading: locationLoading, error: locationError, hasUserLocation, requestLocation } = useCurrentLocation()
 
   useEffect(() => {
     const loadProperty = async () => {
@@ -76,6 +78,7 @@ function PropertyDetailPage() {
     lat: property.location?.lat || 19.07598,
     lng: property.location?.lng || 72.87766,
   }
+  const distanceKm = hasUserLocation ? getDistanceKm(position, coordinates) : null
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -94,12 +97,25 @@ function PropertyDetailPage() {
               alt={property.name}
               className="h-96 w-full object-cover"
             />
+            {(property.images || []).length > 1 ? (
+              <div className="grid grid-cols-3 gap-2 bg-slate-950 p-2 sm:grid-cols-4">
+                {property.images.slice(1, 5).map((image) => (
+                  <img key={image} src={image} alt={property.name} className="h-24 w-full rounded-2xl object-cover" />
+                ))}
+              </div>
+            ) : null}
           </div>
+
+          {property.videoUrl ? (
+            <div className="overflow-hidden rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-4 shadow-card">
+              <video src={property.videoUrl} controls className="max-h-[420px] w-full rounded-[1.5rem] bg-slate-950" />
+            </div>
+          ) : null}
 
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm uppercase tracking-[0.28em] text-accent-400">{property.type || 'PG / Hostel'}</p>
+                <p className="text-sm uppercase tracking-[0.28em] text-accent-400">{property.category || property.type || 'PG'}</p>
                 <h1 className="mt-3 text-4xl font-semibold text-white">{property.name}</h1>
               </div>
               <p className="rounded-3xl bg-brand-500/10 px-5 py-3 text-2xl font-semibold text-brand-100">₹{property.rent || '8,500'}/mo</p>
@@ -112,6 +128,16 @@ function PropertyDetailPage() {
               <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
                 <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Food</p>
                 <p className="mt-2 text-base text-white">{property.foodIncluded ? 'Included' : 'Optional'}</p>
+              </div>
+              <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
+                <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Deposit</p>
+                <p className="mt-2 text-base text-white">₹{property.depositAmount || '0'}</p>
+              </div>
+              <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
+                <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Daily stay</p>
+                <p className="mt-2 text-base text-white">
+                  {property.perDayCheckIn ? `Available${property.dailyRate ? ` at ₹${property.dailyRate}/day` : ''}` : 'Not available'}
+                </p>
               </div>
             </div>
             <div className="mt-8 space-y-4 text-slate-300">
@@ -159,19 +185,21 @@ function PropertyDetailPage() {
         <aside className="space-y-6">
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
             <p className="text-sm uppercase tracking-[0.28em] text-accent-500">Location</p>
+            {distanceKm !== null ? <p className="mt-3 text-sm text-slate-300">{formatDistance(distanceKm)} from your current location</p> : null}
             <div className="mt-6 rounded-[1.75rem] overflow-hidden border border-slate-700/80 bg-slate-950/80">
-              {isLoaded ? (
-                <div className="h-80 w-full">
-                  <GoogleMap mapContainerStyle={{ width: '100%', height: '100%' }} center={coordinates} zoom={13}>
-                    <MarkerF position={coordinates} />
-                  </GoogleMap>
-                </div>
-              ) : (
-                <div className="flex h-80 items-center justify-center bg-slate-950 text-slate-400">
-                  Google Maps loading…
-                </div>
-              )}
+              <div className="h-80 w-full">
+                <PropertyMap
+                  center={coordinates}
+                  userLocation={hasUserLocation ? position : null}
+                  properties={[{ ...property, location: coordinates, distanceKm }]}
+                  showRouteTo={{ ...property, location: coordinates }}
+                />
+              </div>
             </div>
+            <Button onClick={requestLocation} disabled={locationLoading} variant="secondary" className="mt-5 w-full">
+              {locationLoading ? 'Fetching location...' : hasUserLocation ? 'Refresh my location' : 'Use my location'}
+            </Button>
+            {locationError ? <p className="mt-3 text-sm text-rose-300">{locationError}</p> : null}
           </div>
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
             <p className="text-sm uppercase tracking-[0.28em] text-accent-500">Amenities</p>

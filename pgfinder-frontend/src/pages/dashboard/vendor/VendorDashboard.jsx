@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FiEye, FiPlusCircle, FiSliders, FiUsers } from 'react-icons/fi'
 import Button from '../../../components/common/Button'
 import Card from '../../../components/common/Card'
+import { useAuth } from '../../../context/AuthContext'
 import dashboardService from '../../../services/dashboardService'
 
 function VendorDashboard() {
+  const navigate = useNavigate()
+  const { user } = useAuth()
   const [overview, setOverview] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await dashboardService.getVendorOverview()
+        const data = await dashboardService.getVendorOverview(user?._id)
         setOverview(data)
       } catch {
         setOverview({ totalProperties: 0, inquiries: 0, bookings: 0, views: 0 })
@@ -19,8 +23,9 @@ function VendorDashboard() {
         setLoading(false)
       }
     }
-    load()
-  }, [])
+    if (user?._id) load()
+    else setLoading(false)
+  }, [user?._id])
 
   return (
     <div className="space-y-8">
@@ -28,9 +33,9 @@ function VendorDashboard() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Vendor dashboard</p>
-            <h1 className="mt-3 text-4xl font-semibold text-white">Manage your PG listings and inquiries</h1>
+            <h1 className="mt-3 text-4xl font-semibold text-white">Manage your stay listings and inquiries</h1>
           </div>
-          <Button>New property</Button>
+          <Button onClick={() => navigate('/dashboard/vendor/add-property')}>New property</Button>
         </div>
       </header>
 
@@ -64,7 +69,7 @@ function VendorDashboard() {
               <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Active listings</p>
               <h2 className="mt-3 text-2xl font-semibold text-white">Live property performance</h2>
             </div>
-            <Button variant="secondary">View listings</Button>
+            <Button variant="secondary" onClick={() => navigate('/dashboard/vendor/properties')}>View listings</Button>
           </div>
           <p className="mt-6 text-slate-300">Quickly edit rent, update availability, and review active leads in one interface.</p>
         </Card>

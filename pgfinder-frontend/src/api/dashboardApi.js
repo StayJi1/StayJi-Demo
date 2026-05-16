@@ -14,11 +14,18 @@ const normalizeProperty = (property) => ({
   name: property.propertyName || property.name,
   city: property.cityName || property.city,
   rent: Number(property.rent) || property.rent,
+  depositAmount: Number(property.depositAmount) || property.depositAmount || 0,
+  category: property.propertyCategory || property.category || property.propertyTypeIDFK?.typeName || 'PG',
+  type: property.propertyCategory || property.propertyTypeIDFK?.typeName || property.type || 'PG',
+  approvalStatus: property.approvalStatus || 'Approved',
+  perDayCheckIn: Boolean(property.perDayCheckIn),
+  dailyRate: Number(property.dailyRate) || property.dailyRate || 0,
   status: property.isAvailable === false ? 'Booked' : 'Available',
 })
 
 const getUsers = () => axiosClient.get('/client/getUserList').then((res) => (res.data?.data || []).map(normalizeUser))
-const getProperties = () => axiosClient.get('/client/getPropertyList').then((res) => (res.data?.data || []).map(normalizeProperty))
+const getProperties = () => axiosClient.get('/client/getAllPropertyList').then((res) => (res.data?.data || []).map(normalizeProperty))
+const getPropertiesByUser = (userIDFK) => axiosClient.post('/client/getPropertyListByUser', { userIDFK }).then((res) => (res.data?.data || []).map(normalizeProperty))
 
 const getShortlist = (userIDFK) => axiosClient.post('/client/getShortlistById', { userIDFK }).then((res) => res.data?.data || [])
 
@@ -32,8 +39,8 @@ const dashboardApi = {
       inquiries: 0,
     }
   },
-  vendorOverview: async () => {
-    const properties = await getProperties()
+  vendorOverview: async (userIDFK) => {
+    const properties = userIDFK ? await getPropertiesByUser(userIDFK) : await getProperties()
     return {
       totalProperties: properties.length,
       inquiries: 0,
@@ -55,7 +62,7 @@ const dashboardApi = {
     }
   },
   adminUsers: getUsers,
-  vendorProperties: getProperties,
+  vendorProperties: getPropertiesByUser,
 }
 
 export default dashboardApi

@@ -10,12 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@react-google-maps/api": "^2.20.0",
     "axios": "^1.16.1",
     "framer-motion": "^12.5.0",
+    "leaflet": "^1.9.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-icons": "^4.11.0",
+    "react-leaflet": "^5.0.0",
     "react-router-dom": "^6.16.0"
   },
   "devDependencies": {

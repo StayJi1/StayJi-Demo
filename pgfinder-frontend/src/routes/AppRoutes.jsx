@@ -87,6 +87,14 @@ function AppRoutes() {
           }
         />
         <Route
+          path="vendor/properties/:propertyId/edit"
+          element={
+            <RoleProtectedRoute role="vendor">
+              <AddPropertyPage />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
           path="user"
           element={
             <RoleProtectedRoute role="user">

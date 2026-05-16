@@ -6,9 +6,9 @@ import SectionHeading from '../components/common/SectionHeading'
 import Button from '../components/common/Button'
 import Loader from '../components/common/Loader'
 import PropertyCard from '../components/property/PropertyCard'
+import PropertyMap from '../components/map/PropertyMap'
 import propertyService from '../services/propertyService'
-import useGoogleMaps from '../hooks/useGoogleMaps'
-import { GoogleMap, MarkerF, useLoadScript } from '@react-google-maps/api'
+import useCurrentLocation from '../hooks/useCurrentLocation'
 
 const topCities = [
   { name: 'Mumbai', count: '128 PGs' },
@@ -30,8 +30,7 @@ const testimonials = [
 ]
 
 function HomePage() {
-  const { position, loading: locationLoading, error: locationError } = useGoogleMaps()
-  const { isLoaded } = useLoadScript({ googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '' })
+  const { position, loading: locationLoading, error: locationError, hasUserLocation, requestLocation } = useCurrentLocation()
   const [popular, setPopular] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -153,23 +152,18 @@ function HomePage() {
               <span>Premium listings with reviews, vacancy status, and owner response data.</span>
             </div>
           </div>
+          <Button onClick={requestLocation} disabled={locationLoading} className="mt-6">
+            {locationLoading ? 'Fetching location...' : 'Use my location'}
+          </Button>
+          {locationError ? <p className="mt-3 text-sm text-rose-300">{locationError}</p> : null}
         </div>
         <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
-          <div className="flex h-96 items-center justify-center rounded-[1.75rem] bg-slate-950/80">
-            {isLoaded && !locationLoading && !locationError ? (
-              <GoogleMap
-                mapContainerStyle={{ width: '100%', height: '100%' }}
-                center={position}
-                zoom={12}
-              >
-                <MarkerF position={position} />
-              </GoogleMap>
-            ) : (
-              <div className="text-center text-slate-400">
-                <p className="text-lg font-semibold text-white">Map preview</p>
-                <p className="mt-2 text-sm">Enable location or add a Google Maps API key in .env.</p>
-              </div>
-            )}
+          <div className="h-96 overflow-hidden rounded-[1.75rem] bg-slate-950/80">
+            <PropertyMap
+              center={position}
+              userLocation={hasUserLocation ? position : null}
+              properties={popular.slice(0, 6)}
+            />
           </div>
         </div>
       </section>

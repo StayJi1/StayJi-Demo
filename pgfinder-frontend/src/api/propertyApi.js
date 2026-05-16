@@ -8,6 +8,12 @@ const normalizeProperty = (property) => {
     : property.amenities || []
 
   const cityName = (property.cityName || property.city || '').toString()
+  const fallbackImage = 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=80'
+  const imageUrls = [
+    ...(Array.isArray(property.propertyImageUrls) ? property.propertyImageUrls : []),
+    property.propertyImage,
+    property.image,
+  ].filter(Boolean)
   const coordinates = {
     mumbai: { lat: 19.076, lng: 72.8777 },
     bangalore: { lat: 12.9716, lng: 77.5946 },
@@ -19,22 +25,41 @@ const normalizeProperty = (property) => {
     jaipur: { lat: 26.9124, lng: 75.7873 },
   }
 
+  const explicitLocation = {
+    lat: Number(property.latitude ?? property.location?.lat),
+    lng: Number(property.longitude ?? property.location?.lng),
+  }
+  const normalizedLocation = Number.isFinite(explicitLocation.lat) && Number.isFinite(explicitLocation.lng)
+    ? explicitLocation
+    : coordinates[cityName.toLowerCase()] || null
+
   return {
     ...property,
     id: property._id || property.id,
     name: property.propertyName || property.name,
     description: property.description || property.summary,
-    address: property.address || property.location || '',
-    location: typeof property.location === 'object' ? property.location : coordinates[cityName.toLowerCase()] || null,
-    locationLabel: property.address || property.location || property.city || '',
+    address: property.address || '',
+    latitude: property.latitude,
+    longitude: property.longitude,
+    location: normalizedLocation,
+    locationLabel: property.address || property.areaName || property.city || '',
     city: property.cityName || property.city || '',
-    type: property.propertyTypeIDFK?.typeName || property.type || 'PG / Hostel',
+    type: property.propertyCategory || property.propertyTypeIDFK?.typeName || property.type || 'PG',
+    propertyTypeName: property.propertyTypeIDFK?.typeName || property.type || '',
+    category: property.propertyCategory || property.category || 'PG',
     rent: Number(property.rent) || property.rent || 0,
+    dailyRate: Number(property.dailyRate) || property.dailyRate || 0,
+    pricingUnit: property.pricingUnit || 'month',
+    perDayCheckIn: Boolean(property.perDayCheckIn),
+    depositAmount: Number(property.depositAmount) || property.depositAmount || 0,
     sharing: property.sharing || property.roomType || '',
     gender: property.genderType || property.gender || 'Co-ed',
     foodIncluded: amenities.some((item) => /meal|food/i.test(item)),
-    image: property.propertyImage || property.image || 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=80',
+    image: imageUrls[0] || fallbackImage,
+    images: imageUrls.length ? [...new Set(imageUrls)] : [fallbackImage],
+    videoUrl: property.videoUrl || '',
     status: property.isAvailable === false ? 'Booked' : 'Available',
+    approvalStatus: property.approvalStatus || 'Approved',
     amenities,
   }
 }
@@ -63,6 +88,14 @@ const propertyApi = {
 
   // Popular: backend has no featured endpoint; reuse property list and let caller slice
   popular: () => axiosClient.get('/client/getPropertyList').then((res) => mapResponse(res.data && res.data.data)),
+  all: () => axiosClient.get('/client/getAllPropertyList').then((res) => mapResponse(res.data && res.data.data)),
+  review: ({ id, approvalStatus }) => axiosClient.post('/client/reviewProperty', { id, approvalStatus }).then((res) => {
+    if (res.data?.result === 'failure') {
+      throw new Error(res.data?.msg || 'Property review was not updated')
+    }
+    return normalizeProperty(res.data?.data)
+  }),
+  propertyTypes: () => axiosClient.get('/client/getPropertyType').then((res) => res.data?.data || []),
 
   // Try city/area lookups if provided, otherwise return full list
   nearby: (coords) => {
@@ -85,6 +118,20 @@ const propertyApi = {
   }).then((res) => {
     if (res.data?.result === 'failure') {
       throw new Error(res.data?.msg || 'Property was not created')
+    }
+    return res.data?.data
+  }),
+
+  update: (id, payload) => axiosClient.post('/client/updateProperty', { id, ...payload }).then((res) => {
+    if (res.data?.result === 'failure') {
+      throw new Error(res.data?.msg || 'Property was not updated')
+    }
+    return res.data?.data
+  }),
+
+  remove: (id) => axiosClient.post('/client/deleteProperty', { id }).then((res) => {
+    if (res.data?.result === 'failure') {
+      throw new Error(res.data?.msg || 'Property was not deleted')
     }
     return res.data?.data
   }),

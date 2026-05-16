@@ -4,19 +4,22 @@ import { FiHome, FiLayers, FiUsers, FiPlusCircle, FiShield, FiUser } from 'react
 
 function Sidebar() {
   const { role, user } = useAuth()
-  const dashboardRole = role || 'user'
+  const normalizedRole = ['owner', 'host', 'hostel'].includes(role)
+    ? 'vendor'
+    : role || 'user'
+  const dashboardRole = normalizedRole
 
   const links = [
     { label: 'Dashboard', to: `/dashboard/${dashboardRole}`, icon: <FiHome /> },
-    { label: 'Browse PGs', to: '/properties', icon: <FiLayers /> },
+    { label: 'Browse stays', to: '/properties', icon: <FiLayers /> },
   ]
 
-  if (role === 'admin') {
+  if (normalizedRole === 'admin') {
     links.push({ label: 'Manage users', to: '/dashboard/admin/users', icon: <FiUsers /> })
     links.push({ label: 'Manage properties', to: '/dashboard/admin', icon: <FiShield /> })
   }
 
-  if (role === 'vendor') {
+  if (normalizedRole === 'vendor') {
     links.push({ label: 'My properties', to: '/dashboard/vendor/properties', icon: <FiLayers /> })
     links.push({ label: 'Add property', to: '/dashboard/vendor/add-property', icon: <FiPlusCircle /> })
   }
