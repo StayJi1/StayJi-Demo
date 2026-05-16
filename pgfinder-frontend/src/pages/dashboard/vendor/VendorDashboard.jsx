@@ -1,0 +1,87 @@
+import { useEffect, useState } from 'react'
+import { FiEye, FiPlusCircle, FiSliders, FiUsers } from 'react-icons/fi'
+import Button from '../../../components/common/Button'
+import Card from '../../../components/common/Card'
+import dashboardService from '../../../services/dashboardService'
+
+function VendorDashboard() {
+  const [overview, setOverview] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await dashboardService.getVendorOverview()
+        setOverview(data)
+      } catch {
+        setOverview({ totalProperties: 0, inquiries: 0, bookings: 0, views: 0 })
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  return (
+    <div className="space-y-8">
+      <header className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Vendor dashboard</p>
+            <h1 className="mt-3 text-4xl font-semibold text-white">Manage your PG listings and inquiries</h1>
+          </div>
+          <Button>New property</Button>
+        </div>
+      </header>
+
+      <div className="grid gap-6 xl:grid-cols-4">
+        {loading ? (
+          <Card className="p-8">Loading stats…</Card>
+        ) : (
+          [
+            { label: 'Properties', value: overview.totalProperties, icon: <FiSliders /> },
+            { label: 'Inquiries', value: overview.inquiries, icon: <FiUsers /> },
+            { label: 'Bookings', value: overview.bookings, icon: <FiPlusCircle /> },
+            { label: 'Views', value: overview.views, icon: <FiEye /> },
+          ].map((item) => (
+            <Card key={item.label} className="p-6">
+              <div className="flex items-center justify-between gap-4 text-slate-300">
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-950 text-accent-400">{item.icon}</span>
+                <div className="text-right">
+                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">{item.label}</p>
+                  <p className="mt-3 text-3xl font-semibold text-white">{item.value}</p>
+                </div>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Active listings</p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">Live property performance</h2>
+            </div>
+            <Button variant="secondary">View listings</Button>
+          </div>
+          <p className="mt-6 text-slate-300">Quickly edit rent, update availability, and review active leads in one interface.</p>
+        </Card>
+
+        <Card>
+          <div>
+            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Guest feedback</p>
+            <h2 className="mt-3 text-2xl font-semibold text-white">Recent visitor requests</h2>
+          </div>
+          <div className="mt-6 space-y-4 text-slate-300">
+            <p>Users are asking for quick tour slots and immediate move-in options.</p>
+            <p>Your dashboard makes it easy to approve visits and update status.</p>
+          </div>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+export default VendorDashboard
