@@ -46,12 +46,17 @@ function PropertiesPage() {
   const [priceRange, setPriceRange] = useState({ min: '', max: '' })
   const [sortBy, setSortBy] = useState('recommended')
   const [nearbyMode, setNearbyMode] = useState(false)
+  const [mapSearchQuery, setMapSearchQuery] = useState('')
+  const [mapSearchLoading, setMapSearchLoading] = useState(false)
+  const [mapSearchError, setMapSearchError] = useState('')
+  const [mapSearchMessage, setMapSearchMessage] = useState('')
   const {
     position,
     loading: locationLoading,
     error: locationError,
     hasUserLocation,
     requestLocation,
+    setManualLocation,
   } = useCurrentLocation()
 
   useEffect(() => {
@@ -77,6 +82,39 @@ function PropertiesPage() {
   const handleUseLocation = () => {
     setNearbyMode(true)
     requestLocation()
+  }
+
+  const handleSearchLocation = async () => {
+    setMapSearchError('')
+    setMapSearchMessage('')
+
+    const query = mapSearchQuery.trim()
+    if (!query) {
+      setMapSearchError('Enter a location to search on the map.')
+      return
+    }
+
+    setMapSearchLoading(true)
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`,
+      )
+      const results = await response.json()
+
+      if (!results.length) {
+        throw new Error('No location found. Try a nearby address or city.')
+      }
+
+      const { lat, lon, display_name } = results[0]
+      setManualLocation({ lat: Number(lat), lng: Number(lon) })
+      setNearbyMode(true)
+      setSortBy('nearest')
+      setMapSearchMessage(`Showing results near ${display_name}`)
+    } catch (err) {
+      setMapSearchError(err?.message || 'Unable to find that location.')
+    } finally {
+      setMapSearchLoading(false)
+    }
   }
 
   const filteredProperties = useMemo(() => {
@@ -161,6 +199,20 @@ function PropertiesPage() {
               </Button>
             </div>
             {locationError ? <p className="mt-3 text-sm text-rose-300">{locationError}</p> : null}
+            <div className="mt-4 grid gap-4 md:grid-cols-[1.8fr_0.9fr]">
+              <input
+                type="search"
+                value={mapSearchQuery}
+                onChange={(event) => setMapSearchQuery(event.target.value)}
+                placeholder="Search location on map (e.g. Bangalore, Koramangala)"
+                className="w-full rounded-3xl border border-slate-700/80 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
+              />
+              <Button variant="secondary" className="w-full" onClick={handleSearchLocation} disabled={mapSearchLoading}>
+                {mapSearchLoading ? 'Searching location…' : 'Search on map'}
+              </Button>
+            </div>
+            {mapSearchError ? <p className="mt-3 text-sm text-rose-300">{mapSearchError}</p> : null}
+            {mapSearchMessage ? <p className="mt-3 text-sm text-emerald-300">{mapSearchMessage}</p> : null}
             {hasUserLocation && nearbyMode ? (
               <p className="mt-3 text-sm text-emerald-300">
                 Showing nearby stays within {nearbyRadiusKm} km first. Search for PG, hotel, flat, hostel, or an area to narrow it down.

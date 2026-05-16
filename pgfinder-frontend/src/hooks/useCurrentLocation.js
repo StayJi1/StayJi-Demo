@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 
-const defaultPosition = { lat: 19.07598, lng: 72.87766 }
+const defaultPosition = { lat: 12.9716, lng: 77.5946 }
 
 function useCurrentLocation() {
   const [position, setPosition] = useState(defaultPosition)
