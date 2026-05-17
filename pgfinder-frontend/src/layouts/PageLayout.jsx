@@ -6,7 +6,7 @@ function PageLayout() {
   return (
     <div className="min-h-screen bg-surface-900 text-slate-100">
       <Navbar />
-      <main className="relative overflow-hidden py-6 md:py-10">
+      <main className="relative overflow-hidden">
         <Outlet />
       </main>
       <Footer />

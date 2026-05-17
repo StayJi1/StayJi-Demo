@@ -1,38 +1,64 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Link } from 'react-router-dom'
-import { FiMapPin, FiSearch, FiStar } from 'react-icons/fi'
-import SectionHeading from '../components/common/SectionHeading'
+import { Link, useNavigate } from 'react-router-dom'
+import { FiArrowRight, FiCheckCircle, FiHeart, FiMapPin, FiNavigation, FiSearch, FiShield, FiSliders, FiStar, FiUsers } from 'react-icons/fi'
 import Button from '../components/common/Button'
 import Loader from '../components/common/Loader'
 import PropertyCard from '../components/property/PropertyCard'
 import PropertyMap from '../components/map/PropertyMap'
 import propertyService from '../services/propertyService'
 import useCurrentLocation from '../hooks/useCurrentLocation'
+import { useAuth } from '../context/AuthContext'
 
-const topCities = [
-  { name: 'Mumbai', count: '128 PGs' },
-  { name: 'Bangalore', count: '95 PGs' },
-  { name: 'Pune', count: '76 PGs' },
+const cities = [
+  { name: 'Mumbai', count: '128 stays', tone: 'from-blue-600 to-cyan-500' },
+  { name: 'Bangalore', count: '95 stays', tone: 'from-purple-600 to-blue-500' },
+  { name: 'Pune', count: '76 stays', tone: 'from-cyan-500 to-blue-600' },
+  { name: 'Delhi', count: '112 stays', tone: 'from-indigo-600 to-purple-600' },
+  { name: 'Hyderabad', count: '68 stays', tone: 'from-blue-500 to-indigo-600' },
+  { name: 'Chennai', count: '54 stays', tone: 'from-cyan-500 to-purple-600' },
+]
+
+const reasons = [
+  { title: 'Verified listings', text: 'Photos, pricing, amenities, and availability reviewed before going live.', icon: <FiShield /> },
+  { title: 'Fast nearby search', text: 'Find PGs, hostels, flats, and stays around your campus or office.', icon: <FiNavigation /> },
+  { title: 'Smart dashboards', text: 'Purpose-built dashboards for users, vendors, and admins.', icon: <FiSliders /> },
+  { title: 'Book visits', text: 'Shortlist properties, check live availability, and schedule visits quickly.', icon: <FiCheckCircle /> },
 ]
 
 const testimonials = [
   {
     name: 'Aditi Sharma',
     role: 'Student, Mumbai',
-    quote: 'PG Finder made it effortless to compare verified rooms near my college and book a visit instantly.',
+    quote: 'StayJi helped me compare safe PGs near college and book visits without calling ten different owners.',
   },
   {
     name: 'Rahul Mehta',
-    role: 'Young Professional',
-    quote: 'Modern UX, transparent listings, and easy communication with owners made my move smooth.',
+    role: 'Working professional, Pune',
+    quote: 'The listings felt premium and transparent. I found a flat close to office in one evening.',
+  },
+  {
+    name: 'Nisha Iyer',
+    role: 'Vendor, Bangalore',
+    quote: 'The vendor dashboard makes approvals, availability, and inquiries much easier to manage.',
   },
 ]
 
+const stats = [
+  { label: 'Verified stays', value: '250+' },
+  { label: 'Indian cities', value: '18+' },
+  { label: 'Avg. rating', value: '4.8' },
+]
+
 function HomePage() {
+  const navigate = useNavigate()
+  const { user, isAuthenticated } = useAuth()
   const { position, loading: locationLoading, error: locationError, hasUserLocation, requestLocation } = useCurrentLocation()
   const [popular, setPopular] = useState([])
+  const [savedPropertyIds, setSavedPropertyIds] = useState(new Set())
   const [loading, setLoading] = useState(true)
+  const [wishlistLoading, setWishlistLoading] = useState(true)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     const load = async () => {
@@ -48,144 +74,277 @@ function HomePage() {
     load()
   }, [])
 
-  return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <section className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-          <span className="inline-flex rounded-full bg-accent-500/15 px-4 py-2 text-sm font-semibold uppercase tracking-[0.28em] text-accent-200">
-            Startup-grade rentals
-          </span>
-          <h1 className="mt-6 max-w-2xl text-4xl font-semibold text-white sm:text-5xl">
-            Premium student and professional PGs with trusted host owners.
-          </h1>
-          <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">
-            Discover verified properties, filter by preferences, explore nearby locations with maps, and manage your bookings from a modern dashboard.
-          </p>
-          <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-            <Link to="/properties">
-              <Button>Browse properties</Button>
-            </Link>
-            <Link to="/signup?role=vendor">
-              <Button variant="secondary">List your PG</Button>
-            </Link>
-          </div>
-          <div className="mt-10 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-[1.75rem] bg-surface-800/80 p-5 text-slate-200 shadow-soft">
-              <p className="text-sm uppercase tracking-[0.24em] text-slate-400">Verified stays</p>
-              <p className="mt-4 text-3xl font-semibold text-white">250+</p>
-            </div>
-            <div className="rounded-[1.75rem] bg-surface-800/80 p-5 text-slate-200 shadow-soft">
-              <p className="text-sm uppercase tracking-[0.24em] text-slate-400">Happy tenants</p>
-              <p className="mt-4 text-3xl font-semibold text-white">4.8/5</p>
-            </div>
-            <div className="rounded-[1.75rem] bg-surface-800/80 p-5 text-slate-200 shadow-soft">
-              <p className="text-sm uppercase tracking-[0.24em] text-slate-400">Hosts onboarded</p>
-              <p className="mt-4 text-3xl font-semibold text-white">120+</p>
-            </div>
-          </div>
-        </motion.div>
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6 }} className="rounded-[2rem] border border-slate-800/80 bg-surface-800/80 p-6 shadow-card">
-          <div className="rounded-[1.75rem] border border-slate-700/60 bg-slate-950/80 p-6">
-            <div className="flex items-center gap-4 text-slate-200">
-              <span className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-brand-500 text-xl text-slate-950">🏠</span>
-              <div>
-                <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Featured search</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Search with modern filters</h2>
-              </div>
-            </div>
-            <div className="mt-6 grid gap-3">
-              <div className="rounded-3xl bg-slate-950/80 p-4 text-slate-300">
-                <p className="font-semibold text-white">Campus-focused areas</p>
-                <p className="mt-2 text-sm text-slate-400">Search by city, locality, college, or nearby location.</p>
-              </div>
-              <div className="rounded-3xl bg-slate-950/80 p-4 text-slate-300">
-                <p className="font-semibold text-white">Smart filters</p>
-                <p className="mt-2 text-sm text-slate-400">Gender, rent range, food plan, sharing type, and amenities.</p>
-              </div>
-              <div className="rounded-3xl bg-slate-950/80 p-4 text-slate-300">
-                <p className="font-semibold text-white">Instant shortlist</p>
-                <p className="mt-2 text-sm text-slate-400">Save favorite PGs and contact owners quickly.</p>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      </section>
+  useEffect(() => {
+    const loadWishlist = async () => {
+      if (!isAuthenticated || !user?._id) {
+        setSavedPropertyIds(new Set())
+        setWishlistLoading(false)
+        return
+      }
 
-      <section className="mt-16">
-        <SectionHeading title="Featured listings" description="Hand-picked PGs for students and young professionals." />
-        <div className="mt-10 grid gap-6 lg:grid-cols-3">
-          {loading ? (
-            <Loader />
-          ) : popular.length ? (
-            popular.slice(0, 3).map((item) => <PropertyCard key={item.id || item._id} property={item} />)
-          ) : (
-            <div className="rounded-[2rem] border border-slate-800/70 bg-surface-800/90 p-10 text-center text-slate-300">
-              No featured properties available yet.
+      try {
+        const shortlist = await propertyService.fetchShortlist(user._id)
+        setSavedPropertyIds(
+          new Set(
+            shortlist
+              .map((item) => item.property?.id || item.property?._id || item.propertyIDFK?._id)
+              .filter(Boolean),
+          ),
+        )
+      } catch (error) {
+        console.error('Unable to load wishlist state', error)
+        setSavedPropertyIds(new Set())
+      } finally {
+        setWishlistLoading(false)
+      }
+    }
+
+    loadWishlist()
+  }, [isAuthenticated, user?._id])
+
+  const featured = useMemo(() => popular.slice(0, 3), [popular])
+
+  const handleToggleSave = async (propertyIDFK, shouldSave) => {
+    if (!isAuthenticated || !user?._id) {
+      navigate('/login', { replace: true })
+      return
+    }
+
+    try {
+      if (shouldSave) {
+        await propertyService.shortlistProperty({ userIDFK: user._id, propertyIDFK })
+        setSavedPropertyIds((current) => new Set(current).add(propertyIDFK))
+      } else {
+        await propertyService.removeShortlistProperty({ userIDFK: user._id, propertyIDFK })
+        setSavedPropertyIds((current) => {
+          const next = new Set(current)
+          next.delete(propertyIDFK)
+          return next
+        })
+      }
+    } catch (error) {
+      console.error(error)
+      alert('Unable to update this PG in your wishlist.')
+    }
+  }
+
+  const handleSearch = (event) => {
+    event.preventDefault()
+    const query = search.trim()
+    navigate(query ? `/properties?search=${encodeURIComponent(query)}` : '/properties')
+  }
+
+  return (
+    <div className="overflow-hidden">
+      <section className="relative isolate min-h-[calc(100vh-76px)] overflow-hidden bg-slate-950 text-white">
+        <div className="absolute inset-0 stayji-grid opacity-70" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(37,99,235,0.36),transparent_34%),radial-gradient(circle_at_80%_10%,rgba(6,182,212,0.24),transparent_30%),linear-gradient(135deg,#0F172A_0%,#111827_52%,#1E1B4B_100%)]" />
+        <div className="relative mx-auto grid max-w-7xl gap-12 px-4 py-12 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:py-20">
+          <motion.div initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65 }}>
+            <span className="inline-flex rounded-full border border-cyan-300/30 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.26em] text-cyan-100 backdrop-blur-xl">
+              Indian stays, made simpler
+            </span>
+            <h1 className="mt-7 max-w-3xl text-5xl font-semibold leading-tight tracking-tight sm:text-6xl lg:text-7xl">
+              Find Your Perfect Stay
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-200">
+              StayJi helps students and working professionals discover verified PGs, hostels, flats, and short stays with live availability, maps, filters, visits, and wishlist built in.
+            </p>
+
+            <form onSubmit={handleSearch} className="mt-9 glass-card grid gap-3 rounded-[2rem] p-3 sm:grid-cols-[1fr_auto_auto]">
+              <label className="flex items-center gap-3 rounded-[1.5rem] bg-white px-4 py-3 text-slate-900">
+                <FiSearch className="text-blue-600" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search city, college, locality, or stay name"
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500"
+                />
+              </label>
+              <Button type="button" variant="secondary" onClick={requestLocation} disabled={locationLoading} className="w-full sm:w-auto">
+                <FiMapPin className="mr-2" /> {locationLoading ? 'Finding' : 'Nearby'}
+              </Button>
+              <Button type="submit" className="w-full sm:w-auto">
+                Search <FiArrowRight className="ml-2" />
+              </Button>
+            </form>
+            {locationError ? <p className="mt-3 text-sm text-rose-200">{locationError}</p> : null}
+
+            <div className="mt-10 grid gap-4 sm:grid-cols-3">
+              {stats.map((item) => (
+                <motion.div key={item.label} whileHover={{ y: -4 }} className="rounded-[1.5rem] border border-white/10 bg-white/10 p-5 backdrop-blur-xl">
+                  <p className="text-3xl font-semibold">{item.value}</p>
+                  <p className="mt-2 text-sm text-slate-300">{item.label}</p>
+                </motion.div>
+              ))}
             </div>
-          )}
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7 }} className="relative">
+            <div className="glass-card rounded-[2.5rem] p-5">
+              <div className="overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+                <img src="/stayji-logo.png" alt="StayJi logo" className="h-64 w-full object-cover sm:h-80" />
+                <div className="grid gap-4 p-5 text-slate-900">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-[0.22em] text-blue-600">Live discovery</p>
+                      <h2 className="mt-1 text-2xl font-semibold">Verified stays near you</h2>
+                    </div>
+                    <span className="rounded-full bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-700">Open now</span>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {['Wishlist', 'Book visits', 'Live availability'].map((item) => (
+                      <div key={item} className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-700">{item}</div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </section>
 
-      <section className="mt-16 grid gap-10 lg:grid-cols-[0.9fr_0.7fr]">
-        <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
-          <div className="flex items-center gap-4 text-accent-200">
-            <FiSearch size={24} />
+      <section className="bg-white px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Nearby search</p>
-              <h2 className="mt-3 text-3xl font-semibold text-white">Find PGs close to your current location</h2>
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-blue-600">Featured stays</p>
+              <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Premium verified stays</h2>
+            </div>
+            <Link to="/properties" className="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-purple-600">
+              View all stays <FiArrowRight className="ml-2" />
+            </Link>
+          </div>
+          <div className="mt-10 grid gap-6 lg:grid-cols-3">
+            {loading ? (
+              <>
+                <Loader message="Loading StayJi stays..." />
+                <Loader message="Loading StayJi stays..." />
+                <Loader message="Loading StayJi stays..." />
+              </>
+            ) : featured.length ? (
+              featured.map((item) => (
+                <PropertyCard
+                  key={item.id || item._id}
+                  property={item}
+                  saved={savedPropertyIds.has(item.id || item._id)}
+                  onToggleSave={handleToggleSave}
+                />
+              ))
+            ) : (
+              <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-10 text-center text-slate-600">
+                No featured StayJi properties available yet.
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-slate-50 px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-purple-600">Search by city</p>
+              <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Where are you moving next?</h2>
+              <p className="mt-4 text-slate-600">Browse student and professional stays across India’s fastest-moving education and work hubs.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {cities.map((city) => (
+                <motion.button
+                  key={city.name}
+                  whileHover={{ y: -5 }}
+                  type="button"
+                  onClick={() => navigate(`/properties?search=${city.name}`)}
+                  className={`rounded-[1.75rem] bg-gradient-to-br ${city.tone} p-5 text-left text-white shadow-card`}
+                >
+                  <p className="text-xl font-semibold">{city.name}</p>
+                  <p className="mt-2 text-sm text-white/80">{city.count}</p>
+                </motion.button>
+              ))}
             </div>
           </div>
-          <div className="mt-8 flex flex-wrap gap-4">
-            {topCities.map((city) => (
-              <span key={city.name} className="rounded-full bg-slate-950/80 px-4 py-3 text-sm text-slate-200">
-                {city.name} · {city.count}
-              </span>
+        </div>
+      </section>
+
+      <section className="bg-white px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="text-center">
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-cyan-600">Why StayJi</p>
+            <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Built for trust, speed, and clarity</h2>
+          </div>
+          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {reasons.map((item) => (
+              <motion.article key={item.title} whileHover={{ y: -6 }} className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-soft transition hover:shadow-card">
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-xl text-blue-600">{item.icon}</span>
+                <h3 className="mt-5 text-lg font-semibold text-slate-950">{item.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{item.text}</p>
+              </motion.article>
             ))}
           </div>
-          <div className="mt-8 space-y-4 rounded-[1.75rem] border border-slate-700/50 bg-slate-950/80 p-6">
-            <div className="flex items-center gap-3 text-slate-300">
-              <FiMapPin />
-              <span>Use live maps to explore properties nearby and filter by commute.</span>
-            </div>
-            <div className="flex items-center gap-3 text-slate-300">
-              <FiStar />
-              <span>Premium listings with reviews, vacancy status, and owner response data.</span>
+        </div>
+      </section>
+
+      <section className="bg-slate-950 px-4 py-16 text-white sm:px-6 lg:px-8">
+        <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.75fr_1.25fr] lg:items-center">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-cyan-300">Google Maps nearby</p>
+            <h2 className="mt-3 text-3xl font-semibold sm:text-4xl">Find stays around your real location</h2>
+            <p className="mt-4 leading-7 text-slate-300">Use map-first discovery to compare commute distance, nearby areas, and verified StayJi listings before booking a visit.</p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button onClick={requestLocation} disabled={locationLoading}>
+                <FiNavigation className="mr-2" /> {hasUserLocation ? 'Refresh location' : 'Use my location'}
+              </Button>
+              <Link to="/properties">
+                <Button variant="secondary">Open map search</Button>
+              </Link>
             </div>
           </div>
-          <Button onClick={requestLocation} disabled={locationLoading} className="mt-6">
-            {locationLoading ? 'Fetching location...' : 'Use my location'}
-          </Button>
-          {locationError ? <p className="mt-3 text-sm text-rose-300">{locationError}</p> : null}
-        </div>
-        <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
-          <div className="h-96 overflow-hidden rounded-[1.75rem] bg-slate-950/80">
-            <PropertyMap
-              center={position}
-              userLocation={hasUserLocation ? position : null}
-              properties={popular.slice(0, 6)}
-            />
+          <div className="glass-card overflow-hidden rounded-[2rem] p-3">
+            <div className="h-[420px] overflow-hidden rounded-[1.5rem] bg-slate-900">
+              <PropertyMap center={position} userLocation={hasUserLocation ? position : null} properties={popular.slice(0, 8)} />
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="mt-16">
-        <SectionHeading title="Student stories" description="Real reviews from students who moved with confidence." />
-        <div className="mt-10 grid gap-6 lg:grid-cols-2">
-          {testimonials.map((item) => (
-            <motion.article
-              key={item.name}
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card"
-            >
-              <p className="text-lg leading-8 text-slate-300">“{item.quote}”</p>
-              <div className="mt-6">
-                <p className="font-semibold text-white">{item.name}</p>
-                <p className="text-sm text-slate-400">{item.role}</p>
-              </div>
-            </motion.article>
-          ))}
+      <section className="bg-white px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="flex items-center gap-3">
+            <FiUsers className="text-blue-600" />
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-blue-600">Testimonials</p>
+          </div>
+          <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Loved by students, professionals, and vendors</h2>
+          <div className="mt-10 grid gap-6 lg:grid-cols-3">
+            {testimonials.map((item) => (
+              <motion.article key={item.name} whileHover={{ y: -6 }} className="rounded-[2rem] border border-slate-200 bg-slate-50 p-7 shadow-soft">
+                <div className="flex gap-1 text-amber-400">{Array.from({ length: 5 }).map((_, index) => <FiStar key={index} fill="currentColor" />)}</div>
+                <p className="mt-5 leading-7 text-slate-700">"{item.quote}"</p>
+                <div className="mt-6 flex items-center gap-3">
+                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-purple-600 font-semibold text-white">
+                    {item.name.charAt(0)}
+                  </span>
+                  <div>
+                    <p className="font-semibold text-slate-950">{item.name}</p>
+                    <p className="text-sm text-slate-500">{item.role}</p>
+                  </div>
+                </div>
+              </motion.article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 px-4 py-16 text-white sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-6 rounded-[2rem] border border-white/20 bg-white/10 p-8 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-cyan-100">Ready when you are</p>
+            <h2 className="mt-3 text-3xl font-semibold">Move smarter with StayJi</h2>
+            <p className="mt-3 text-blue-50">Wishlist, filter, book visits, and manage your stay journey from one place.</p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link to="/properties"><Button>Explore stays</Button></Link>
+            <Link to="/signup?role=vendor"><Button variant="secondary">List your property</Button></Link>
+          </div>
         </div>
       </section>
     </div>

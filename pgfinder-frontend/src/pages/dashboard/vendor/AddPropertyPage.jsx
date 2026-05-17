@@ -26,7 +26,8 @@ function AddPropertyPage() {
     perDayCheckIn: false,
     sharing: '',
     gender: 'Co-ed',
-    foodIncluded: false,
+    mealsAvailable: [],
+    menuPhotoUrls: '',
     description: '',
     imageUrls: '',
     videoUrl: '',
@@ -40,7 +41,7 @@ function AddPropertyPage() {
       if (!isEditMode || !propertyId) return
       try {
         setLoading(true)
-        const property = await propertyService.fetchPropertyById(propertyId)
+        const property = await propertyService.fetchPropertyById(propertyId, { includePrivate: true })
         setForm({
           name: property.name || '',
           propertyCategory: property.category || property.type || 'PG',
@@ -55,7 +56,8 @@ function AddPropertyPage() {
           perDayCheckIn: Boolean(property.perDayCheckIn),
           sharing: property.sharing || '',
           gender: property.gender || 'Co-ed',
-          foodIncluded: property.foodIncluded || false,
+          mealsAvailable: property.mealsAvailable || [],
+          menuPhotoUrls: (property.menuPhotoUrls || [property.menuPhoto]).filter(Boolean).join('\n'),
           description: property.description || '',
           imageUrls: (property.images || [property.image]).filter(Boolean).join('\n'),
           videoUrl: property.videoUrl || '',
@@ -76,6 +78,15 @@ function AddPropertyPage() {
     setForm((current) => ({
       ...current,
       [name]: type === 'checkbox' ? checked : value,
+    }))
+  }
+
+  const handleMealToggle = (meal) => {
+    setForm((current) => ({
+      ...current,
+      mealsAvailable: current.mealsAvailable.includes(meal)
+        ? current.mealsAvailable.filter((item) => item !== meal)
+        : [...current.mealsAvailable, meal],
     }))
   }
 
@@ -137,7 +148,10 @@ function AddPropertyPage() {
     payload.append('genderType', form.gender)
     payload.append('areaName', form.area)
     payload.append('cityName', form.city)
-    payload.append('aminityFeatures', form.foodIncluded ? 'WiFi, Meals, Laundry, Security' : 'WiFi, Laundry, Security')
+    payload.append('aminityFeatures', form.mealsAvailable.length ? 'WiFi, Meals, Laundry, Security' : 'WiFi, Laundry, Security')
+    payload.append('mealsAvailable', JSON.stringify(form.mealsAvailable))
+    payload.append('menuPhotoUrls', form.menuPhotoUrls)
+    payload.append('menuPhoto', form.menuPhotoUrls.split(/\n|,/).map((item) => item.trim()).filter(Boolean)[0] || '')
     payload.append('propertyImageUrls', form.imageUrls)
     payload.append('propertyImage', form.imageUrls.split(/\n|,/).map((item) => item.trim()).filter(Boolean)[0] || '')
     payload.append('videoUrl', form.videoUrl)
@@ -162,7 +176,10 @@ function AddPropertyPage() {
           genderType: form.gender,
           areaName: form.area,
           cityName: form.city,
-          aminityFeatures: form.foodIncluded ? 'WiFi, Meals, Laundry, Security' : 'WiFi, Laundry, Security',
+          aminityFeatures: form.mealsAvailable.length ? 'WiFi, Meals, Laundry, Security' : 'WiFi, Laundry, Security',
+          mealsAvailable: form.mealsAvailable,
+          menuPhotoUrls: form.menuPhotoUrls,
+          menuPhoto: form.menuPhotoUrls.split(/\n|,/).map((item) => item.trim()).filter(Boolean)[0] || '',
           propertyImageUrls: form.imageUrls,
           propertyImage: form.imageUrls.split(/\n|,/).map((item) => item.trim()).filter(Boolean)[0] || '',
           videoUrl: form.videoUrl,
@@ -186,7 +203,8 @@ function AddPropertyPage() {
           perDayCheckIn: false,
           sharing: '',
           gender: 'Co-ed',
-          foodIncluded: false,
+          mealsAvailable: [],
+          menuPhotoUrls: '',
           description: '',
           imageUrls: '',
           videoUrl: '',
@@ -278,10 +296,17 @@ function AddPropertyPage() {
                 <option value="Girls">Girls</option>
               </select>
             </label>
-            <label className="inline-flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-sm text-slate-200">
-              <input type="checkbox" name="foodIncluded" checked={form.foodIncluded} onChange={handleChange} className="h-5 w-5 rounded border-slate-700 bg-slate-900 text-accent-400" />
-              Food included
-            </label>
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-sm text-slate-200">
+              <span className="mb-3 block text-slate-300">Food available</span>
+              <div className="flex flex-wrap gap-3">
+                {['Breakfast', 'Lunch', 'Dinner'].map((meal) => (
+                  <label key={meal} className="inline-flex items-center gap-2">
+                    <input type="checkbox" checked={form.mealsAvailable.includes(meal)} onChange={() => handleMealToggle(meal)} className="h-5 w-5 rounded border-slate-700 bg-slate-900 text-accent-400" />
+                    {meal}
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
           <label className="block text-sm text-slate-200">
             <span className="mb-2 block text-slate-300">Description</span>
@@ -314,6 +339,17 @@ function AddPropertyPage() {
                 />
               </label>
               <Input label="Small video URL" name="videoUrl" value={form.videoUrl} onChange={handleChange} placeholder="https://.../room-tour.mp4" />
+              <label className="block text-sm text-slate-200">
+                <span className="mb-2 block text-slate-300">Menu photo URLs</span>
+                <textarea
+                  name="menuPhotoUrls"
+                  rows="3"
+                  value={form.menuPhotoUrls}
+                  onChange={handleChange}
+                  placeholder="https://.../menu.jpg"
+                  className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-4 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
+                />
+              </label>
             </div>
           </div>
           {message ? (

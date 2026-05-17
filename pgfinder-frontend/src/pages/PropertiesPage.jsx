@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { FiMapPin, FiSearch } from 'react-icons/fi'
 import SectionHeading from '../components/common/SectionHeading'
@@ -8,6 +9,7 @@ import PropertyCard from '../components/property/PropertyCard'
 import PropertyMap from '../components/map/PropertyMap'
 import propertyService from '../services/propertyService'
 import useCurrentLocation from '../hooks/useCurrentLocation'
+import { useAuth } from '../context/AuthContext'
 import { getDistanceKm } from '../utils/distance'
 
 const filterOptions = [
@@ -38,10 +40,26 @@ const normalizeSearchToken = (token) => {
   return singularMap[token] || token
 }
 
+const isSimilarToken = (token, value) => {
+  if (!token || !value) return false
+  if (value.includes(token) || token.includes(value)) return true
+  if (Math.abs(token.length - value.length) > 2) return false
+
+  let mismatches = 0
+  const maxLength = Math.max(token.length, value.length)
+  for (let index = 0; index < maxLength; index += 1) {
+    if (token[index] !== value[index]) mismatches += 1
+    if (mismatches > 2) return false
+  }
+  return true
+}
+
 function PropertiesPage() {
+  const [searchParams] = useSearchParams()
+  const initialSearch = searchParams.get('search') || ''
   const [properties, setProperties] = useState([])
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useState(initialSearch)
   const [activeFilters, setActiveFilters] = useState([])
   const [priceRange, setPriceRange] = useState({ min: '', max: '' })
   const [sortBy, setSortBy] = useState('recommended')
@@ -50,6 +68,9 @@ function PropertiesPage() {
   const [mapSearchLoading, setMapSearchLoading] = useState(false)
   const [mapSearchError, setMapSearchError] = useState('')
   const [mapSearchMessage, setMapSearchMessage] = useState('')
+  const { user, isAuthenticated } = useAuth()
+  const [savedPropertyIds, setSavedPropertyIds] = useState(new Set())
+  const [wishlistLoading, setWishlistLoading] = useState(true)
   const {
     position,
     loading: locationLoading,
@@ -60,9 +81,64 @@ function PropertiesPage() {
   } = useCurrentLocation()
 
   useEffect(() => {
+    const loadWishlist = async () => {
+      if (!isAuthenticated || !user?._id) {
+        setSavedPropertyIds(new Set())
+        setWishlistLoading(false)
+        return
+      }
+
+      try {
+        const shortlist = await propertyService.fetchShortlist(user._id)
+        const savedIds = new Set(
+          shortlist
+            .map((item) => item.property?.id || item.property?._id || item.propertyIDFK?._id)
+            .filter(Boolean),
+        )
+        setSavedPropertyIds(savedIds)
+      } catch (error) {
+        console.error('Unable to load wishlist state', error)
+        setSavedPropertyIds(new Set())
+      } finally {
+        setWishlistLoading(false)
+      }
+    }
+
+    loadWishlist()
+  }, [isAuthenticated, user?._id])
+
+  useEffect(() => {
+    setSearchQuery(searchParams.get('search') || '')
+  }, [searchParams])
+
+  const handleToggleSave = async (propertyIDFK, shouldSave) => {
+    if (!isAuthenticated || !user?._id) {
+      navigate('/login', { replace: true })
+      return
+    }
+
+    try {
+      if (shouldSave) {
+        await propertyService.shortlistProperty({ userIDFK: user._id, propertyIDFK })
+        setSavedPropertyIds((current) => new Set(current).add(propertyIDFK))
+      } else {
+        await propertyService.removeShortlistProperty({ userIDFK: user._id, propertyIDFK })
+        setSavedPropertyIds((current) => {
+          const next = new Set(current)
+          next.delete(propertyIDFK)
+          return next
+        })
+      }
+    } catch (error) {
+      console.error(error)
+      alert('Unable to update this PG in your wishlist.')
+    }
+  }
+
+  useEffect(() => {
     const load = async () => {
       try {
-        const data = await propertyService.fetchProperties({ q: searchQuery })
+        const data = await propertyService.fetchProperties()
         setProperties(data || [])
       } catch {
         setProperties([])
@@ -71,7 +147,7 @@ function PropertiesPage() {
       }
     }
     load()
-  }, [searchQuery])
+  }, [])
 
   useEffect(() => {
     if (hasUserLocation && nearbyMode) {
@@ -141,7 +217,15 @@ function PropertiesPage() {
         ...(item.amenities || []),
       ].filter(Boolean).join(' ').toLowerCase()
 
-      if (searchTokens.length && !searchTokens.every((token) => haystack.includes(token))) {
+      if (searchTokens.length && !searchTokens.every((token) => {
+        if (haystack.includes(token)) return true
+        return [item.name, item.city, item.locationLabel, item.category, item.type]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .split(/\W+/)
+          .some((word) => isSimilarToken(token, word))
+      })) {
         return false
       }
 
@@ -171,6 +255,16 @@ function PropertiesPage() {
         if (sortBy === 'price-high') return (Number(b.rent) || 0) - (Number(a.rent) || 0)
         if (sortBy === 'deposit-low') return (Number(a.depositAmount) || 0) - (Number(b.depositAmount) || 0)
         if (sortBy === 'nearest' || (nearbyMode && hasUserLocation)) return (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity)
+        if (searchTokens.length) {
+          const score = (item) => {
+            const name = (item.name || '').toLowerCase()
+            if (name === normalizedSearch) return 0
+            if (name.startsWith(normalizedSearch)) return 1
+            if (name.includes(normalizedSearch)) return 2
+            return 3
+          }
+          return score(a) - score(b)
+        }
         return 0
       })
   }, [properties, activeFilters, searchQuery, priceRange, sortBy, hasUserLocation, nearbyMode, position])
@@ -274,7 +368,14 @@ function PropertiesPage() {
             {loading ? (
               <Loader message="Fetching properties…" />
             ) : filteredProperties.length ? (
-              filteredProperties.map((property) => <PropertyCard key={property.id || property._id} property={property} />)
+              filteredProperties.map((property) => (
+                <PropertyCard
+                  key={property.id || property._id}
+                  property={property}
+                  saved={savedPropertyIds.has(property.id || property._id)}
+                  onToggleSave={handleToggleSave}
+                />
+              ))
             ) : (
               <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-10 text-center text-slate-300">
                 No properties found. Adjust the filters or search query.

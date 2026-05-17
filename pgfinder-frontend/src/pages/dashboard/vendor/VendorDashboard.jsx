@@ -44,12 +44,13 @@ function VendorDashboard() {
           <Card className="p-8">Loading stats…</Card>
         ) : (
           [
-            { label: 'Properties', value: overview.totalProperties, icon: <FiSliders /> },
-            { label: 'Inquiries', value: overview.inquiries, icon: <FiUsers /> },
-            { label: 'Bookings', value: overview.bookings, icon: <FiPlusCircle /> },
-            { label: 'Views', value: overview.views, icon: <FiEye /> },
+            { label: 'Properties', value: overview.totalProperties, icon: <FiSliders />, onClick: () => navigate('/dashboard/vendor/properties') },
+            { label: 'Leads', value: overview.leads ?? overview.inquiries + overview.bookings, icon: <FiUsers />, onClick: () => navigate('/dashboard/vendor/leads') },
+            { label: 'Inquiries', value: overview.inquiries, icon: <FiUsers />, onClick: () => document.getElementById('vendor-requests')?.scrollIntoView({ behavior: 'smooth' }) },
+            { label: 'Bookings', value: overview.bookings, icon: <FiPlusCircle />, onClick: () => document.getElementById('vendor-requests')?.scrollIntoView({ behavior: 'smooth' }) },
           ].map((item) => (
-            <Card key={item.label} className="p-6">
+            <button key={item.label} type="button" onClick={item.onClick} className="text-left">
+              <Card className="h-full p-6 transition hover:border-accent-500">
               <div className="flex items-center justify-between gap-4 text-slate-300">
                 <span className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-950 text-accent-400">{item.icon}</span>
                 <div className="text-right">
@@ -57,13 +58,14 @@ function VendorDashboard() {
                   <p className="mt-3 text-3xl font-semibold text-white">{item.value}</p>
                 </div>
               </div>
-            </Card>
+              </Card>
+            </button>
           ))
         )}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card>
+        <Card id="vendor-requests">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Active listings</p>

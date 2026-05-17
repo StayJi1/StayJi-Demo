@@ -1,12 +1,13 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import authService from '../services/authService'
 import userService from '../services/userService'
 import axiosClient from '../api/axiosClient'
 
 const AuthContext = createContext(null)
 
-const storageKey = 'pgfinder-auth'
+const storageKey = 'stayji-auth'
 const sessionDurationMs = 7 * 24 * 60 * 60 * 1000
+const inactivityTimeoutMs = 30 * 60 * 1000
 
 const readStoredAuth = () => {
   try {
@@ -60,6 +61,7 @@ export const AuthProvider = ({ children }) => {
   const [role, setRole] = useState(() => normalizeRole(storedAuth?.role || storedUser?.role || 'user'))
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState(null)
+  const lastActivityRef = useRef(Date.now())
 
   useEffect(() => {
     if (token) {
@@ -75,12 +77,41 @@ export const AuthProvider = ({ children }) => {
         user,
         token,
         role,
-        expiresAt: Date.now() + sessionDurationMs,
+        expiresAt: Date.now() + Math.min(sessionDurationMs, inactivityTimeoutMs),
       }))
     } else {
       localStorage.removeItem(storageKey)
     }
   }, [user, token, role])
+
+  useEffect(() => {
+    if (!user) return undefined
+
+    const refreshActivity = () => {
+      lastActivityRef.current = Date.now()
+      const saved = readStoredAuth()
+      if (saved?.user) {
+        localStorage.setItem(storageKey, JSON.stringify({
+          ...saved,
+          expiresAt: Date.now() + Math.min(sessionDurationMs, inactivityTimeoutMs),
+        }))
+      }
+    }
+
+    const activityEvents = ['click', 'keydown', 'mousemove', 'scroll', 'touchstart']
+    activityEvents.forEach((eventName) => window.addEventListener(eventName, refreshActivity, { passive: true }))
+
+    const timer = window.setInterval(() => {
+      if (Date.now() - lastActivityRef.current > inactivityTimeoutMs) {
+        logout()
+      }
+    }, 60 * 1000)
+
+    return () => {
+      activityEvents.forEach((eventName) => window.removeEventListener(eventName, refreshActivity))
+      window.clearInterval(timer)
+    }
+  }, [user])
 
   const login = async ({ email, password, role: userRole }) => {
     setStatus('loading')
@@ -114,6 +145,7 @@ export const AuthProvider = ({ children }) => {
         userEmail: payload.email || payload.userEmail,
         userPassword: payload.password || payload.userPassword,
         gender: payload.gender || 'Male',
+        contact: payload.contact || '',
         userType: payload.role ? payload.role.charAt(0).toUpperCase() + payload.role.slice(1) : 'User',
       }
       const response = await authService.signup(mapped)
@@ -126,6 +158,30 @@ export const AuthProvider = ({ children }) => {
       return { ...response, user: { ...normalizedUser, role: nextRole } }
     } catch (err) {
       setError(err?.response?.data?.message || err.message || 'Signup failed')
+      setStatus('error')
+      throw err
+    }
+  }
+
+  const googleSignup = async (payload) => {
+    setStatus('loading')
+    setError(null)
+    try {
+      const response = await authService.googleSignup({
+        credential: payload.credential,
+        contact: payload.contact,
+        gender: payload.gender || '',
+        userType: payload.role ? payload.role.charAt(0).toUpperCase() + payload.role.slice(1) : 'User',
+      })
+      const normalizedUser = normalizeUser(response.user)
+      const nextRole = normalizedUser.role || payload.role || 'user'
+      setUser(normalizedUser)
+      setToken(response.token)
+      setRole(nextRole)
+      setStatus('success')
+      return { ...response, user: { ...normalizedUser, role: nextRole } }
+    } catch (err) {
+      setError(err?.response?.data?.msg || err.message || 'Google signup failed')
       setStatus('error')
       throw err
     }
@@ -162,7 +218,7 @@ export const AuthProvider = ({ children }) => {
   }
 
   const value = useMemo(
-    () => ({ user, token, role, isAuthenticated: Boolean(user), status, error, login, signup, updateProfile, logout }),
+    () => ({ user, token, role, isAuthenticated: Boolean(user), status, error, login, signup, googleSignup, updateProfile, logout }),
     [user, token, role, status, error],
   )
 

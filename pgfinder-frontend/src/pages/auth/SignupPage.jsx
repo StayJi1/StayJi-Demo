@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import Button from '../../components/common/Button'
 import Input from '../../components/common/Input'
@@ -9,14 +9,63 @@ function SignupPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const requestedRole = searchParams.get('role') === 'vendor' ? 'vendor' : null
-  const { signup, status, error, isAuthenticated, role } = useAuth()
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: requestedRole || 'user' })
+  const { signup, googleSignup, status, error, isAuthenticated, role } = useAuth()
+  const googleButtonRef = useRef(null)
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+  const [form, setForm] = useState({ name: '', contact: '', email: '', password: '', role: requestedRole || 'user' })
+  const [localError, setLocalError] = useState('')
 
   useEffect(() => {
     if (isAuthenticated) {
       navigate(`/dashboard/${role || 'user'}`, { replace: true })
     }
   }, [isAuthenticated, navigate, role])
+
+  useEffect(() => {
+    if (!googleClientId || !googleButtonRef.current) return undefined
+
+    const renderGoogleButton = () => {
+      if (!window.google?.accounts?.id || !googleButtonRef.current) return
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: async ({ credential }) => {
+          setLocalError('')
+          if (!form.contact.trim()) {
+            setLocalError('Enter your phone number before continuing with Google.')
+            return
+          }
+          try {
+            const response = await googleSignup({ credential, contact: form.contact, role: form.role })
+            navigate(`/dashboard/${response.user?.role || form.role}`)
+          } catch {
+            // handled in context
+          }
+        },
+      })
+      googleButtonRef.current.innerHTML = ''
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: 'outline',
+        size: 'large',
+        width: googleButtonRef.current.offsetWidth || 320,
+      })
+    }
+
+    if (window.google?.accounts?.id) {
+      renderGoogleButton()
+      return undefined
+    }
+
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    script.onload = renderGoogleButton
+    document.head.appendChild(script)
+
+    return () => {
+      script.onload = null
+    }
+  }, [googleClientId, googleSignup, form.contact, form.role, navigate])
 
   const handleChange = (event) => {
     const { name, value } = event.target
@@ -25,6 +74,11 @@ function SignupPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    setLocalError('')
+    if (!form.contact.trim()) {
+      setLocalError('Phone number is required to create an account.')
+      return
+    }
     try {
       const response = await signup(form)
       navigate(`/dashboard/${response.user?.role || form.role}`)
@@ -45,11 +99,12 @@ function SignupPage() {
         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
           <div className="grid gap-4">
             <Input label="Full name" name="name" value={form.name} onChange={handleChange} required />
+            <Input label="Phone number" name="contact" value={form.contact} onChange={handleChange} required />
             <Input label="Email" type="email" name="email" value={form.email} onChange={handleChange} required />
             <Input label="Password" type="password" name="password" value={form.password} onChange={handleChange} required />
             {requestedRole ? (
               <div className="rounded-3xl border border-accent-500/40 bg-accent-500/10 px-4 py-3 text-sm text-accent-100">
-                Creating a vendor account for listing PGs.
+                Creating a vendor account for listing stays on StayJi.
               </div>
             ) : (
               <label className="block text-sm text-slate-200">
@@ -66,8 +121,22 @@ function SignupPage() {
               </label>
             )}
           </div>
-          {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+          {localError || error ? <p className="text-sm text-rose-300">{localError || error}</p> : null}
           <Button type="submit" className="w-full">{status === 'loading' ? 'Creating account…' : 'Create account'}</Button>
+          <div className="grid gap-3">
+            <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-slate-500">
+              <span className="h-px flex-1 bg-slate-800" />
+              or
+              <span className="h-px flex-1 bg-slate-800" />
+            </div>
+            {googleClientId ? (
+              <div ref={googleButtonRef} className="min-h-10 w-full overflow-hidden rounded-3xl" />
+            ) : (
+              <p className="rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-center text-sm text-slate-400">
+                Google signup is ready once `VITE_GOOGLE_CLIENT_ID` and backend `GOOGLE_CLIENT_ID` are configured.
+              </p>
+            )}
+          </div>
           <p className="text-center text-sm text-slate-400">
             Already have an account?{' '}
             <Link to="/login" className="text-accent-300 hover:text-white">

@@ -14,6 +14,7 @@ import UserDashboard from '../pages/dashboard/user/UserDashboard'
 import UserProfilePage from '../pages/dashboard/user/UserProfilePage'
 import AddPropertyPage from '../pages/dashboard/vendor/AddPropertyPage'
 import ManagePropertiesPage from '../pages/dashboard/vendor/ManagePropertiesPage'
+import VendorLeadsPage from '../pages/dashboard/vendor/VendorLeadsPage'
 import ManageUsersPage from '../pages/dashboard/admin/ManageUsersPage'
 import ProtectedRoute from '../components/common/ProtectedRoute'
 import RoleProtectedRoute from '../components/common/RoleProtectedRoute'
@@ -75,6 +76,14 @@ function AppRoutes() {
           element={
             <RoleProtectedRoute role="vendor">
               <AddPropertyPage />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="vendor/leads"
+          element={
+            <RoleProtectedRoute role="vendor">
+              <VendorLeadsPage />
             </RoleProtectedRoute>
           }
         />

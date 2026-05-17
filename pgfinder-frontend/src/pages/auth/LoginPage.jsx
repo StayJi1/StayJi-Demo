@@ -69,7 +69,7 @@ function LoginPage() {
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}
           <Button type="submit" className="w-full">{status === 'loading' ? 'Signing in…' : 'Continue'}</Button>
           <p className="text-center text-sm text-slate-400">
-            New to PG Finder?{' '}
+            New to StayJi?{' '}
             <Link to="/signup" className="text-accent-300 hover:text-white">
               Create an account
             </Link>

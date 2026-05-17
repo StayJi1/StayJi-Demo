@@ -34,6 +34,17 @@ const authService = {
     err.response = { data: res }
     throw err
   },
+
+  googleSignup: async (payload) => {
+    const res = await authApi.googleAuth(payload)
+    if (res && res.result === 'success') {
+      return { token: null, user: res.data }
+    }
+    const message = res?.msg || 'Google signup failed'
+    const err = new Error(message)
+    err.response = { data: res }
+    throw err
+  },
 }
 
 export default authService

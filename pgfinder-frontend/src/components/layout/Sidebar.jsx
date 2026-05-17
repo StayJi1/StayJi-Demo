@@ -1,9 +1,10 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { FiHome, FiLayers, FiUsers, FiPlusCircle, FiShield, FiUser } from 'react-icons/fi'
+import { FiHome, FiLayers, FiUsers, FiPlusCircle, FiShield, FiUser, FiLogOut } from 'react-icons/fi'
 
 function Sidebar() {
-  const { role, user } = useAuth()
+  const navigate = useNavigate()
+  const { role, user, logout } = useAuth()
   const normalizedRole = ['owner', 'host', 'hostel'].includes(role)
     ? 'vendor'
     : role || 'user'
@@ -21,6 +22,7 @@ function Sidebar() {
 
   if (normalizedRole === 'vendor') {
     links.push({ label: 'My properties', to: '/dashboard/vendor/properties', icon: <FiLayers /> })
+    links.push({ label: 'My leads', to: '/dashboard/vendor/leads', icon: <FiUsers /> })
     links.push({ label: 'Add property', to: '/dashboard/vendor/add-property', icon: <FiPlusCircle /> })
   }
 
@@ -35,11 +37,11 @@ function Sidebar() {
   return (
     <aside className="flex min-h-screen flex-col border-r border-slate-800/90 bg-surface-900 p-6 text-slate-200">
       <div className="mb-10 flex items-center gap-3">
-        <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-brand-600 text-xl text-white shadow-glow">
-          P
+        <div className="inline-flex h-12 w-12 overflow-hidden rounded-3xl bg-white shadow-glow">
+          <img src="/stayji-logo.png" alt="StayJi" className="h-full w-full object-cover" />
         </div>
         <div>
-          <p className="text-sm text-slate-400">Welcome back</p>
+          <p className="text-sm text-slate-400">StayJi dashboard</p>
           <p className="text-lg font-semibold text-white">{user?.name || user?.firstName || user?.userFname || 'Host'}</p>
         </div>
       </div>
@@ -60,6 +62,18 @@ function Sidebar() {
           </NavLink>
         ))}
       </nav>
+
+      <button
+        type="button"
+        onClick={() => {
+          logout()
+          navigate('/login', { replace: true })
+        }}
+        className="mt-auto flex items-center gap-3 rounded-3xl px-4 py-3 text-sm font-medium text-slate-400 transition hover:bg-slate-800/80 hover:text-white"
+      >
+        <FiLogOut />
+        Logout
+      </button>
     </aside>
   )
 }

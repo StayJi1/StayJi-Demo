@@ -23,7 +23,7 @@ export default function SearchBar({ query, onChange, onSearch, suggestions }) {
           onClick={onSearch}
           className="inline-flex h-14 items-center justify-center rounded-3xl bg-brand-600 px-6 text-sm font-semibold text-white transition hover:bg-brand-700"
         >
-          Find PGs
+          Find stays
         </button>
       </div>
       <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-600">

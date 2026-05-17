@@ -35,7 +35,8 @@ function PropertyDetailPage() {
 
   const handleShortlist = async () => {
     if (!user || !user._id) {
-      return alert('Please login to shortlist properties.')
+      navigate('/login', { replace: true })
+      return
     }
     try {
       await propertyService.shortlistProperty({ userIDFK: user._id, propertyIDFK: property._id })
@@ -46,9 +47,29 @@ function PropertyDetailPage() {
     }
   }
 
+  const handleExpressInterest = async () => {
+    if (!user || !user._id) {
+      navigate('/login', { replace: true })
+      return
+    }
+    try {
+      await propertyService.expressInterest({
+        userIDFK: user._id,
+        propertyIDFK: property._id,
+        subject: 'Interested in this property',
+        description: 'I am interested in this property and would like to know the next steps.',
+      })
+      alert('Your interest has been sent to the host.')
+    } catch (err) {
+      console.error(err)
+      alert('Unable to send your interest.')
+    }
+  }
+
   const handleBookVisit = async () => {
     if (!user || !user._id) {
-      return alert('Please login to book a visit.')
+      navigate('/login', { replace: true })
+      return
     }
     try {
       await propertyService.bookVisit({ userIDFK: user._id, propertyIDFK: property._id, visitDate: new Date() })
@@ -127,7 +148,7 @@ function PropertyDetailPage() {
               </div>
               <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
                 <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Food</p>
-                <p className="mt-2 text-base text-white">{property.foodIncluded ? 'Included' : 'Optional'}</p>
+                <p className="mt-2 text-base text-white">{property.mealsAvailable?.length ? property.mealsAvailable.join(', ') : property.foodIncluded ? 'Included' : 'Optional'}</p>
               </div>
               <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
                 <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Deposit</p>
@@ -167,7 +188,7 @@ function PropertyDetailPage() {
               <div className="rounded-3xl bg-slate-950/80 p-5">
                 <FiPhone className="text-accent-400" />
                 <p className="mt-3 text-sm text-slate-400">Owner contact</p>
-                <p className="mt-2 text-white">{property.contact || '+91 98765 43210'}</p>
+                <p className="mt-2 text-white">{property.contact || '1234567899'}</p>
               </div>
               <div className="rounded-3xl bg-slate-950/80 p-5">
                 <FiClock className="text-accent-400" />
@@ -177,6 +198,7 @@ function PropertyDetailPage() {
             </div>
             <div className="mt-8 flex flex-wrap gap-4">
               <Button onClick={handleShortlist} className="w-full sm:w-auto">Shortlist</Button>
+              <Button onClick={handleExpressInterest} className="w-full sm:w-auto">Express interest</Button>
               <Button onClick={handleBookVisit} variant="secondary" className="w-full sm:w-auto">Book visit</Button>
             </div>
           </div>
@@ -212,6 +234,12 @@ function PropertyDetailPage() {
               ))}
             </ul>
           </div>
+          {property.menuPhoto ? (
+            <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
+              <p className="text-sm uppercase tracking-[0.28em] text-accent-500">Menu</p>
+              <img src={property.menuPhoto} alt={`${property.name} menu`} className="mt-5 max-h-80 w-full rounded-[1.5rem] object-cover" />
+            </div>
+          ) : null}
         </aside>
       </div>
     </div>

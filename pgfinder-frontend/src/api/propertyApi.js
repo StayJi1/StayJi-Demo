@@ -6,9 +6,17 @@ const normalizeProperty = (property) => {
   const amenities = property.aminityFeatures
     ? property.aminityFeatures.split(',').map((item) => item.trim()).filter(Boolean)
     : property.amenities || []
+  const mealsAvailable = Array.isArray(property.mealsAvailable) ? property.mealsAvailable : []
 
   const cityName = (property.cityName || property.city || '').toString()
-  const fallbackImage = 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=80'
+  const inferredCategory = property.propertyCategory || property.category || property.propertyTypeIDFK?.typeName || property.type || 'PG'
+  const categoryFallbackImages = {
+    PG: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=80',
+    Hotel: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=900&q=80',
+    Flat: 'https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=900&q=80',
+    Hostel: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=900&q=80',
+  }
+  const fallbackImage = categoryFallbackImages[inferredCategory] || categoryFallbackImages.PG
   const imageUrls = [
     ...(Array.isArray(property.propertyImageUrls) ? property.propertyImageUrls : []),
     property.propertyImage,
@@ -44,9 +52,9 @@ const normalizeProperty = (property) => {
     location: normalizedLocation,
     locationLabel: property.address || property.areaName || property.city || '',
     city: property.cityName || property.city || '',
-    type: property.propertyCategory || property.propertyTypeIDFK?.typeName || property.type || 'PG',
+    type: inferredCategory,
     propertyTypeName: property.propertyTypeIDFK?.typeName || property.type || '',
-    category: property.propertyCategory || property.category || 'PG',
+    category: inferredCategory,
     rent: Number(property.rent) || property.rent || 0,
     dailyRate: Number(property.dailyRate) || property.dailyRate || 0,
     pricingUnit: property.pricingUnit || 'month',
@@ -54,7 +62,10 @@ const normalizeProperty = (property) => {
     depositAmount: Number(property.depositAmount) || property.depositAmount || 0,
     sharing: property.sharing || property.roomType || '',
     gender: property.genderType || property.gender || 'Co-ed',
-    foodIncluded: amenities.some((item) => /meal|food/i.test(item)),
+    foodIncluded: mealsAvailable.length > 0 || amenities.some((item) => /meal|food/i.test(item)),
+    mealsAvailable,
+    menuPhoto: property.menuPhoto || property.menuPhotoUrls?.[0] || '',
+    menuPhotoUrls: property.menuPhotoUrls || [],
     image: imageUrls[0] || fallbackImage,
     images: imageUrls.length ? [...new Set(imageUrls)] : [fallbackImage],
     videoUrl: property.videoUrl || '',
@@ -84,11 +95,11 @@ const propertyApi = {
   list: (params) => axiosClient.get('/client/getPropertyList', { params }).then((res) => mapResponse(res.data && res.data.data)),
 
   // Backend expects POST with { id }
-  detail: (id) => axiosClient.post('/client/getPropertyById', { id }).then((res) => mapResponse(res.data && res.data.data)),
+  detail: (id, options = {}) => axiosClient.post('/client/getPropertyById', { id, includePrivate: Boolean(options.includePrivate) }).then((res) => mapResponse(res.data && res.data.data)),
 
   // Popular: backend has no featured endpoint; reuse property list and let caller slice
   popular: () => axiosClient.get('/client/getPropertyList').then((res) => mapResponse(res.data && res.data.data)),
-  all: () => axiosClient.get('/client/getAllPropertyList').then((res) => mapResponse(res.data && res.data.data)),
+  all: (params) => axiosClient.get('/client/getAllPropertyList', { params }).then((res) => mapResponse(res.data && res.data.data)),
   review: ({ id, approvalStatus }) => axiosClient.post('/client/reviewProperty', { id, approvalStatus }).then((res) => {
     if (res.data?.result === 'failure') {
       throw new Error(res.data?.msg || 'Property review was not updated')
@@ -107,11 +118,13 @@ const propertyApi = {
 
   // Shortlist expects userIDFK and propertyIDFK
   shortlist: ({ userIDFK, propertyIDFK }) => axiosClient.post('/client/addShortlist', { userIDFK, propertyIDFK }).then((res) => res.data && res.data.data),
+  removeShortlist: ({ userIDFK, propertyIDFK }) => axiosClient.post('/client/deleteShortlist', { userIDFK, propertyIDFK }).then((res) => res.data && res.data.data),
 
   shortlistByUser: (userIDFK) => axiosClient.post('/client/getShortlistById', { userIDFK }).then((res) => (res.data?.data || []).map(normalizeShortlistItem)),
 
   // Book visit uses /addVisit (expects userIDFK, propertyIDFK, visitDate)
   bookVisit: ({ userIDFK, propertyIDFK, visitDate }) => axiosClient.post('/client/addVisit', { userIDFK, propertyIDFK, visitDate }).then((res) => res.data && res.data.data),
+  expressInterest: ({ userIDFK, propertyIDFK, subject, description }) => axiosClient.post('/client/addInterest', { userIDFK, propertyIDFK, subject, description }).then((res) => res.data && res.data.data),
 
   create: (payload) => axiosClient.post('/client/addProperty', payload, {
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -134,6 +147,12 @@ const propertyApi = {
       throw new Error(res.data?.msg || 'Property was not deleted')
     }
     return res.data?.data
+  }),
+  reactivate: (id) => axiosClient.post('/client/reactivateProperty', { id }).then((res) => {
+    if (res.data?.result === 'failure') {
+      throw new Error(res.data?.msg || 'Property was not reactivated')
+    }
+    return normalizeProperty(res.data?.data)
   }),
 }
 

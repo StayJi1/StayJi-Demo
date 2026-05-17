@@ -24,28 +24,31 @@ const normalizeProperty = (property) => ({
 })
 
 const getUsers = () => axiosClient.get('/client/getUserList').then((res) => (res.data?.data || []).map(normalizeUser))
+const getAdminUsers = (params) => axiosClient.get('/client/getAdminUsers', { params }).then((res) => (res.data?.data || []).map(normalizeUser))
 const getProperties = () => axiosClient.get('/client/getAllPropertyList').then((res) => (res.data?.data || []).map(normalizeProperty))
 const getPropertiesByUser = (userIDFK) => axiosClient.post('/client/getPropertyListByUser', { userIDFK }).then((res) => (res.data?.data || []).map(normalizeProperty))
 
 const getShortlist = (userIDFK) => axiosClient.post('/client/getShortlistById', { userIDFK }).then((res) => res.data?.data || [])
+const getVendorVisits = (userIDFK) => axiosClient.post('/client/getVisitorList', { userIDFK }).then((res) => res.data?.data || [])
+const getVendorInquiries = (userIDFK) => axiosClient.post('/client/getInquiry', { userIDFK }).then((res) => res.data?.data || [])
+const getVendorShortlists = (userIDFK) => axiosClient.post('/client/getShortlistByVendor', { userIDFK }).then((res) => res.data?.data || [])
 
 const dashboardApi = {
   adminStats: async () => {
-    const [users, properties] = await Promise.all([getUsers(), getProperties()])
-    return {
-      users: users.length,
-      vendors: users.filter((user) => ['vendor', 'owner'].includes(user.role)).length,
-      properties: properties.length,
-      inquiries: 0,
-    }
+    const res = await axiosClient.get('/client/getAdminStats')
+    return res.data?.data || { users: 0, vendors: 0, properties: 0, inactiveProperties: 0, inquiries: 0, pendingProperties: 0, leads: 0 }
   },
   vendorOverview: async (userIDFK) => {
-    const properties = userIDFK ? await getPropertiesByUser(userIDFK) : await getProperties()
+    const [properties, visits, inquiries, shortlists] = userIDFK
+      ? await Promise.all([getPropertiesByUser(userIDFK), getVendorVisits(userIDFK), getVendorInquiries(userIDFK), getVendorShortlists(userIDFK)])
+      : [await getProperties(), [], [], []]
     return {
       totalProperties: properties.length,
-      inquiries: 0,
-      bookings: properties.filter((property) => property.status === 'Booked').length,
+      inquiries: inquiries.length,
+      bookings: visits.length,
+      savedByStudents: shortlists.length,
       views: properties.length * 12,
+      leads: visits.length + inquiries.length + shortlists.length,
     }
   },
   userOverview: async (userIDFK) => {
@@ -61,8 +64,16 @@ const dashboardApi = {
       savedSearches: 0,
     }
   },
-  adminUsers: getUsers,
+  adminUsers: getAdminUsers,
+  adminVendorLeadSummary: async () => {
+    const res = await axiosClient.get('/client/getAdminVendorLeadSummary')
+    return res.data?.data || { totalLeads: 0, vendors: [] }
+  },
+  updateUserStatus: ({ id, isActive, userType }) => axiosClient.post('/client/updateUserStatus', { id, isActive, userType }).then((res) => normalizeUser(res.data?.data)),
   vendorProperties: getPropertiesByUser,
+  vendorVisits: getVendorVisits,
+  vendorInquiries: getVendorInquiries,
+  vendorShortlists: getVendorShortlists,
 }
 
 export default dashboardApi

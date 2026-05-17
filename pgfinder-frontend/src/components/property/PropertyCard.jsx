@@ -1,28 +1,44 @@
 import { motion } from 'framer-motion'
-import { Link } from 'react-router-dom'
-import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { FiHeart, FiMapPin, FiStar } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import propertyService from '../../services/propertyService'
 import { formatDistance } from '../../utils/distance'
 
-function PropertyCard({ property }) {
+function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
+  const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
-  const [saved, setSaved] = useState(false)
+  const [saved, setSaved] = useState(Boolean(savedProp))
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setSaved(Boolean(savedProp))
+  }, [savedProp])
 
   const handleShortlist = async () => {
     if (!isAuthenticated || !user?._id) {
-      alert('Please login to add this PG to your wishlist.')
+      navigate('/login', { replace: true })
       return
     }
 
+    const propertyIDFK = property._id || property.id
     setSaving(true)
     try {
-      await propertyService.shortlistProperty({ userIDFK: user._id, propertyIDFK: property._id || property.id })
-      setSaved(true)
+      if (onToggleSave) {
+        await onToggleSave(propertyIDFK, !saved)
+        setSaved(!saved)
+      } else {
+        if (saved) {
+          await propertyService.removeShortlistProperty({ userIDFK: user._id, propertyIDFK })
+          setSaved(false)
+        } else {
+          await propertyService.shortlistProperty({ userIDFK: user._id, propertyIDFK })
+          setSaved(true)
+        }
+      }
     } catch {
-      alert('Unable to add this PG to your wishlist.')
+      alert('Unable to update this PG in your wishlist.')
     } finally {
       setSaving(false)
     }
@@ -58,7 +74,7 @@ function PropertyCard({ property }) {
             className={`inline-flex h-11 w-11 items-center justify-center rounded-3xl shadow-soft transition ${
               saved ? 'bg-rose-500 text-white' : 'bg-slate-900 text-slate-200 hover:text-rose-300'
             }`}
-            aria-label="Add to wishlist"
+            aria-label={saved ? 'Remove from wishlist' : 'Add to wishlist'}
           >
             <FiHeart />
           </button>
@@ -76,6 +92,11 @@ function PropertyCard({ property }) {
         {property.perDayCheckIn ? (
           <p className="rounded-3xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
             Per-day check-in available{property.dailyRate ? ` at ₹${property.dailyRate}/day` : ''}
+          </p>
+        ) : null}
+        {property.mealsAvailable?.length ? (
+          <p className="rounded-3xl bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Food: {property.mealsAvailable.join(', ')}
           </p>
         ) : null}
         <div className="flex items-center justify-between gap-3 text-slate-300">
