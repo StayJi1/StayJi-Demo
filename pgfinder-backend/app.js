@@ -21,11 +21,20 @@ var cors = require("cors");
 |--------------------------------------------------------------------------
 */
 
+const corsOrigins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://final-pg-finder-alpha.vercel.app"
+];
+
+// Add environment variable CORS origins if provided
+if (process.env.CORS_ORIGINS) {
+    const envOrigins = process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim());
+    corsOrigins.push(...envOrigins);
+}
+
 app.use(cors({
-    origin: [
-        "http://localhost:5173",
-        "https://final-pg-finder-alpha.vercel.app"
-    ],
+    origin: corsOrigins,
     credentials: true
 }));
 
