@@ -24,7 +24,7 @@ var cors = require("cors");
 app.use(cors({
     origin: [
         "http://localhost:5173",
-        "https://your-vercel-url.vercel.app"
+        "https://final-pg-finder-alpha.vercel.app"
     ],
     credentials: true
 }));
