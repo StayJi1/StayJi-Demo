@@ -1,0 +1,94 @@
+<%- include('./include/header.html') %>
+<div class="main-content">
+    <section class="section">
+      <div class="section-body">
+        <!-- <a href="/admin/addVisit" class="btn btn-icon btn-primary" style="width: 100px;"><i class="fas fa-plus"></i></a><br><br> -->
+        <div class="row">
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header">
+                <h4>Visit Details</h4>
+              </div>
+              <div class="card-body">
+                <div class="table-responsive">
+                  <table class="table table-striped" id="table-1" >
+                    <thead>
+                      <tr>
+                        <th>No</th>
+                        <th>Visit</th>
+                        <th>Property</th>
+                        <th>Status</th>
+                        <!-- <th>Action</th> -->
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <%
+                      var n=1;
+                      data.forEach(function(key){
+                      %>
+                      <tr>
+                        <td>
+                          <%= n++; %>
+                        </td>
+                        <td>
+                            <b>Date: </b><%= key.visitDate; %><br>
+                            <b>Time: </b><%= key.visitTime; %><br>
+                        </td>
+                        <td>
+                            <b>Property Name: </b><%= key.property_value; %><br>
+                            <b>User Name: </b><%= key.user_value; %><br>
+                        </td>
+                        <td>
+                          <b><%if(key.status=="0"){%>
+                            <div class="text-center" style="color:white;background-color:grey;width: 100px;border-radius: 15%;">Pending</div>
+                          <%}else if(key.status=="1"){%>
+                            <div class="text-center" style="background-color: rgb(210, 210, 4);width: 100px;border-radius: 15%;">Visit Schedule</div>
+                            <%}else{%>
+                              <div class="text-center" style="color:white;background-color:green;width: 100px;border-radius: 15%;">Already Visited</div>
+                              <%}%>
+                        </td>
+                        <!-- <td>
+                            <a href="#" class="btn btn-icon btn-primary" style="border-radius: 30%;"><i class="fas fa-pencil-alt"></i></a>
+                            <a href="#" class="btn btn-icon btn-danger" style="border-radius: 30%;"><i class="fas fa-trash-alt"></i></a>
+                        </td> -->
+                      </tr>
+                      <% }); %>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <%  data.forEach(function(key){ %>
+  
+  <!------------------Confirm Model -------------------------->
+
+  <div class="modal fade" id="modalUpdate<%= key._id; %>" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="exampleModalLabel">Do You Really Want To Update Status?</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        
+          <form method="post" action="/admin/updateVisitEJS">
+            <input type="hidden" name="id" value="<%=key._id%>" />
+            <input type="hidden" name="status" value="<%=key.status%>" />
+            <div class="modal-footer bg-whitesmoke br">
+            <button type="submit" class="btn btn-primary">Confirm</button>
+            <button type="button" class="btn btn-danger" data-dismiss="modal">Close</button>
+            </div>
+          </form>
+      </div>
+    </div>
+  </div>
+<% }); %>
+  <%- include('./include/footer.html') %>

@@ -1,0 +1,79 @@
+<%- include('./include/header.html') %>
+<div class="main-content">
+    <section class="section">
+      <div class="section-body">
+        <a href="/admin/addPropertyType" class="btn btn-icon btn-primary" style="width: 100px;"><i class="fas fa-plus"></i></a><br><br>
+        <div class="row">
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header">
+                <h4>Property Type</h4>
+              </div>
+              <div class="card-body">
+                <div class="table-responsive">
+                  <table class="table table-striped" id="table-1" >
+                    <thead>
+                      <tr>
+                        <th>No</th>
+                        <th>Property Type</th>
+                        <th>Image</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <%
+                      var n=1;
+                      data.forEach(function(key){
+                      %>
+                      <tr>
+                        <td>
+                          <%= n++; %>
+                        </td>
+                        <td>
+                          <%= key.typeName; %>
+                        </td>
+                        <td>
+                            <img alt="image" src="/upload/PropertyTypeImage/<%=key.image%>" width="200"><br>
+                        </td>
+                        <td>
+                          <a href="/admin/fetchPropertyType/<%= key._id; %>" class="btn btn-icon btn-primary" style="border-radius: 30%;"><i class="fas fa-pencil-alt"></i></a>
+                          <a href="" data-toggle="modal" data-target="#modalDelete<%= key._id; %>"class="btn btn-icon btn-danger" style="border-radius: 30%;"><i class="fas fa-trash-alt"></i></a>
+                      </td>
+                      </tr>
+                      <% }); %>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <!------------------ Model -------------------------->
+  <%  data.forEach(function(key){ %>
+    <div class="modal fade" id="modalDelete<%= key._id; %>" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="exampleModalLabel">Do You Really Want To Delete?</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        
+          <form method="post" action="/admin/deletePropertyType">
+            <input type="hidden" name="id" value="<%=key._id%>" />
+            <div class="modal-footer bg-whitesmoke br">
+            <button type="submit" class="btn btn-primary">Confirm</button>
+            <button type="button" class="btn btn-danger" data-dismiss="modal">Close</button>
+            </div>
+          </form>
+      </div>
+    </div>
+  </div>
+<% }); %>
+  <%- include('./include/footer.html') %>

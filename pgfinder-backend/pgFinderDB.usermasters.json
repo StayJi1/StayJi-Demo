@@ -1,0 +1,18 @@
+[{
+  "_id": {
+    "$oid": "687b4e95c6b9b7a61a7849fd"
+  },
+  "userName": "Admin",
+  "userFname": "Admin",
+  "userLname": "A",
+  "userEmail": "admin@gmail.com",
+  "userPassword": "123",
+  "dob": "",
+  "gender": "female",
+  "contact": "123456789",
+  "occupation": "",
+  "userType": "Admin",
+  "profile": "",
+  "addedOn": "2025-07-19 13:24:25",
+  "isActive": true
+}]

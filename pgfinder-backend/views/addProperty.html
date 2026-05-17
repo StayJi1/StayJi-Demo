@@ -1,0 +1,296 @@
+<%- include('./include/header.html') %>
+<div class="main-content">
+    <section class="section">
+      <div class="section-body">
+        <div class="row">
+            <div class="col-md-2"></div>
+          <div class="col-12 col-md-8 col-lg-9">
+            <div class="card">
+              <%if(operation=="insert"){%>
+              <form action="/admin/addPropertyEJS" method="post" enctype="multipart/form-data">
+                <div class="card-header">
+                  <h4>Insert Property</h4>
+                </div>
+                <div class="card-body">
+                  <div class="form-group">
+                    <label>Property Name</label>
+                    <input type="text" class="form-control"  required="" name="propertyName" id="propertyName">
+                  </div>
+                  <div class="form-group">
+                    <label>Owner Name</label>
+                    <select class="form-control" name="userIDFK">
+                      <option selected>Select</option>
+                      <%for (let user of userData){ %>
+                        <option value="<%= user._id %>">
+                            <%= user.userFname %> <%= user.userLname %>
+                        </option>
+                        <% } %>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Property Type</label>
+                    <select class="form-control" name="propertyTypeIDFK">
+                      <option selected>Select</option>
+                      <%for (let propertyType of propertyTypeData){ %>
+                        <option value="<%= propertyType._id %>">
+                            <%= propertyType.typeName %>
+                        </option>
+                        <% } %>
+                    </select>
+                  </div>
+                  
+                  <div class="form-group">
+                    <label>Description</label>
+                    <textarea class="form-control"  required="" name="description" id="description"></textarea>
+                  </div>
+                  <div class="form-group">
+                    <label>Address</label>
+                    <textarea class="form-control"  required="" name="address" id="address"></textarea>
+                  </div>
+                  <div class="form-group">
+                    <label>Area</label>
+                    <input type="text" class="form-control"  required="" name="areaName" id="areaName">
+                  </div>
+                  <div class="form-group">
+                    <label>City</label>
+                    <select class="form-control" name="cityName" id="cityName">
+                      <option>Select</option>
+                      <option>Surat</option>
+                      <option>Vapi</option>
+                      <option>Valsad</option>
+                      <option>Navsari</option>
+                    </select>
+                  </div>
+                  <div class="form-group">  
+                    <label>Rent</label>
+                    <div class="input-group">
+                    <div class="input-group-prepend">
+                      <div class="input-group-text">
+                        <i class="fas fas fa-rupee-sign"></i>
+                      </div>
+                    </div>
+                    <input type="number" class="form-control" required="" name="rent" id="rent">
+                  </div>  
+                  </div>
+                  <div class="form-group">
+                    <label class="d-block">Sharing</label>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="sharing" id="Yes" Value="Yes" >
+                        <label class="form-check-label" for="Yes">
+                          Yes
+                        </label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="sharing" id="No" Value="No" >
+                        <label class="form-check-label" for="No">
+                          No
+                        </label>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label>Gender Type</label>
+                    <select class="form-control" id="genderType" name="genderType">
+                      <option>Select</option>
+                      <option>Male</option>
+                      <option>Female</option>
+                      <option>Unisex</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Property Image</label>
+                  <div class="custom-file">
+                    <input type="hidden" value="PropertyImage" id="docimg" name="docimg">
+                    <input type="file" class="custom-file-input" name="propertyImage" id="propertyImage">
+                    <label class="custom-file-label" for="propertyImage">Choose file</label>
+                  </div>
+                  </div>
+                  <div class="form-group">
+                    <label>Property Multiple Images</label>
+                  <div class="custom-file">
+                    <input type="hidden" value="PropertyImages" id="docimg" name="docimg">
+                    <input type="file" class="custom-file-input" id="image" name="image" multiple>
+                    <label class="custom-file-label" for="image">Choose file</label>
+                  </div>
+                  </div>
+                </div>
+                <div class="card-footer text-center">
+                  <button class="btn btn-primary">Submit</button>
+                </div>
+              </form>
+              <%}else{%>
+                <form action="/admin/updatePropertyEJS" method="post" enctype="multipart/form-data">
+                  <div class="card-header">
+                    <h4>Update Property</h4>
+                  </div>
+                  <div class="card-body">
+                    <input type="hidden" name="id" value="<%=propertyData._id%>">
+                    <div class="form-group">
+                      <label>Property Name</label>
+                      <input type="text" class="form-control"  required="" name="propertyName" id="propertyName" value="<%=propertyData.propertyName%>">
+                    </div>
+                    <div class="form-group">
+                      <label>Owner Name</label>
+                      <select class="form-control" name="userIDFK">
+                        <option selected >select</option>
+                        <%for (let user of userData){ %>
+                            <option value="<%= user._id %>"<%
+                                if(user._id.toString()==propertyData.userIDFK){ %>
+                                selected
+                                <% }%>
+                               >
+
+                              <%= user.userFname %><%= user.userLname %>
+                            </option>
+                            <% } %>
+                    </select>
+                    </div>
+                    <div class="form-group">
+                      <label>Property Type</label>
+                      <select class="form-control" name="propertyTypeIDFK">
+                        <option selected>select</option>
+                        <%for (let propertyType of propertyTypeData){ %>
+                          <option value="<%= propertyType._id %>" <%= 
+                            propertyType._id.toString()==propertyData.propertyTypeIDFK ? 'selected' : '' %>
+                              >
+                              <%= propertyType.typeName %>
+                          </option>
+                          <% } %>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label>Description</label>
+                      <textarea class="form-control"  required="" name="description" id="description"><%=propertyData.description%></textarea>
+                    </div>
+                    <div class="form-group">
+                      <label>Address</label>
+                      <textarea class="form-control"  required="" name="address" id="address"><%=propertyData.address%></textarea>
+                    </div>
+                    <div class="form-group">
+                      <label>Area</label>
+                      <input type="text" class="form-control"  required="" name="areaName" id="areaName" value="<%=propertyData.areaName%>">
+                    </div>
+                    <div class="form-group">
+                      <label>City</label>
+                      <select class="form-control" name="cityName" id="cityName">
+                        <option>Select</option>
+                        <option value="Surat"
+                        <% if(propertyData.cityName=="Surat"){ %>
+                          selected 
+                          <%}%>
+                          >Surat</option>
+                          <option value="Vapi"
+                        <% if(propertyData.cityName=="Vapi"){ %>
+                          selected 
+                          <%}%>
+                          >Vapi</option>
+                          <option value="Valsad"
+                        <% if(propertyData.cityName=="Valsad"){ %>
+                          selected 
+                          <%}%>
+                          >Valsad</option>
+                          <option value="Navsari"
+                          <% if(propertyData.cityName=="Navsari"){ %>
+                            selected 
+                            <%}%>
+                            >Navsari</option>
+                      </select>
+                    </div>
+                    <div class="form-group">  
+                      <label>Rent</label>
+                      <div class="input-group">
+                      <div class="input-group-prepend">
+                        <div class="input-group-text">
+                          <i class="fas fas fa-rupee-sign"></i>
+                        </div>
+                      </div>
+                      <input type="number" class="form-control" required="" name="rent" id="rent" value="<%=propertyData.rent%>">
+                    </div>  
+                    </div>
+                    <div class="form-group">
+                      <label class="d-block">Sharing</label>
+                      <div class="form-check form-check-inline">
+                          <input class="form-check-input" type="radio" name="sharing" id="Yes" Value="Yes" <%
+                          if(propertyData.sharing == 'Yes'){%>
+                            checked
+                            <% }%>
+                             >
+                          <label class="form-check-label" for="Yes">
+                            Yes
+                          </label>
+                      </div>
+                      <div class="form-check form-check-inline">
+                          <input class="form-check-input" type="radio" name="sharing" id="No" Value="No" <%
+                          if(propertyData.sharing == 'No'){%>
+                            checked
+                            <% }%>
+                             >
+                          <label class="form-check-label" for="No">
+                            No
+                          </label>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label>Gender Type</label>
+                      <select class="form-control" id="genderType" name="genderType">
+                        <option>Select</option>
+                        <option value="Male"
+                        <% if(propertyData.genderType=="Male"){ %>
+                          selected 
+                          <%}%>
+                          >Male</option>
+                        <option value="Female"
+                        <% if(propertyData.genderType=="Female"){ %>
+                          selected 
+                          <%}%>
+                          >Female</option>
+                        <option value="Unisex"
+                        <% if(propertyData.genderType=="Unisex"){ %>
+                          selected 
+                          <%}%>
+                          >Unisex</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="d-block">Available</label>
+                      <div class="form-check form-check-inline">
+                          <input class="form-check-input" type="radio" name="isAvailable" id="Available" value="true" <%
+                          if(propertyData.isAvailable == true){%>
+                            checked
+                            <% }%>
+                             >
+                          <label class="form-check-label" for="Available">
+                            Available
+                          </label>
+                      </div>
+                      <div class="form-check form-check-inline">
+                          <input class="form-check-input" type="radio" name="isAvailable" id="NotAvailable" value="false" <%
+                          if(propertyData.isAvailable == false){%>
+                            checked
+                            <% }%>
+                             >>
+                          <label class="form-check-label" for="NotAvailable">
+                            Not Available
+                          </label>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label>Property Image</label>
+                    <div class="custom-file">
+                      <input type="hidden" value="PropertyImage" id="docimg" name="docimg">
+                      <input type="file" class="custom-file-input" id="propertyImage" name="propertyImage" value="<%=propertyData.propertyImage%>">
+                      <label class="custom-file-label" for="propertyImage">Choose file</label>
+                    </div>
+                    </div>
+                  </div>
+                  <div class="card-footer text-center">
+                    <button class="btn btn-primary">Submit</button>
+                  </div>
+                </form>
+                <% }%>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+<%- include('./include/footer.html') %>

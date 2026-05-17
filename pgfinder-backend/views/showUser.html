@@ -1,0 +1,151 @@
+<%- include('./include/header.html') %>
+<div class="main-content">
+    <section class="section">
+      <div class="section-body">
+        <!-- <a href="/admin/addUser" class="btn btn-icon btn-primary" style="width: 100px;"><i class="fas fa-plus"></i></a><br><br> -->
+        <div class="row">
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header">
+                <h4>User Details</h4>
+              </div>
+              <div class="card-body">
+                <form method="get" action="/admin/showUser" class="mb-4 form-inline">
+                  <div class="form-row align-items-center">
+                    <div class="col-auto">
+                      <label class="sr-only" for="search">Search</label>
+                      <input type="text" class="form-control" id="search" name="search" placeholder="Search name, email, contact" value="<%= searchQuery ? searchQuery : '' %>" />
+                    </div>
+                    <div class="col-auto">
+                      <label class="sr-only" for="userType">User Type</label>
+                      <select class="form-control" id="userType" name="userType">
+                        <option value="">All user types</option>
+                        <option value="Vendor" <%= userTypeFilter === 'Vendor' ? 'selected' : '' %>>Vendor</option>
+                        <option value="User" <%= userTypeFilter === 'User' ? 'selected' : '' %>>General User</option>
+                        <option value="Admin" <%= userTypeFilter === 'Admin' ? 'selected' : '' %>>Admin</option>
+                      </select>
+                    </div>
+                    <div class="col-auto">
+                      <label class="sr-only" for="status">Status</label>
+                      <select class="form-control" id="status" name="status">
+                        <option value="active" <%= statusFilter !== 'inactive' ? 'selected' : '' %>>Active</option>
+                        <option value="inactive" <%= statusFilter === 'inactive' ? 'selected' : '' %>>Inactive</option>
+                      </select>
+                    </div>
+                    <div class="col-auto">
+                      <button type="submit" class="btn btn-primary">Filter</button>
+                    </div>
+                    <div class="col-auto">
+                      <a href="/admin/showUser" class="btn btn-outline-secondary">Reset</a>
+                    </div>
+                  </div>
+                </form>
+                <div class="table-responsive">
+                  <table class="table table-striped" id="table-1">
+                    <thead>
+                      <tr>
+                        <th>No</th>
+                        <th>User</th>
+                        <th>Login</th>
+                        <th>Birthdate</th>
+                        <th>Occupation</th>
+                        <th>User type</th>
+                        <th>Properties</th>
+                        <th>Profile</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <%
+                      var n = (typeof currentPage !== 'undefined' ? ((currentPage - 1) * 10 + 1) : 1);
+                      data.forEach(function(key){
+                      %>
+                      <tr>
+                        <td>
+                          <%= n++; %>
+                        </td>
+                        <td>
+                            <b>Name: </b><%=key.userFname; %> <%=key.userLname; %><br>
+                            <b>Gender: </b><%=key.gender; %><br>
+                        </td>
+                        <td>
+                            <b>Email: </b><%= key.userEmail; %><br>
+                            <b>Contact: </b><%= key.contact; %><br>
+                        </td>
+                        <td>
+                          <%= key.dob; %>
+                        </td>
+                        <td><%= key.occupation; %></td>
+                        <td><%= key.userType; %></td>
+                        <td><%= key.userType === 'Vendor' ? key.propertyCount : 0 %></td>
+                        <td>
+                            <img alt="image" src="/upload/UserImage/<%= key.profile; %>" width="100">
+                        </td>
+                        <td>
+                          <% if (key.userType === 'Vendor') { %>
+                            <a href="/admin/showVendorProperties/<%= key._id; %>" class="btn btn-icon btn-info" style="border-radius: 30%; margin-bottom: 0.2rem;"><i class="fas fa-list"></i></a>
+                          <% } %>
+                          <a href="/admin/fetchUser/<%= key._id; %>" class="btn btn-icon btn-primary" style="border-radius: 30%;"><i class="fas fa-pencil-alt"></i></a>
+                          <a href="" data-toggle="modal" data-target="#modalDelete<%= key._id; %>" class="btn btn-icon btn-danger" style="border-radius: 30%;"><i class="fas fa-trash-alt"></i></a>
+                        </td>
+                      </tr>
+                      <% }); %>
+                    </tbody>
+                  </table>
+                </div>
+                <% if (typeof totalPages !== 'undefined' && totalPages > 1) { %>
+                  <% const params = [];
+                     if (searchQuery) params.push('search=' + encodeURIComponent(searchQuery));
+                     if (userTypeFilter && userTypeFilter !== 'All') params.push('userType=' + encodeURIComponent(userTypeFilter));
+                     if (statusFilter) params.push('status=' + encodeURIComponent(statusFilter));
+                     const baseUrl = '/admin/showUser?' + params.join('&');
+                  %>
+                  <nav aria-label="User list pagination" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                      <li class="page-item <%= currentPage === 1 ? 'disabled' : '' %>">
+                        <a class="page-link" href="<%= baseUrl %><%= params.length ? '&' : '' %>page=<%= currentPage - 1 %>">Previous</a>
+                      </li>
+                      <% for (let page = 1; page <= totalPages; page++) { %>
+                        <li class="page-item <%= currentPage === page ? 'active' : '' %>">
+                          <a class="page-link" href="<%= baseUrl %><%= params.length ? '&' : '' %>page=<%= page %>"><%= page %></a>
+                        </li>
+                      <% } %>
+                      <li class="page-item <%= currentPage === totalPages ? 'disabled' : '' %>">
+                        <a class="page-link" href="<%= baseUrl %><%= params.length ? '&' : '' %>page=<%= currentPage + 1 %>">Next</a>
+                      </li>
+                    </ul>
+                  </nav>
+                <% } %>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </section>
+  </div>
+   <!------------------ Model -------------------------->
+   <%  data.forEach(function(key){ %>
+    <div class="modal fade" id="modalDelete<%= key._id; %>" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="exampleModalLabel">Do You Really Want To Delete?</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        
+          <form method="post" action="/admin/deleteUser">
+            <input type="hidden" name="id" value="<%=key._id%>" />
+            <div class="modal-footer bg-whitesmoke br">
+            <button type="submit" class="btn btn-primary">Confirm</button>
+            <button type="button" class="btn btn-danger" data-dismiss="modal">Close</button>
+            </div>
+          </form>
+      </div>
+    </div>
+  </div>
+<% }); %>
+  <%- include('./include/footer.html') %>

@@ -1,0 +1,53 @@
+<%- include('./include/header.html') %>
+
+<div class="main-content">
+    <section class="section">
+      <div class="section-body">
+        <div class="row">
+            <div class="col-md-2"></div>
+          <div class="col-12 col-md-8 col-lg-9">
+            <div class="card">
+                <form action="/admin/updateAminityFeature" method="post">
+                  <div class="card-header">
+                    <h4> Aminity Features</h4>
+                  </div>
+                  <div class="card-body">
+                    <div class="form-group">
+                      <label>Aminity Features</label>
+                      
+                      <input type="hidden" name="id" value="<%=propertyID%>">
+                      <input type="hidden" id="noOfSizes" name="noOfSizes" value="<%=noofsize%>">
+                      
+                    </div>
+                    <% var no=1; typeData.forEach(function(key,index){ %>
+                     
+                    <div class="form-group">
+                      <input type="hidden" class="form-control"  required="" name="aminityFeaturesText<%= no; %>" id="aminityFeaturesText<%= no; %>" value="<%=key.aminityName%>">
+                      <label><%=key.aminityName%></label>
+                      <select class="form-control" name="aminityFeaturesValue<%= no; %>">
+                        <option value="No"
+                        <% if(aminityData[index] === "No"){ %>
+                          selected 
+                          <%}%>
+                          >No</option>
+                          <option value="Yes"
+                        <% if(aminityData[index] === "Yes"){ %>
+                          selected 
+                          <%}%>
+                          >Yes</option>
+                        <!-- <option selected value="No">No</option>
+                        <option value="Yes">Yes</option> -->
+                      </select>
+                    </div>
+                    <% no++}); %>
+                  <div class="card-footer text-center">
+                    <button class="btn btn-primary">Submit</button>
+                  </div>
+                </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+<%- include('./include/footer.html') %>

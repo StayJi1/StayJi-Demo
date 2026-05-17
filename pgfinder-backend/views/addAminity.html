@@ -1,0 +1,69 @@
+<%- include('./include/header.html') %>
+<div class="main-content">
+    <section class="section">
+      <div class="section-body">
+        <div class="row">
+            <div class="col-md-2"></div>
+          <div class="col-12 col-md-8 col-lg-9">
+            <div class="card">
+              <%if(operation=="insert"){%>
+              <form action="/admin/addAminityEJS" method="post">
+                <div class="card-header">
+                  <h4>Insert Aminity</h4>
+                </div>
+                <div class="card-body">
+                  <div class="form-group">
+                    <label>Aminity</label>
+                    <input type="text" class="form-control"  required="" name="aminityName" id="aminityName">
+                  </div>
+                  <div class="form-group">
+                    <label>Property Name</label>
+                    <select class="form-control" name="propertyTypeIDFK">
+                      <option>Select</option>
+                      <%for (let property of propertyTypeData){ %>
+                        <option value="<%= property._id %>">
+                            <%= property.typeName %>
+                        </option>
+                        <% } %>
+                    </select>
+                  </div>
+                <div class="card-footer text-center">
+                  <button class="btn btn-primary">Submit</button>
+                </div>
+              </form>
+              <%}else{%>
+                <form action="/admin/updateAminityEJS" method="post">
+                  <div class="card-header">
+                    <h4>Update Aminity</h4>
+                  </div>
+                  <div class="card-body">
+                    <div class="form-group">
+                      <label>Aminity</label>
+                      <input type="hidden" name="id" value="<%=aminityData._id%>">
+                      <input type="text" class="form-control"  required="" name="aminityName" id="aminityName" value="<%=aminityData.aminityName%>">
+                    </div>
+                    <div class="form-group">
+                      <label>Property Type Name</label>
+                      <select class="form-control" name="propertyTypeIDFK">
+                        <option>Select</option>
+                        <%for (let property of propertytypeData){ %>
+                          <option value="<%= property._id %>" <%= 
+                            property._id.toString()==aminityData.propertyTypeIDFK ? 'selected' : '' %>
+                              >
+                              <%= property.typeName %>
+                          </option>
+                          <% } %>
+                      </select>
+                    </div>
+                  <div class="card-footer text-center">
+                    <button class="btn btn-primary">Submit</button>
+                  </div>
+                </form>
+                <% } %>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+<%- include('./include/footer.html') %>

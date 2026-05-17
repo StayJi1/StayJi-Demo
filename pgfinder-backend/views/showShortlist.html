@@ -1,0 +1,62 @@
+<%- include('./include/header.html') %>
+<div class="main-content">
+    <section class="section">
+      <div class="section-body">
+        <!-- <a href="/admin/addShortlist" class="btn btn-icon btn-primary" style="width: 100px;"><i class="fas fa-plus"></i></a><br><br> -->
+        <div class="row">
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header">
+                <h4>Shortlisted Properties</h4>
+              </div>
+              <div class="card-body">
+                <div class="table-responsive">
+                  <table class="table table-striped" id="table-1" >
+                    <thead>
+                      <tr>
+                        <th>No</th>
+                        <th>Property</th>
+                        <th>User</th>
+                        <th>Address</th>
+                        <!-- <th>Action</th> -->
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <%
+                      var n=1;
+                      data.forEach(function(key){
+                      %>
+                      <tr>
+                        <td>
+                          <%= n++; %>
+                        </td>
+                        <td>
+                            <img alt="image" src="/upload/PropertyImage/<%=key.property_image%>" width="100"><br>
+                            <b>Name: </b><%= key.property_value; %><br>
+                            <b>Rent: </b><%= key.property_rent; %><br>
+                        </td>
+                        <td>
+                            <b>Name: </b><%= key.user_value; %><br>
+                            <b>Contact: </b><%= key.user_contact;%><br>
+                        </td>
+                        <td>
+                          <%= key.property_address; %><br>
+                        </td>
+                        <!-- <td>
+                            <a href="#" class="btn btn-icon btn-primary" style="border-radius: 30%;"><i class="fas fa-pencil-alt"></i></a>
+                            <a href="#" class="btn btn-icon btn-danger" style="border-radius: 30%;"><i class="fas fa-trash-alt"></i></a>
+                        </td> -->
+                      </tr>
+                      <% }); %>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <%- include('./include/footer.html') %>

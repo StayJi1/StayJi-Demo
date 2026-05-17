@@ -1,0 +1,59 @@
+<%- include('./include/header.html') %>
+<div class="main-content">
+    <section class="section">
+      <div class="section-body">
+        <div class="row">
+            <div class="col-md-2"></div>
+          <div class="col-12 col-md-8 col-lg-9">
+            <div class="card">
+              <%if(operation=="insert"){%>
+              <form action="/admin/addPropertyTypeEJS" method="post" enctype="multipart/form-data">
+                <div class="card-header">
+                  <h4>Insert Property Type</h4>
+                </div>
+                <div class="card-body">
+                  <div class="form-group">
+                    <label>Property Type</label>
+                    <input type="text" class="form-control"  required="" name="typeName" id="typeName">
+                  </div>
+                  <div class="form-group">
+                    <label>Property Type Image</label>
+                  <div class="custom-file">
+                    <input type="hidden" value="PropertyTypeImage" id="docimg" name="docimg">
+                    <input type="file" class="custom-file-input" id="image" name="image">
+                    <label class="custom-file-label" for="image">Choose file</label>
+                  </div>
+                  </div>
+                <div class="card-footer text-center">
+                  <button class="btn btn-primary">Submit</button>
+                </div>
+              </form>
+              <%}else{%>
+                <form action="/admin/updatePropertyTypeEJS" method="post" enctype="multipart/form-data">
+                  <div class="card-header">
+                    <h4>Update Property Type</h4>
+                  </div>
+                  <div class="card-body">
+                    <input type="hidden" name="id" value="<%=propertyTypeData._id%>">
+                    <div class="form-group">
+                      <label>Property Type</label>
+                      <input type="text" class="form-control"  required="" name="typeName" id="typeName" value="<%=propertyTypeData.typeName%>">
+                    </div>
+                    <div class="custom-file">
+                      <input type="hidden" value="PropertyTypeImage" id="docimg" name="docimg">
+                      <input type="file" class="custom-file-input" id="image" name="image" value="<%=propertyTypeData.image%>">
+                      <label class="custom-file-label" for="image">Choose file</label>
+                    </div>
+                    </div>
+                  <div class="card-footer text-center">
+                    <button class="btn btn-primary">Submit</button>
+                  </div>
+                </form>
+              <%}%>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+<%- include('./include/footer.html') %>

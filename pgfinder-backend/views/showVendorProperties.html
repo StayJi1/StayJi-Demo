@@ -1,0 +1,75 @@
+<%- include('./include/header.html') %>
+<div class="main-content">
+    <section class="section">
+      <div class="section-body">
+        <a href="/admin/showUser" class="btn btn-icon btn-secondary" style="width: auto;"><i class="fas fa-arrow-left"></i> Back to vendors</a><br><br>
+        <div class="row">
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header">
+                <h4>Vendor Properties</h4>
+                <div class="card-header-action">
+                  <span class="badge badge-primary">Vendor: <%= vendor.userFname %> <%= vendor.userLname %></span>
+                  <span class="badge badge-info">Email: <%= vendor.userEmail %></span>
+                  <span class="badge badge-success">Active listings: <%= properties.length %></span>
+                </div>
+              </div>
+              <div class="card-body">
+                <% if (!properties.length) { %>
+                  <div class="alert alert-warning">This vendor has no active properties yet.</div>
+                <% } else { %>
+                <div class="table-responsive">
+                  <table class="table table-striped" id="table-1">
+                    <thead>
+                      <tr>
+                        <th>No</th>
+                        <th>Property</th>
+                        <th>Description</th>
+                        <th>Rent</th>
+                        <th>Status</th>
+                        <th>Availability</th>
+                        <th>Image</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <% var n = 1; properties.forEach(function(property){ %>
+                      <tr>
+                        <td><%= n++ %></td>
+                        <td>
+                            <b>Name: </b><%= property.propertyName %><br>
+                            <b>Address: </b><%= property.address %><br>
+                            <b>City: </b><%= property.cityName %><br>
+                            <b>Area: </b><%= property.areaName %><br>
+                        </td>
+                        <td>
+                            <b>Property Type: </b><%= property.propertyType_value %><br>
+                            <b>Description: </b><%= property.description %><br>
+                            <b>Sharing: </b><%= property.sharing %><br>
+                            <b>Gender: </b><%= property.genderType %><br>
+                            <b>Amenities: </b><%= property.aminityFeatures %><br>
+                        </td>
+                        <td><%= property.rent %></td>
+                        <td><%= property.approvalStatus || 'Pending' %></td>
+                        <td><%= property.isAvailable ? 'Available' : 'Not available' %></td>
+                        <td class="text-center">
+                            <a href="/admin/showPropertyImage/<%= property._id %>"><img alt="image" src="/upload/PropertyImage/<%= property.propertyImage %>" width="180" height="120"></a>
+                        </td>
+                        <td>
+                          <a href="/admin/fetchProperty/<%= property._id %>" class="btn btn-icon btn-primary" style="border-radius: 30%; margin-bottom: 0.2rem;"><i class="fas fa-pencil-alt"></i></a>
+                          <a href="/admin/showProperty" class="btn btn-icon btn-info" style="border-radius: 30%;"><i class="fas fa-eye"></i></a>
+                        </td>
+                      </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+                <% } %>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+<%- include('./include/footer.html') %>

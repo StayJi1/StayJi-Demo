@@ -1,0 +1,108 @@
+<%- include('./include/header.html') %>
+<div class="main-content">
+    <section class="section">
+      <div class="section-body">
+        <a href="/admin/addProperty" class="btn btn-icon btn-primary" style="width: 100px;"><i class="fas fa-plus"></i></a><br><br>
+        <div class="row">
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header">
+                <h4>Property Details</h4>
+              </div>
+              <div class="card-body">
+                <div class="table-responsive">
+                  <table class="table table-striped" id="table-1">
+                    <thead>
+                      <tr>
+                        <th>No</th>
+                        <th>Property</th>
+                        <th>Description</th>
+                        <th>Rent</th>
+                        <th>Status</th>
+                        <th>Availability</th>
+                        <th>Image</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <%
+                      var n=1;
+                      data.forEach(function(key){
+                      %>
+                      <tr>
+                        <td>
+                          <%= n++; %>
+                        </td>
+                        <td>
+                            <b>Name: </b><%= key.propertyName; %><br>
+                            <b>Owner Name: </b><%= key.user_value; %><br>
+                            <b>Address: </b><%= key.address; %><br>
+                            <b>City: </b><%= key.cityName; %><br>
+                            <b>Area: </b><%= key.areaName; %><br>
+                        </td>
+                        <td>
+                            <b>Property Type: </b><%= key.propertyType_value; %><br>
+                            <b>Description: </b><%= key.description; %><br>
+                            <b>Sharing: </b><%= key.sharing; %><br>
+                            <b>Property for gender: </b><%= key.genderType; %><br>
+                            <b>Aminity Features: </b><%= key.aminityFeatures; %><br>
+                        </td>
+                        <td><%= key.rent; %></td>
+                        <td><%= key.approvalStatus || 'Pending' %></td>
+                        <td><%= key.isAvailable ? 'Available' : 'Not available' %></td>
+                        <td class="text-center">
+                            <b><%if(key.isAvailable==true){%><a href="/admin/showPropertyImage/<%=key._id;%>"><img alt="image" src="/upload/PropertyImage/<%=key.propertyImage%>" width="230" height="200"></a><br></b>
+                              <% }else{%><b><img alt="image" src="/upload/PropertyImage/<%=key.propertyImage%>" width="230" height="200" style="opacity:0.5;pointer-events: none; display: inline-block;"><br></b><% } %>
+                        </td>
+                        <td>
+                          <a href="/admin/fetchProperty/<%= key._id; %>" class="btn btn-icon btn-primary" style="border-radius: 30%; margin-bottom: 0.2rem;"><i class="fas fa-pencil-alt"></i></a>
+                          <form method="post" action="/admin/updatePropertyStatus" style="display:inline-block; margin-bottom: 0.2rem;">
+                            <input type="hidden" name="id" value="<%= key._id %>" />
+                            <input type="hidden" name="status" value="Approved" />
+                            <button type="submit" class="btn btn-icon btn-success" style="border-radius: 30%;"><i class="fas fa-check"></i></button>
+                          </form>
+                          <form method="post" action="/admin/updatePropertyStatus" style="display:inline-block; margin-bottom: 0.2rem;">
+                            <input type="hidden" name="id" value="<%= key._id %>" />
+                            <input type="hidden" name="status" value="Rejected" />
+                            <button type="submit" class="btn btn-icon btn-warning" style="border-radius: 30%;"><i class="fas fa-times"></i></button>
+                          </form>
+                          <a href="" data-toggle="modal" data-target="#modalDelete<%= key._id; %>" class="btn btn-icon btn-danger" style="border-radius: 30%;"><i class="fas fa-trash-alt"></i></a>
+                        </td>
+                      </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <!------------------ Model -------------------------->
+  <%  data.forEach(function(key){ %>
+    <div class="modal fade" id="modalDelete<%= key._id; %>" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="exampleModalLabel">Do You Really Want To Delete?</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        
+          <form method="post" action="/admin/deleteProperty">
+            <input type="hidden" name="id" value="<%=key._id%>" />
+            <div class="modal-footer bg-whitesmoke br">
+            <button type="submit" class="btn btn-primary">Confirm</button>
+            <button type="button" class="btn btn-danger" data-dismiss="modal">Close</button>
+            </div>
+          </form>
+      </div>
+    </div>
+  </div>
+<% }); %>
+  <%- include('./include/footer.html') %>

@@ -1,0 +1,117 @@
+<%- include('./include/header.html') %>
+<div class="main-content">
+    <section class="section">
+      <div class="section-body">
+        <!-- <a href="/admin/addUserRequest" class="btn btn-icon btn-primary" style="width: 100px;"><i class="fas fa-plus"></i></a><br><br> -->
+        <div class="row">
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header">
+                <h4>User Request</h4>
+              </div>
+              <div class="card-body">
+                <div class="table-responsive">
+                  <table class="table table-striped" id="table-1" >
+                    <thead>
+                      <tr>
+                        <th>No</th>
+                        <th>Property</th>
+                        <th>Refrence</th>
+                        <th>Status</th>
+                        <!-- <th>Action</th> -->
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <%
+                      var n=1;
+                      data.forEach(function(key){
+                      %>
+                      <tr>
+                        <td>
+                          <%= n++; %>
+                        </td>
+                        <td>
+                            <b>User Name: </b><%= key.user_value; %><br>
+                            <b>Name: </b><%= key.property_value; %><br>
+                            <b>Sharing: </b><%= key.sharing; %><br>
+                            <b>No of Rooms: </b><%= key.noOfRooms; %><br>
+                        </td>
+                        <td>
+                            <b>Refrence Name: </b><%= key.refrencebyname; %><br>
+                            <b>Refrence Contact: </b><%= key.refrencecontact; %><br>
+                        </td>
+                        <td>
+                          <b><%if(key.status==true){%>
+                          <button type="submit" class="btn btn-icon btn-success" data-toggle="modal" data-target="#modalUpdate<%= key._id; %>" style="border-radius: 30%;"><i class="fas fa-thumbs-up"></i></button>
+                          <%}else{%>
+                            <button type="submit" data-toggle="modal" data-target="#modalUpdate<%= key._id; %>" class="btn btn-icon btn-danger" style="border-radius: 30%;"><i class="fas fa-thumbs-down"></i></button>
+                            <%}%>
+                        </td>
+                        <!-- <td>
+                            <a href="#" class="btn btn-icon btn-primary" style="border-radius: 30%;"><i class="fas fa-pencil-alt"></i></a>
+                            <a href="#" class="btn btn-icon btn-danger" style="border-radius: 30%;" data-toggle="modal" data-target="#modalDelete<%= key._id; %>"><i class="fas fa-trash-alt"></i></a>
+                        </td> -->
+                      </tr>
+                      <% }); %>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <!------------------ Model -------------------------->
+  <%  data.forEach(function(key){ %>
+    <div class="modal fade" id="modalDelete<%= key._id; %>" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="exampleModalLabel">Do You Really Want To Delete?</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        
+          <form method="post" action="/admin/deleteUserRequest">
+            <input type="hidden" name="id" value="<%=key._id%>" />
+            <div class="modal-footer bg-whitesmoke br">
+            <button type="submit" class="btn btn-primary">Confirm</button>
+            <button type="button" class="btn btn-danger" data-dismiss="modal">Close</button>
+            </div>
+          </form>
+      </div>
+    </div>
+  </div>
+
+  <!------------------Confirm Model -------------------------->
+
+  <div class="modal fade" id="modalUpdate<%= key._id; %>" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="exampleModalLabel">Do You Really Want To Update Status?</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        
+          <form method="post" action="/admin/updateRequestEJS">
+            <input type="hidden" name="id" value="<%=key._id%>" />
+            <input type="hidden" name="status" value="<%=key.status%>" />
+            <div class="modal-footer bg-whitesmoke br">
+            <button type="submit" class="btn btn-primary">Confirm</button>
+            <button type="button" class="btn btn-danger" data-dismiss="modal">Close</button>
+            </div>
+          </form>
+      </div>
+    </div>
+  </div>
+<% }); %>
+<%- include('./include/footer.html') %>
+   

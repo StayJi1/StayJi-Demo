@@ -1,0 +1,91 @@
+<%- include('./include/header.html') %>
+<div class="main-content">
+    <section class="section">
+      <div class="section-body">
+        <div class="row">
+            <div class="col-md-2"></div>
+          <div class="col-12 col-md-8 col-lg-9">
+            <div class="card">
+              <form>
+                <div class="card-header">
+                  <h4>Insert User Request</h4>
+                </div>
+                <div class="card-body">
+                  <div class="form-group">
+                    <label>Property Name</label>
+                    <select class="form-control">
+                      <option>Select</option>
+                      <option>Drashti</option>
+                      <option>Jeel</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="d-block">Sharing</label>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="exampleRadios" id="exampleRadios1" checked>
+                        <label class="form-check-label" for="exampleRadios1">
+                          Yes
+                        </label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="exampleRadios" id="exampleRadios2" checked>
+                        <label class="form-check-label" for="exampleRadios2">
+                          No
+                        </label>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label>No of Rooms</label>
+                    <input type="number" class="form-control"  required="">
+                  </div>
+                  <div class="form-group">
+                    <label class="d-block">Refrence</label>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="exampleRadios" id="exampleRadios1" checked>
+                        <label class="form-check-label" for="exampleRadios1">
+                          By Name
+                        </label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="exampleRadios" id="exampleRadios2" checked>
+                        <label class="form-check-label" for="exampleRadios2">
+                          By Contact
+                        </label>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label>User Name</label>
+                    <select class="form-control">
+                      <option>Select</option>
+                      <option>Male</option>
+                      <option>Female</option>
+                      <option>Both</option>
+                    </select>
+                  </div>
+                <div class="form-group">
+                    <label class="d-block">Status</label>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="exampleRadios" id="exampleRadios1" checked>
+                        <label class="form-check-label" for="exampleRadios1">
+                          Yes
+                        </label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="exampleRadios" id="exampleRadios2" checked>
+                        <label class="form-check-label" for="exampleRadios2">
+                          No
+                        </label>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-footer text-center">
+                  <button class="btn btn-primary">Submit</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+<%- include('./include/footer.html') %>
