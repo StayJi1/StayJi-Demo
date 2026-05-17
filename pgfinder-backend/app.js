@@ -33,10 +33,20 @@ if (process.env.CORS_ORIGINS) {
     corsOrigins.push(...envOrigins);
 }
 
-app.use(cors({
-    origin: corsOrigins,
-    credentials: true
-}));
+// Custom CORS handling: set explicit headers for allowed origins
+app.use(function (req, res, next) {
+    const origin = req.headers.origin;
+    if (origin && corsOrigins.indexOf(origin) !== -1) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    }
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
 
 /*
 |--------------------------------------------------------------------------
