@@ -155,6 +155,20 @@ function AdminDashboard() {
         )}
       </div>
 
+      <div className="grid gap-6 xl:grid-cols-4">
+        {[
+          { label: 'Revenue pipeline', value: `₹${((stats?.leads || leadSummary.totalLeads || 0) * 2500).toLocaleString('en-IN')}` },
+          { label: 'Active listings', value: stats?.properties || 0 },
+          { label: 'Pending reviews', value: stats?.pendingProperties || pendingProperties.length },
+          { label: 'Conversions', value: stats?.conversions || 0 },
+        ].map((item) => (
+          <Card key={item.label} className="p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{item.label}</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{item.value}</p>
+          </Card>
+        ))}
+      </div>
+
       <Card id="admin-vendor-leads">
         <div className="flex items-center justify-between gap-4">
           <div>

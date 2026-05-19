@@ -11,18 +11,19 @@ const inactivityTimeoutMs = 30 * 60 * 1000
 
 const readStoredAuth = () => {
   try {
-    const saved = localStorage.getItem(storageKey)
+    localStorage.removeItem(storageKey)
+    const saved = sessionStorage.getItem(storageKey)
     if (!saved) return null
 
     const parsed = JSON.parse(saved)
     if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
-      localStorage.removeItem(storageKey)
+      sessionStorage.removeItem(storageKey)
       return null
     }
 
     return parsed
   } catch {
-    localStorage.removeItem(storageKey)
+    sessionStorage.removeItem(storageKey)
     return null
   }
 }
@@ -73,14 +74,14 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (user && role) {
-      localStorage.setItem(storageKey, JSON.stringify({
+      sessionStorage.setItem(storageKey, JSON.stringify({
         user,
         token,
         role,
         expiresAt: Date.now() + Math.min(sessionDurationMs, inactivityTimeoutMs),
       }))
     } else {
-      localStorage.removeItem(storageKey)
+      sessionStorage.removeItem(storageKey)
     }
   }, [user, token, role])
 
@@ -91,7 +92,7 @@ export const AuthProvider = ({ children }) => {
       lastActivityRef.current = Date.now()
       const saved = readStoredAuth()
       if (saved?.user) {
-        localStorage.setItem(storageKey, JSON.stringify({
+        sessionStorage.setItem(storageKey, JSON.stringify({
           ...saved,
           expiresAt: Date.now() + Math.min(sessionDurationMs, inactivityTimeoutMs),
         }))
@@ -113,15 +114,35 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user])
 
+  useEffect(() => {
+    if (!user?._id) return undefined
+
+    const verifyAccount = async () => {
+      try {
+        await userService.authStatus(user._id)
+      } catch {
+        logout()
+      }
+    }
+
+    verifyAccount()
+    const timer = window.setInterval(verifyAccount, 30 * 1000)
+    return () => window.clearInterval(timer)
+  }, [user?._id])
+
   const login = async ({ email, password, role: userRole }) => {
     setStatus('loading')
     setError(null)
     try {
       // backend expects { userEmail, userPassword }
-      const payload = { userEmail: email, userPassword: password }
+      const payload = { userEmail: email, userPassword: password, accountType: userRole }
       const response = await authService.login(payload)
       const normalizedUser = normalizeUser(response.user)
       const nextRole = normalizedUser.role || userRole || 'user'
+      const requestedRole = normalizeRole(userRole)
+      if (requestedRole && requestedRole !== nextRole) {
+        throw new Error(`This account is registered as ${nextRole}. Select the correct account type to continue.`)
+      }
       setUser(normalizedUser)
       setToken(response.token)
       setRole(nextRole)
@@ -213,6 +234,7 @@ export const AuthProvider = ({ children }) => {
     setRole(null)
     setStatus('idle')
     setError(null)
+    sessionStorage.removeItem(storageKey)
     localStorage.removeItem(storageKey)
     delete axiosClient.defaults.headers.common.Authorization
   }

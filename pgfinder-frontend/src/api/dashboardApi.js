@@ -12,6 +12,7 @@ const normalizeProperty = (property) => ({
   ...property,
   id: property._id || property.id,
   name: property.propertyName || property.name,
+  ownerId: property.userIDFK?._id || property.userIDFK || '',
   city: property.cityName || property.city,
   rent: Number(property.rent) || property.rent,
   depositAmount: Number(property.depositAmount) || property.depositAmount || 0,
@@ -20,6 +21,13 @@ const normalizeProperty = (property) => ({
   approvalStatus: property.approvalStatus || 'Approved',
   perDayCheckIn: Boolean(property.perDayCheckIn),
   dailyRate: Number(property.dailyRate) || property.dailyRate || 0,
+  availableBeds: Number(property.availableBeds) || 0,
+  vacancyStatus: property.vacancyStatus || (property.isAvailable === false ? 'Fully occupied' : 'Available now'),
+  availableFrom: property.availableFrom || '',
+  sharingAvailability: property.sharingAvailability || property.sharing || '',
+  parkingAvailable: Boolean(property.parkingAvailable),
+  acAvailable: Boolean(property.acAvailable),
+  rating: Number(property.rating) || property.rating || 4.6,
   status: property.isAvailable === false ? 'Booked' : 'Available',
 })
 
@@ -74,6 +82,10 @@ const dashboardApi = {
   vendorVisits: getVendorVisits,
   vendorInquiries: getVendorInquiries,
   vendorShortlists: getVendorShortlists,
+  markLeadConverted: ({ id, type }) => axiosClient.post('/client/markLeadConverted', { id, type }).then((res) => {
+    if (res.data?.result !== 'success') throw new Error(res.data?.msg || 'Unable to convert lead')
+    return res.data?.data
+  }),
 }
 
 export default dashboardApi

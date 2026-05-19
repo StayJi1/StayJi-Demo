@@ -53,11 +53,12 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
     >
       <div className="relative overflow-hidden">
         <div className="absolute right-4 top-4 z-20 rounded-full bg-slate-950/70 px-3 py-2 text-xs font-semibold text-white backdrop-blur-xl">
-          {property.status || 'Verified'}
+          {property.availableBeds ? `${property.availableBeds} beds live` : property.vacancyStatus || property.status || 'Verified'}
         </div>
         <img
           src={property.image || 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=80'}
           alt={property.name}
+          loading="lazy"
           className="h-64 w-full object-cover transition duration-500 group-hover:scale-105"
         />
       </div>
@@ -88,6 +89,14 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
           <span className="rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">{property.gender || 'Co-ed'}</span>
           <span className="rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">{property.rent ? `₹${property.rent}/mo` : '₹8,500'}</span>
           <span className="rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">{property.depositAmount ? `₹${property.depositAmount} deposit` : 'No deposit'}</span>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <span className="rounded-3xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+            {property.vacancyStatus || (property.availableBeds ? `${property.availableBeds} beds available` : 'Live vacancy')}
+          </span>
+          <span className="rounded-3xl bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
+            {property.sharingAvailability || property.sharing || 'Sharing options'}
+          </span>
         </div>
         {property.perDayCheckIn ? (
           <p className="rounded-3xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">

@@ -39,23 +39,39 @@
                             <b>Address: </b><%= key.address; %><br>
                             <b>City: </b><%= key.cityName; %><br>
                             <b>Area: </b><%= key.areaName; %><br>
+                            <b>Coordinates: </b><%= key.latitude || '-' %>, <%= key.longitude || '-' %><br>
                         </td>
                         <td>
                             <b>Property Type: </b><%= key.propertyType_value; %><br>
                             <b>Description: </b><%= key.description; %><br>
                             <b>Sharing: </b><%= key.sharing; %><br>
+                            <b>Sharing Availability: </b><%= key.sharingAvailability || '-' %><br>
                             <b>Property for gender: </b><%= key.genderType; %><br>
                             <b>Aminity Features: </b><%= key.aminityFeatures; %><br>
+                            <b>Food: </b><%= (key.mealsAvailable || []).join(', ') || '-' %><br>
+                            <b>Parking: </b><%= key.parkingAvailable ? 'Yes' : 'No' %><br>
+                            <b>AC: </b><%= key.acAvailable ? 'Yes' : 'No' %><br>
                         </td>
-                        <td><%= key.rent; %></td>
+                        <td>
+                          <b>Monthly: </b><%= key.rent; %><br>
+                          <b>Deposit: </b><%= key.depositAmount || 0; %><br>
+                          <b>Daily: </b><%= key.perDayCheckIn ? (key.dailyRate || key.rent || '-') : 'No'; %><br>
+                          <b>Rating: </b><%= key.rating || '-' %>
+                        </td>
                         <td><%= key.approvalStatus || 'Pending' %></td>
-                        <td><%= key.isAvailable ? 'Available' : 'Not available' %></td>
+                        <td>
+                          <b>Status: </b><%= key.isAvailable ? 'Available' : 'Not available' %><br>
+                          <b>Vacancy: </b><%= key.vacancyStatus || '-' %><br>
+                          <b>Beds/rooms: </b><%= key.availableBeds || 0 %><br>
+                          <b>From: </b><%= key.availableFrom || 'Immediately' %>
+                        </td>
                         <td class="text-center">
                             <b><%if(key.isAvailable==true){%><a href="/admin/showPropertyImage/<%=key._id;%>"><img alt="image" src="/upload/PropertyImage/<%=key.propertyImage%>" width="230" height="200"></a><br></b>
                               <% }else{%><b><img alt="image" src="/upload/PropertyImage/<%=key.propertyImage%>" width="230" height="200" style="opacity:0.5;pointer-events: none; display: inline-block;"><br></b><% } %>
                         </td>
                         <td>
                           <a href="/admin/fetchProperty/<%= key._id; %>" class="btn btn-icon btn-primary" style="border-radius: 30%; margin-bottom: 0.2rem;"><i class="fas fa-pencil-alt"></i></a>
+                          <a href="" data-toggle="modal" data-target="#modalView<%= key._id; %>" class="btn btn-icon btn-info" style="border-radius: 30%; margin-bottom: 0.2rem;"><i class="fas fa-eye"></i></a>
                           <form method="post" action="/admin/updatePropertyStatus" style="display:inline-block; margin-bottom: 0.2rem;">
                             <input type="hidden" name="id" value="<%= key._id %>" />
                             <input type="hidden" name="status" value="Approved" />
@@ -83,6 +99,43 @@
   </div>
   <!------------------ Model -------------------------->
   <%  data.forEach(function(key){ %>
+    <div class="modal fade" id="modalView<%= key._id; %>" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><%= key.propertyName %> - full approval details</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p><b>Owner:</b> <%= key.user_value %></p>
+            <p><b>Address:</b> <%= key.address %>, <%= key.areaName %>, <%= key.cityName %></p>
+            <p><b>Description:</b> <%= key.description %></p>
+            <p><b>Rent:</b> <%= key.rent %> | <b>Deposit:</b> <%= key.depositAmount || 0 %> | <b>Daily stay:</b> <%= key.perDayCheckIn ? 'Yes' : 'No' %></p>
+            <p><b>Vacancy:</b> <%= key.vacancyStatus || '-' %> | <b>Beds/rooms:</b> <%= key.availableBeds || 0 %> | <b>Available from:</b> <%= key.availableFrom || 'Immediately' %></p>
+            <p><b>Sharing:</b> <%= key.sharing %> | <b>Sharing availability:</b> <%= key.sharingAvailability || '-' %></p>
+            <p><b>Gender:</b> <%= key.genderType %> | <b>Parking:</b> <%= key.parkingAvailable ? 'Yes' : 'No' %> | <b>AC:</b> <%= key.acAvailable ? 'Yes' : 'No' %></p>
+            <p><b>Amenities:</b> <%= key.aminityFeatures || '-' %></p>
+            <p><b>Meals:</b> <%= (key.mealsAvailable || []).join(', ') || '-' %></p>
+            <p><b>Video URL:</b> <%= key.videoUrl || '-' %></p>
+          </div>
+          <div class="modal-footer">
+            <form method="post" action="/admin/updatePropertyStatus" style="display:inline-block;">
+              <input type="hidden" name="id" value="<%= key._id %>" />
+              <input type="hidden" name="status" value="Approved" />
+              <button type="submit" class="btn btn-success">Approve</button>
+            </form>
+            <form method="post" action="/admin/updatePropertyStatus" style="display:inline-block;">
+              <input type="hidden" name="id" value="<%= key._id %>" />
+              <input type="hidden" name="status" value="Rejected" />
+              <button type="submit" class="btn btn-warning">Reject</button>
+            </form>
+            <button type="button" class="btn btn-danger" data-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="modal fade" id="modalDelete<%= key._id; %>" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
     aria-hidden="true">
     <div class="modal-dialog" role="document">

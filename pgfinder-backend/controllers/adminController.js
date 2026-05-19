@@ -38,7 +38,7 @@ async function ensureDefaultAdmin() {
     const adminExists = await User.findOne({ userType: 'Admin' })
     if (!adminExists) {
       await new User(defaultAdmin).save()
-      console.log('Default admin user created: admin@gmail.com / 123')
+      console.log('Default admin user created.')
     }
   } catch (error) {
     console.error('Error ensuring default admin user:', error)
@@ -142,6 +142,7 @@ router.get('/',async(req,res)=>{
 router.post('/loginEJS', async (req, res) => {
   const objUser = await User.findOne({
     userEmail: req.body.userEmail,
+    isActive: true,
   });
 
   if (!objUser || !verifyPassword(req.body.userPassword, objUser.userPassword)) {
@@ -152,7 +153,7 @@ router.post('/loginEJS', async (req, res) => {
     await User.updateOne({ _id: objUser._id }, { userPassword: hashPassword(req.body.userPassword) });
   }
 
-  if (objUser.userType !== 'Admin') {
+  if ((objUser.userType || '').toLowerCase() !== 'admin') {
     return res.render('login', { error: 'Only admin users can log in here.' });
   }
 
@@ -168,6 +169,13 @@ router.post('/loginEJS', async (req, res) => {
     req.session.destroy();
     res.redirect('/admin');
   });
+
+router.use((req, res, next) => {
+    if (req.session && req.session.userEmail && (req.session.userType || '').toLowerCase() === 'admin') {
+        return next();
+    }
+    return res.redirect('/admin');
+});
 
 //Area
 
@@ -351,8 +359,8 @@ router.get('/showProperty', async (req, res) => {
         .populate('propertyTypeIDFK', 'typeName');
 
     for (var i = 0; i < objProperty.length; i++) {
-        objProperty[i].user_value = objProperty[i].userIDFK.userFname+" "+ objProperty[i].userIDFK.userLname 
-        objProperty[i].propertyType_value = objProperty[i].propertyTypeIDFK.typeName
+        objProperty[i].user_value = objProperty[i].userIDFK ? `${objProperty[i].userIDFK.userFname || ''} ${objProperty[i].userIDFK.userLname || ''}`.trim() : 'Unknown owner'
+        objProperty[i].propertyType_value = objProperty[i].propertyTypeIDFK ? objProperty[i].propertyTypeIDFK.typeName : (objProperty[i].propertyCategory || 'PG')
     }
     
     res.render("showProperty.html",{"data":objProperty});

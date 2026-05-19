@@ -15,6 +15,8 @@ const session = require('express-session');
 
 var cors = require("cors");
 
+app.disable('x-powered-by');
+
 /*
 |--------------------------------------------------------------------------
 | CORS Configuration
@@ -45,6 +47,14 @@ app.use(function (req, res, next) {
     if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
     }
+    next();
+});
+
+app.use(function (req, res, next) {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Cache-Control', 'no-store');
     next();
 });
 
@@ -82,7 +92,10 @@ app.use(session({
     resave: false,
     rolling: true,
     cookie: {
-        maxAge: 30 * 60 * 1000
+        maxAge: 30 * 60 * 1000,
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production'
     }
 }));
 
@@ -121,6 +134,30 @@ app.use('/admin', adminController);
 const clientController = require('./controllers/clientController');
 
 app.use('/client', clientController);
+app.post('/api/auth/login', (req, res, next) => {
+    req.url = '/loginByUser';
+    clientController(req, res, next);
+});
+app.post('/api/auth/signup', (req, res, next) => {
+    req.url = '/addUser';
+    clientController(req, res, next);
+});
+app.get('/api/properties', (req, res, next) => {
+    req.url = '/getPropertyList';
+    clientController(req, res, next);
+});
+app.post('/api/properties', (req, res, next) => {
+    req.url = '/addProperty';
+    clientController(req, res, next);
+});
+app.get('/api/admin/stats', (req, res, next) => {
+    req.url = '/getAdminStats';
+    clientController(req, res, next);
+});
+app.use('/api/auth', clientController);
+app.use('/api/properties', clientController);
+app.use('/api/vendors', clientController);
+app.use('/api/admin', clientController);
 
 /*
 |--------------------------------------------------------------------------
@@ -128,6 +165,18 @@ app.use('/client', clientController);
 |--------------------------------------------------------------------------
 */
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log("Connected to Port " + PORT);
+});
+
+server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use. Stop the other backend process or set PORT to another value.`);
+        return;
+    }
+    if (error.code === 'EPERM') {
+        console.error(`Permission denied while opening port ${PORT}. Start the backend with terminal permission or use another allowed port.`);
+        return;
+    }
+    throw error;
 });

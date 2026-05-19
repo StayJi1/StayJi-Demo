@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 const navItems = [
   { label: 'Home', to: '/' },
   { label: 'Explore stays', to: '/properties' },
+  { label: 'Compare', to: '/compare' },
   { label: 'Login', to: '/login' },
   { label: 'Signup', to: '/signup' },
 ]
@@ -16,7 +17,11 @@ function Navbar() {
   const dashboardRole = ['owner', 'host', 'hostel'].includes(role)
     ? 'vendor'
     : role || 'user'
-  const visibleNavItems = isAuthenticated ? navItems.filter((item) => !['/login', '/signup'].includes(item.to)) : navItems
+  const visibleNavItems = isAuthenticated
+    ? navItems
+      .filter((item) => !['/login', '/signup'].includes(item.to))
+      .map((item) => (dashboardRole === 'vendor' && item.to === '/properties' ? { ...item, label: 'My stays', to: '/dashboard/vendor/properties' } : item))
+    : navItems
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/75 backdrop-blur-2xl">

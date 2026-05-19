@@ -80,6 +80,32 @@ propertySchema = mongoose.Schema({
     depositAmount:{
         type:String
     },
+    availableBeds:{
+        type:Number,
+        default:0
+    },
+    vacancyStatus:{
+        type:String,
+        default:"Available"
+    },
+    availableFrom:{
+        type:String
+    },
+    sharingAvailability:{
+        type:String
+    },
+    parkingAvailable:{
+        type:Boolean,
+        default:false
+    },
+    acAvailable:{
+        type:Boolean,
+        default:false
+    },
+    rating:{
+        type:Number,
+        default:4.6
+    },
     approvalStatus:{
         type:String,
         enum:["Pending","Approved","Rejected"],

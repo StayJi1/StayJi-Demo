@@ -10,11 +10,13 @@ const dashboardService = {
       dashboardApi.vendorInquiries(userIDFK),
       dashboardApi.vendorShortlists ? dashboardApi.vendorShortlists(userIDFK) : Promise.resolve([]),
     ])
-    return { visits, inquiries, shortlists, totalLeads: visits.length + inquiries.length + shortlists.length }
+    const shortlistCount = shortlists.reduce((sum, item) => sum + (Number(item.wishlistCount) || 0), 0)
+    return { visits, inquiries, shortlists, totalLeads: visits.length + inquiries.length, shortlistCount }
   },
   getUserOverview: (userIDFK) => dashboardApi.userOverview(userIDFK),
   getAdminUsers: (filters) => dashboardApi.adminUsers(filters),
   updateUserStatus: (payload) => dashboardApi.updateUserStatus(payload),
+  markLeadConverted: (payload) => dashboardApi.markLeadConverted(payload),
   getVendorProperties: (userIDFK) => dashboardApi.vendorProperties(userIDFK),
 }
 

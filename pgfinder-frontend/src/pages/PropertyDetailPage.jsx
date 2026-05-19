@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { FiArrowLeft, FiClock, FiMapPin, FiPhone, FiShield } from 'react-icons/fi'
+import { FiArrowLeft, FiClock, FiMapPin, FiPhone, FiShield, FiShuffle, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome } from 'react-icons/fi'
 import Loader from '../components/common/Loader'
 import Button from '../components/common/Button'
 import PropertyMap from '../components/map/PropertyMap'
@@ -9,12 +9,25 @@ import { useAuth } from '../context/AuthContext'
 import useCurrentLocation from '../hooks/useCurrentLocation'
 import { formatDistance, getDistanceKm } from '../utils/distance'
 
+const getAmenityIcon = (amenity) => {
+  const value = amenity.toLowerCase()
+  if (/wifi|internet/.test(value)) return <FiWifi />
+  if (/food|meal|breakfast|lunch|dinner|kitchen/.test(value)) return <FiCoffee />
+  if (/parking|bike|car/.test(value)) return <FiTruck />
+  if (/cctv|security|camera/.test(value)) return <FiVideo />
+  if (/laundry|washing/.test(value)) return <FiDroplet />
+  if (/power|backup|electric/.test(value)) return <FiZap />
+  if (/gym|fitness/.test(value)) return <FiActivity />
+  return <FiHome />
+}
+
 function PropertyDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [property, setProperty] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [leadPrefs, setLeadPrefs] = useState({ preferredVisitTime: '', moveInPreference: '' })
   const { position, loading: locationLoading, error: locationError, hasUserLocation, requestLocation } = useCurrentLocation()
 
   useEffect(() => {
@@ -22,6 +35,8 @@ function PropertyDetailPage() {
       try {
         const data = await propertyService.fetchPropertyById(id)
         setProperty(data)
+        const viewed = JSON.parse(localStorage.getItem('stayjiViewed') || '[]')
+        localStorage.setItem('stayjiViewed', JSON.stringify([id, ...viewed.filter((item) => item !== id)].slice(0, 20)))
       } catch (err) {
         setError('Unable to load property details.')
       } finally {
@@ -31,7 +46,16 @@ function PropertyDetailPage() {
     loadProperty()
   }, [id])
 
-  const { user } = useAuth()
+  const { user, role } = useAuth()
+
+  useEffect(() => {
+    if (!property || role !== 'vendor') return
+    const ownerId = property.ownerId?.toString()
+    const userId = user?._id?.toString()
+    if (ownerId && userId && ownerId !== userId) {
+      navigate('/dashboard/vendor/properties', { replace: true })
+    }
+  }, [navigate, property, role, user?._id])
 
   const handleShortlist = async () => {
     if (!user || !user._id) {
@@ -58,6 +82,8 @@ function PropertyDetailPage() {
         propertyIDFK: property._id,
         subject: 'Interested in this property',
         description: 'I am interested in this property and would like to know the next steps.',
+        preferredVisitTime: leadPrefs.preferredVisitTime,
+        moveInPreference: leadPrefs.moveInPreference,
       })
       alert('Your interest has been sent to the host.')
     } catch (err) {
@@ -72,12 +98,32 @@ function PropertyDetailPage() {
       return
     }
     try {
-      await propertyService.bookVisit({ userIDFK: user._id, propertyIDFK: property._id, visitDate: new Date() })
+      await propertyService.bookVisit({
+        userIDFK: user._id,
+        propertyIDFK: property._id,
+        visitDate: leadPrefs.preferredVisitTime || new Date(),
+        moveInPreference: leadPrefs.moveInPreference,
+      })
       alert('Visit request submitted.')
     } catch (err) {
       console.error(err)
       alert('Unable to book visit.')
     }
+  }
+
+  const handleCompare = () => {
+    const current = JSON.parse(localStorage.getItem('stayjiCompare') || '[]')
+    const propertyId = property._id || property.id
+    const next = [propertyId, ...current.filter((item) => item !== propertyId)].slice(0, 3)
+    localStorage.setItem('stayjiCompare', JSON.stringify(next))
+    alert('Added to comparison. You can compare up to 3 properties while browsing.')
+  }
+
+  const getMapsUrl = (provider = 'google') => {
+    const lat = property.location?.lat || property.latitude || 19.07598
+    const lng = property.location?.lng || property.longitude || 72.87766
+    if (provider === 'apple') return `https://maps.apple.com/?daddr=${lat},${lng}`
+    return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
   }
 
   if (loading) {
@@ -166,7 +212,7 @@ function PropertyDetailPage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-3xl bg-slate-950/80 p-4">
                   <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Occupancy</p>
-                  <p className="mt-2 text-sm text-white">{property.occupancy || '80% full'}</p>
+                  <p className="mt-2 text-sm text-white">{property.vacancyStatus || property.occupancy || 'Live availability'}</p>
                 </div>
                 <div className="rounded-3xl bg-slate-950/80 p-4">
                   <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Rating</p>
@@ -196,15 +242,59 @@ function PropertyDetailPage() {
                 <p className="mt-2 text-white">{property.nextVisit || 'Tomorrow 3:00 PM'}</p>
               </div>
             </div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <label className="text-sm text-slate-300">
+                Preferred visit time
+                <input
+                  type="datetime-local"
+                  value={leadPrefs.preferredVisitTime}
+                  onChange={(event) => setLeadPrefs((current) => ({ ...current, preferredVisitTime: event.target.value }))}
+                  className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-accent-400"
+                />
+              </label>
+              <label className="text-sm text-slate-300">
+                Move-in preference
+                <input
+                  type="text"
+                  value={leadPrefs.moveInPreference}
+                  onChange={(event) => setLeadPrefs((current) => ({ ...current, moveInPreference: event.target.value }))}
+                  placeholder="Immediately, this week, next month"
+                  className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-accent-400"
+                />
+              </label>
+            </div>
             <div className="mt-8 flex flex-wrap gap-4">
               <Button onClick={handleShortlist} className="w-full sm:w-auto">Shortlist</Button>
-              <Button onClick={handleExpressInterest} className="w-full sm:w-auto">Express interest</Button>
+              <Button onClick={handleExpressInterest} className="w-full sm:w-auto">Request callback</Button>
               <Button onClick={handleBookVisit} variant="secondary" className="w-full sm:w-auto">Book visit</Button>
+              <Button onClick={handleCompare} variant="secondary" className="w-full sm:w-auto"><FiShuffle className="mr-2" /> Compare</Button>
+              <a href="/compare" className="inline-flex w-full items-center justify-center rounded-3xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cyan-300/60 hover:bg-white/15 sm:w-auto">Open comparison</a>
             </div>
           </div>
         </section>
 
         <aside className="space-y-6">
+          <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
+            <p className="text-sm uppercase tracking-[0.28em] text-accent-500">Live vacancy</p>
+            <div className="mt-5 grid gap-3">
+              <div className="rounded-3xl bg-emerald-500/10 p-4 text-emerald-100">
+                <p className="text-2xl font-semibold">{property.availableBeds || 0}</p>
+                <p className="mt-1 text-sm">beds available</p>
+              </div>
+              <p className="rounded-3xl bg-slate-950/80 p-4 text-sm text-slate-300">{property.sharingAvailability || property.sharing || 'Sharing availability will be confirmed by owner.'}</p>
+              <p className="rounded-3xl bg-slate-950/80 p-4 text-sm text-slate-300">Available from: {property.availableFrom || 'Immediately'}</p>
+              {property.contact ? (
+                <a
+                  href={`https://wa.me/91${property.contact}?text=${encodeURIComponent(`Hi, I found ${property.name} on StayJi and want to know vacancy details.`)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-3xl bg-emerald-500 px-5 py-3 text-center text-sm font-semibold text-white"
+                >
+                  WhatsApp owner
+                </a>
+              ) : null}
+            </div>
+          </div>
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
             <p className="text-sm uppercase tracking-[0.28em] text-accent-500">Location</p>
             {distanceKm !== null ? <p className="mt-3 text-sm text-slate-300">{formatDistance(distanceKm)} from your current location</p> : null}
@@ -221,14 +311,22 @@ function PropertyDetailPage() {
             <Button onClick={requestLocation} disabled={locationLoading} variant="secondary" className="mt-5 w-full">
               {locationLoading ? 'Fetching location...' : hasUserLocation ? 'Refresh my location' : 'Use my location'}
             </Button>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <a href={getMapsUrl('google')} target="_blank" rel="noreferrer" className="rounded-3xl bg-brand-500 px-5 py-3 text-center text-sm font-semibold text-slate-950">Google Maps</a>
+              <a href={getMapsUrl('apple')} target="_blank" rel="noreferrer" className="rounded-3xl border border-slate-700 px-5 py-3 text-center text-sm font-semibold text-slate-200">Apple Maps</a>
+            </div>
+            <p className="mt-3 text-sm text-slate-400">
+              Estimated travel time: {distanceKm ? `${Math.max(6, Math.round(distanceKm * 4))}-${Math.max(10, Math.round(distanceKm * 6))} min by road` : 'use location to estimate'}.
+            </p>
+            <p className="mt-2 text-sm text-slate-400">Nearby landmark: {property.areaName || property.locationLabel || property.city || 'central locality'}</p>
             {locationError ? <p className="mt-3 text-sm text-rose-300">{locationError}</p> : null}
           </div>
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
             <p className="text-sm uppercase tracking-[0.28em] text-accent-500">Amenities</p>
-            <ul className="mt-6 space-y-3 text-slate-300">
+            <ul className="mt-6 grid gap-3 sm:grid-cols-2 text-slate-300">
               {(property.amenities || ['WiFi', '24/7 Security', 'Kitchen access']).map((item) => (
-                <li key={item} className="flex items-center gap-3">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-2xl bg-slate-900 text-accent-400">•</span>
+                <li key={item} className="flex items-center gap-3 rounded-3xl bg-slate-950/80 p-4">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-accent-500/10 text-accent-300">{getAmenityIcon(item)}</span>
                   <span>{item}</span>
                 </li>
               ))}

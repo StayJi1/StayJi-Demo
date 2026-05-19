@@ -22,6 +22,12 @@ function AddPropertyPage() {
     longitude: '',
     rent: '',
     depositAmount: '',
+    availableBeds: '',
+    vacancyStatus: 'Available now',
+    availableFrom: '',
+    sharingAvailability: '',
+    parkingAvailable: false,
+    acAvailable: false,
     dailyRate: '',
     perDayCheckIn: false,
     sharing: '',
@@ -35,6 +41,9 @@ function AddPropertyPage() {
   const [status, setStatus] = useState('idle')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [imageFiles, setImageFiles] = useState([])
+  const [videoFile, setVideoFile] = useState(null)
+  const [uploadProgress, setUploadProgress] = useState(0)
 
   useEffect(() => {
     const loadProperty = async () => {
@@ -52,6 +61,12 @@ function AddPropertyPage() {
           longitude: property.location?.lng || property.longitude || '',
           rent: property.rent || '',
           depositAmount: property.depositAmount || '',
+          availableBeds: property.availableBeds || '',
+          vacancyStatus: property.vacancyStatus || 'Available now',
+          availableFrom: property.availableFrom || '',
+          sharingAvailability: property.sharingAvailability || '',
+          parkingAvailable: Boolean(property.parkingAvailable),
+          acAvailable: Boolean(property.acAvailable),
           dailyRate: property.dailyRate || '',
           perDayCheckIn: Boolean(property.perDayCheckIn),
           sharing: property.sharing || '',
@@ -88,6 +103,14 @@ function AddPropertyPage() {
         ? current.mealsAvailable.filter((item) => item !== meal)
         : [...current.mealsAvailable, meal],
     }))
+  }
+
+  const handleImageFiles = (event) => {
+    setImageFiles(Array.from(event.target.files || []).slice(0, 10))
+  }
+
+  const handleVideoFile = (event) => {
+    setVideoFile(event.target.files?.[0] || null)
   }
 
   const handleFindCoordinates = async () => {
@@ -140,6 +163,12 @@ function AddPropertyPage() {
     payload.append('longitude', form.longitude)
     payload.append('rent', form.rent)
     payload.append('depositAmount', form.depositAmount)
+    payload.append('availableBeds', form.availableBeds)
+    payload.append('vacancyStatus', form.vacancyStatus)
+    payload.append('availableFrom', form.availableFrom)
+    payload.append('sharingAvailability', form.sharingAvailability)
+    payload.append('parkingAvailable', form.parkingAvailable)
+    payload.append('acAvailable', form.acAvailable)
     payload.append('dailyRate', form.dailyRate)
     payload.append('perDayCheckIn', form.perDayCheckIn)
     payload.append('propertyCategory', form.propertyCategory)
@@ -154,9 +183,12 @@ function AddPropertyPage() {
     payload.append('menuPhoto', form.menuPhotoUrls.split(/\n|,/).map((item) => item.trim()).filter(Boolean)[0] || '')
     payload.append('propertyImageUrls', form.imageUrls)
     payload.append('propertyImage', form.imageUrls.split(/\n|,/).map((item) => item.trim()).filter(Boolean)[0] || '')
+    imageFiles.forEach((file) => payload.append('propertyImage', file))
+    if (videoFile) payload.append('video', videoFile)
     payload.append('videoUrl', form.videoUrl)
 
     setStatus('loading')
+    setUploadProgress(imageFiles.length || videoFile ? 35 : 0)
     setMessage('')
     try {
       if (isEditMode && propertyId) {
@@ -168,6 +200,12 @@ function AddPropertyPage() {
           longitude: form.longitude,
           rent: form.rent,
           depositAmount: form.depositAmount,
+          availableBeds: form.availableBeds,
+          vacancyStatus: form.vacancyStatus,
+          availableFrom: form.availableFrom,
+          sharingAvailability: form.sharingAvailability,
+          parkingAvailable: form.parkingAvailable,
+          acAvailable: form.acAvailable,
           dailyRate: form.dailyRate,
           perDayCheckIn: form.perDayCheckIn,
           propertyCategory: form.propertyCategory,
@@ -189,6 +227,7 @@ function AddPropertyPage() {
         setMessage('Property updated successfully. Admin approval is required before it appears live.')
       } else {
         await propertyService.createProperty(payload)
+        setUploadProgress(100)
         setForm({
           name: '',
           propertyCategory: 'PG',
@@ -199,6 +238,12 @@ function AddPropertyPage() {
           longitude: '',
           rent: '',
           depositAmount: '',
+          availableBeds: '',
+          vacancyStatus: 'Available now',
+          availableFrom: '',
+          sharingAvailability: '',
+          parkingAvailable: false,
+          acAvailable: false,
           dailyRate: '',
           perDayCheckIn: false,
           sharing: '',
@@ -211,6 +256,8 @@ function AddPropertyPage() {
           propertyTypeIDFK: '',
           isAvailable: true,
         })
+        setImageFiles([])
+        setVideoFile(null)
         setMessage('Property submitted successfully. It will go live after admin approval.')
       }
       setStatus('success')
@@ -276,10 +323,41 @@ function AddPropertyPage() {
             <Input label="Sharing type" name="sharing" value={form.sharing} onChange={handleChange} placeholder="2BHK, 3 sharing" required />
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
+            <Input label="Beds / rooms available" name="availableBeds" type="number" value={form.availableBeds} onChange={handleChange} placeholder="10" />
+            <Input label="Available from" name="availableFrom" type="date" value={form.availableFrom} onChange={handleChange} />
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <label className="block text-sm text-slate-200">
+              <span className="mb-2 block text-slate-300">Vacancy status</span>
+              <select
+                name="vacancyStatus"
+                value={form.vacancyStatus}
+                onChange={handleChange}
+                className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
+              >
+                <option value="Available now">Available now</option>
+                <option value="Few beds left">Few beds left</option>
+                <option value="Fully occupied">Fully occupied</option>
+                <option value="Available from date">Available from date</option>
+              </select>
+            </label>
+            <Input label="Sharing availability" name="sharingAvailability" value={form.sharingAvailability} onChange={handleChange} placeholder="2 double-sharing, 5 single-sharing" />
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2">
             <Input label="Per-day price" name="dailyRate" type="number" value={form.dailyRate} onChange={handleChange} placeholder="Required for hotels / day stays" />
             <label className="inline-flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-sm text-slate-200">
               <input type="checkbox" name="perDayCheckIn" checked={form.perDayCheckIn} onChange={handleChange} className="h-5 w-5 rounded border-slate-700 bg-slate-900 text-accent-400" />
               Allows per-day check-in
+            </label>
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <label className="inline-flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-sm text-slate-200">
+              <input type="checkbox" name="parkingAvailable" checked={form.parkingAvailable} onChange={handleChange} className="h-5 w-5 rounded border-slate-700 bg-slate-900 text-accent-400" />
+              Parking available
+            </label>
+            <label className="inline-flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-sm text-slate-200">
+              <input type="checkbox" name="acAvailable" checked={form.acAvailable} onChange={handleChange} className="h-5 w-5 rounded border-slate-700 bg-slate-900 text-accent-400" />
+              AC rooms available
             </label>
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
@@ -322,11 +400,34 @@ function AddPropertyPage() {
             <div className="flex items-center gap-4">
               <FiUpload className="h-6 w-6 text-accent-400" />
               <div>
-                <p className="font-semibold text-white">Property media URLs</p>
-                <p className="text-sm text-slate-400">Paste multiple image URLs, one per line. Add a short hosted video URL if available.</p>
+                <p className="font-semibold text-white">Property photos and video</p>
+                <p className="text-sm text-slate-400">Upload from mobile gallery, camera, or desktop. URL fields remain optional.</p>
               </div>
             </div>
             <div className="mt-5 grid gap-5">
+              <label className="block rounded-3xl border border-dashed border-slate-700 bg-slate-900/70 p-5 text-sm text-slate-200">
+                <span className="mb-2 block text-slate-300">Upload images</span>
+                <input type="file" accept="image/*" capture="environment" multiple onChange={handleImageFiles} className="block w-full text-sm text-slate-300 file:mr-4 file:rounded-full file:border-0 file:bg-accent-500 file:px-4 file:py-2 file:font-semibold file:text-slate-950" />
+              </label>
+              {imageFiles.length ? (
+                <div className="grid gap-3 sm:grid-cols-4">
+                  {imageFiles.map((file) => (
+                    <img key={`${file.name}-${file.size}`} src={URL.createObjectURL(file)} alt={file.name} className="h-28 w-full rounded-2xl object-cover" />
+                  ))}
+                </div>
+              ) : null}
+              <label className="block rounded-3xl border border-dashed border-slate-700 bg-slate-900/70 p-5 text-sm text-slate-200">
+                <span className="mb-2 block text-slate-300">Upload room video</span>
+                <input type="file" accept="video/*" capture="environment" onChange={handleVideoFile} className="block w-full text-sm text-slate-300 file:mr-4 file:rounded-full file:border-0 file:bg-accent-500 file:px-4 file:py-2 file:font-semibold file:text-slate-950" />
+                {videoFile ? <span className="mt-3 block text-slate-400">{videoFile.name}</span> : null}
+              </label>
+              {uploadProgress > 0 ? (
+                <div className="rounded-3xl bg-slate-900 p-3">
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+                    <div className="h-full rounded-full bg-accent-400 transition-all" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                </div>
+              ) : null}
               <label className="block text-sm text-slate-200">
                 <span className="mb-2 block text-slate-300">Image URLs</span>
                 <textarea

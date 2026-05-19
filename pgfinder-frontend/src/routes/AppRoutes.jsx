@@ -5,6 +5,7 @@ import DashboardLayout from '../layouts/DashboardLayout'
 import HomePage from '../pages/HomePage'
 import PropertiesPage from '../pages/PropertiesPage'
 import PropertyDetailPage from '../pages/PropertyDetailPage'
+import ComparePage from '../pages/ComparePage'
 import LoginPage from '../pages/auth/LoginPage'
 import SignupPage from '../pages/auth/SignupPage'
 import NotFoundPage from '../pages/NotFoundPage'
@@ -34,6 +35,7 @@ function AppRoutes() {
         <Route path="/" element={<HomePage />} />
         <Route path="/properties" element={<PropertiesPage />} />
         <Route path="/properties/:id" element={<PropertyDetailPage />} />
+        <Route path="/compare" element={<ComparePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
       </Route>

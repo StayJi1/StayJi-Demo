@@ -12,6 +12,8 @@ function UserDashboard() {
   const [overview, setOverview] = useState(null)
   const [loading, setLoading] = useState(true)
   const [actionError, setActionError] = useState('')
+  const [compareCount, setCompareCount] = useState(0)
+  const [viewedCount, setViewedCount] = useState(0)
 
   useEffect(() => {
     const load = async () => {
@@ -25,6 +27,8 @@ function UserDashboard() {
       }
     }
     load()
+    setCompareCount(JSON.parse(localStorage.getItem('stayjiCompare') || '[]').length)
+    setViewedCount(JSON.parse(localStorage.getItem('stayjiViewed') || '[]').length)
   }, [user?._id])
 
   const handleRemoveWishlist = async (event, propertyIDFK) => {
@@ -127,6 +131,23 @@ function UserDashboard() {
           </div>
           <p className="mt-6 text-slate-300">Need help with a booking or vendor query? Reach the StayJi team at stayji@gmail.com or 1234567899.</p>
         </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        {[
+          { title: 'Visit bookings', text: 'Track upcoming visits and owner confirmations in one place.' },
+          { title: 'Inquiry history', text: 'Your contacted owners, replies, and follow-up status stay organized.' },
+          { title: 'Comparison history', text: `${compareCount} properties currently saved for side-by-side comparison.` },
+          { title: 'Viewed properties', text: `${viewedCount} recently viewed stays are remembered in this browser session.` },
+          { title: 'Saved searches', text: 'Keep city, budget, sharing, and nearby filters ready for your next move.' },
+          { title: 'Rental history', text: 'Converted stays and past rentals will appear here after owner confirmation.' },
+          { title: 'Notifications', text: 'Visit updates, owner replies, and vacancy alerts are grouped here.' },
+        ].map((item) => (
+          <Card key={item.title}>
+            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">{item.title}</p>
+            <p className="mt-4 text-slate-300">{item.text}</p>
+          </Card>
+        ))}
       </div>
     </div>
   )

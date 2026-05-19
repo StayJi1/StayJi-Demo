@@ -13,10 +13,13 @@ axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (!error.response) {
-      return Promise.reject({ message: 'Network error. Check backend or internet connection.' })
+      return Promise.reject({
+        message: `Backend is not reachable at ${baseURL}. Start the Node server on port 3000 and check CORS/API URL settings.`,
+      })
     }
     return Promise.reject(error)
   },
 )
 
 export default axiosClient
+export { baseURL }

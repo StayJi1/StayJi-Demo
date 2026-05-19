@@ -136,6 +136,8 @@ function ManagePropertiesPage() {
                 <div className="space-y-2 text-sm text-slate-400">
                   <p>Rent: ₹{property.rent || '8,500'}</p>
                   <p>Deposit: ₹{property.depositAmount || '0'}</p>
+                  <p>Vacancy: {property.vacancyStatus || 'Available'}{property.availableBeds ? ` • ${property.availableBeds} beds` : ''}</p>
+                  <p>Sharing: {property.sharingAvailability || property.sharing || '-'}</p>
                   {property.perDayCheckIn ? <p>Day stay: ₹{property.dailyRate || property.rent || '0'}/day</p> : null}
                   <p>Status: {property.status || 'Available'}</p>
                 </div>
@@ -190,6 +192,10 @@ function ManagePropertiesPage() {
               <p className="text-slate-300">Longitude: {selectedProperty.location?.lng ?? selectedProperty.longitude ?? '-'}</p>
               <p className="text-slate-300">Rent: ₹{selectedProperty.rent || '0'}</p>
               <p className="text-slate-300">Deposit: ₹{selectedProperty.depositAmount || '0'}</p>
+              <p className="text-slate-300">Beds available: {selectedProperty.availableBeds || 0}</p>
+              <p className="text-slate-300">Vacancy: {selectedProperty.vacancyStatus || 'Available'}</p>
+              <p className="text-slate-300">Available from: {selectedProperty.availableFrom || 'Immediately'}</p>
+              <p className="text-slate-300">Parking: {selectedProperty.parkingAvailable ? 'Yes' : 'No'}</p>
             </div>
             <p className="mt-5 text-slate-300">{selectedProperty.description || 'No description available.'}</p>
             <div className="mt-6 grid gap-3 sm:grid-cols-3">

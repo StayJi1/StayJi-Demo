@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { FiMapPin, FiSearch } from 'react-icons/fi'
 import SectionHeading from '../components/common/SectionHeading'
@@ -17,6 +17,7 @@ const filterOptions = [
   'Flat',
   'Hotel',
   'Hostel',
+  'Co-living',
   'Boys',
   'Girls',
   'Co-ed',
@@ -24,10 +25,17 @@ const filterOptions = [
   'AC',
   'Non-AC',
   'Food included',
+  'Parking',
+  'Available now',
+  'Rating 4+',
+  'Single sharing',
+  'Double sharing',
+  'Triple sharing',
   'Attached bathroom',
 ]
 
-const nearbyRadiusKm = 25
+const defaultNearbyRadiusKm = 5
+const expandedNearbyRadiusKm = 25
 const ignoredSearchWords = new Set(['near', 'nearby', 'me', 'my', 'location', 'around'])
 const normalizeSearchToken = (token) => {
   const singularMap = {
@@ -55,6 +63,7 @@ const isSimilarToken = (token, value) => {
 }
 
 function PropertiesPage() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const initialSearch = searchParams.get('search') || ''
   const [properties, setProperties] = useState([])
@@ -64,11 +73,12 @@ function PropertiesPage() {
   const [priceRange, setPriceRange] = useState({ min: '', max: '' })
   const [sortBy, setSortBy] = useState('recommended')
   const [nearbyMode, setNearbyMode] = useState(false)
+  const [searchRadiusKm, setSearchRadiusKm] = useState(defaultNearbyRadiusKm)
   const [mapSearchQuery, setMapSearchQuery] = useState('')
   const [mapSearchLoading, setMapSearchLoading] = useState(false)
   const [mapSearchError, setMapSearchError] = useState('')
   const [mapSearchMessage, setMapSearchMessage] = useState('')
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, role } = useAuth()
   const [savedPropertyIds, setSavedPropertyIds] = useState(new Set())
   const [wishlistLoading, setWishlistLoading] = useState(true)
   const {
@@ -81,6 +91,11 @@ function PropertiesPage() {
   } = useCurrentLocation()
 
   useEffect(() => {
+    if (role === 'vendor') {
+      navigate('/dashboard/vendor/properties', { replace: true })
+      return
+    }
+
     const loadWishlist = async () => {
       if (!isAuthenticated || !user?._id) {
         setSavedPropertyIds(new Set())
@@ -105,7 +120,7 @@ function PropertiesPage() {
     }
 
     loadWishlist()
-  }, [isAuthenticated, user?._id])
+  }, [isAuthenticated, navigate, role, user?._id])
 
   useEffect(() => {
     setSearchQuery(searchParams.get('search') || '')
@@ -157,6 +172,7 @@ function PropertiesPage() {
 
   const handleUseLocation = () => {
     setNearbyMode(true)
+    setSearchRadiusKm(defaultNearbyRadiusKm)
     requestLocation()
   }
 
@@ -184,6 +200,7 @@ function PropertiesPage() {
       const { lat, lon, display_name } = results[0]
       setManualLocation({ lat: Number(lat), lng: Number(lon) })
       setNearbyMode(true)
+      setSearchRadiusKm(defaultNearbyRadiusKm)
       setSortBy('nearest')
       setMapSearchMessage(`Showing results near ${display_name}`)
     } catch (err) {
@@ -200,6 +217,10 @@ function PropertiesPage() {
       .map((token) => token.trim())
       .filter((token) => token && !ignoredSearchWords.has(token))
       .map(normalizeSearchToken)
+
+    const categoryFilters = activeFilters.filter((filter) => ['PG', 'Flat', 'Hotel', 'Hostel', 'Co-living'].includes(filter))
+    const genderFilters = activeFilters.filter((filter) => ['Boys', 'Girls', 'Co-ed'].includes(filter))
+    const utilityFilters = activeFilters.filter((filter) => !categoryFilters.includes(filter) && !genderFilters.includes(filter))
 
     const matchingProperties = properties.map((item) => ({
       ...item,
@@ -229,13 +250,32 @@ function PropertiesPage() {
         return false
       }
 
-      return activeFilters.every((filter) => {
-        if (['PG', 'Flat', 'Hotel', 'Hostel'].includes(filter)) return item.category === filter || item.type === filter
+      if (categoryFilters.length) {
+        const categoryMatch = categoryFilters.some((filter) => {
+          if (filter === 'Co-living') return ['Co-ed', 'Boys', 'Girls'].includes(item.gender) || /co.?living|co.?ed/i.test(`${item.category} ${item.type} ${item.description}`)
+          return item.category === filter || item.type === filter
+        })
+        if (!categoryMatch) return false
+      }
+
+      if (genderFilters.length) {
+        const allowsCoLiving = categoryFilters.includes('Co-living') || genderFilters.includes('Co-ed')
+        const genderMatch = allowsCoLiving || genderFilters.includes(item.gender)
+        if (!genderMatch) return false
+      }
+
+      return utilityFilters.every((filter) => {
         if (filter === 'Per-day check-in') return item.perDayCheckIn
         if (filter === 'Food included') return item.foodIncluded
-        if (filter === 'AC') return item.amenities?.some((amenity) => /ac|air conditioning/i.test(amenity))
-        if (filter === 'Non-AC') return !item.amenities?.some((amenity) => /ac|air conditioning/i.test(amenity))
+        if (filter === 'AC') return item.acAvailable || item.amenities?.some((amenity) => /ac|air conditioning/i.test(amenity))
+        if (filter === 'Non-AC') return !item.acAvailable && !item.amenities?.some((amenity) => /ac|air conditioning/i.test(amenity))
         if (filter === 'Attached bathroom') return item.amenities?.some((amenity) => /bathroom/i.test(amenity))
+        if (filter === 'Parking') return item.parkingAvailable || item.amenities?.some((amenity) => /parking/i.test(amenity))
+        if (filter === 'Available now') return item.status === 'Available' && item.vacancyStatus !== 'Fully occupied'
+        if (filter === 'Rating 4+') return Number(item.rating) >= 4
+        if (filter === 'Single sharing') return /single|1/i.test(item.sharingAvailability || item.sharing || '')
+        if (filter === 'Double sharing') return /double|2/i.test(item.sharingAvailability || item.sharing || '')
+        if (filter === 'Triple sharing') return /triple|3/i.test(item.sharingAvailability || item.sharing || '')
         return item.gender === filter
       })
     })
@@ -246,7 +286,7 @@ function PropertiesPage() {
         return price >= min && price <= max
       })
 
-    const nearbyMatches = matchingProperties.filter((item) => item.distanceKm !== null && item.distanceKm !== undefined && item.distanceKm <= nearbyRadiusKm)
+    const nearbyMatches = matchingProperties.filter((item) => item.distanceKm !== null && item.distanceKm !== undefined && item.distanceKm <= searchRadiusKm)
     const propertiesToShow = hasUserLocation && nearbyMode && nearbyMatches.length ? nearbyMatches : matchingProperties
 
     return propertiesToShow
@@ -267,13 +307,34 @@ function PropertiesPage() {
         }
         return 0
       })
-  }, [properties, activeFilters, searchQuery, priceRange, sortBy, hasUserLocation, nearbyMode, position])
+  }, [properties, activeFilters, searchQuery, priceRange, sortBy, hasUserLocation, nearbyMode, position, searchRadiusKm])
+
+  const nearbyCount = useMemo(
+    () => properties.filter((item) => {
+      const distance = hasUserLocation ? getDistanceKm(position, item.location) : null
+      return distance !== null && distance !== undefined && distance <= searchRadiusKm
+    }).length,
+    [hasUserLocation, position, properties, searchRadiusKm],
+  )
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="grid gap-10 lg:grid-cols-[0.95fr_0.45fr]">
         <section>
           <SectionHeading title="Search stays" description="Explore PGs, flats, hostels, and hotels with price filters and daily check-in options." />
+          <div className="mt-6 grid gap-4 md:grid-cols-4">
+            {[
+              { label: 'Live listings', value: properties.length },
+              { label: 'Vacant now', value: properties.filter((item) => item.status === 'Available').length },
+              { label: 'Avg. rating', value: properties.length ? (properties.reduce((sum, item) => sum + (Number(item.rating) || 0), 0) / properties.length).toFixed(1) : '4.6' },
+              { label: 'Nearby radius', value: `${searchRadiusKm} km` },
+            ].map((item) => (
+              <div key={item.label} className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card">
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{item.label}</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{item.value}</p>
+              </div>
+            ))}
+          </div>
           <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="mt-8 rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-1 items-center gap-3 rounded-3xl border border-slate-700/80 bg-slate-950/80 px-4 py-3">
@@ -309,7 +370,20 @@ function PropertiesPage() {
             {mapSearchMessage ? <p className="mt-3 text-sm text-emerald-300">{mapSearchMessage}</p> : null}
             {hasUserLocation && nearbyMode ? (
               <p className="mt-3 text-sm text-emerald-300">
-                Showing nearby stays within {nearbyRadiusKm} km first. Search for PG, hotel, flat, hostel, or an area to narrow it down.
+                Searching within {searchRadiusKm} km first. Search for PG, hotel, flat, hostel, or an area to narrow it down.
+              </p>
+            ) : null}
+            {hasUserLocation && nearbyMode && nearbyCount === 0 && searchRadiusKm === defaultNearbyRadiusKm ? (
+              <div className="mt-4 rounded-3xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+                No stays found within 5 km. Increase range to 25 km for wider discovery.
+                <button type="button" onClick={() => setSearchRadiusKm(expandedNearbyRadiusKm)} className="ml-3 rounded-full bg-amber-400 px-3 py-1 font-semibold text-slate-950">
+                  Increase range
+                </button>
+              </div>
+            ) : null}
+            {hasUserLocation && nearbyMode && nearbyCount === 0 && searchRadiusKm === expandedNearbyRadiusKm ? (
+              <p className="mt-4 rounded-3xl border border-slate-700 bg-slate-950/70 p-4 text-sm text-slate-300">
+                Sorry, we currently do not have properties in this range. Showing all available properties{searchQuery ? ` for ${searchQuery}` : ''}.
               </p>
             ) : null}
             <div className="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_1.2fr]">

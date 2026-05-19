@@ -38,6 +38,14 @@ const toNumberOrUndefined = (value) => {
     return Number.isFinite(numberValue) ? numberValue : undefined
 }
 
+const normalizeAccountType = (value) => {
+    const normalized = (value || '').toString().trim().toLowerCase()
+    if (['owner', 'host', 'hostel', 'vendor'].includes(normalized)) return 'vendor'
+    if (['personal', 'student', 'user'].includes(normalized)) return 'user'
+    if (normalized === 'admin') return 'admin'
+    return normalized
+}
+
 const propertyPopulate = () => [
     { path: 'userIDFK', select: ['userFname', 'userLname', 'userType', 'userEmail', 'contact'] },
     { path: 'propertyTypeIDFK', select: ['typeName'] },
@@ -81,7 +89,6 @@ const publicPropertyQuery = {
 
 var storage = multer.diskStorage({
     destination: function (req, res, cb) {
-        cb(null, './public/upload/UserImage')
         var docimg = req.body.docimg;
         if (docimg == "PropertyImage") {
             cb(null, './public/upload/PropertyImage')
@@ -103,7 +110,7 @@ var storage = multer.diskStorage({
     }
 });
 const fileFilter = (req, file, cb) => {
-    if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg' || file.mimetype === 'image/png') {
+    if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg' || file.mimetype === 'image/png' || file.mimetype === 'image/webp' || file.mimetype === 'video/mp4' || file.mimetype === 'video/webm' || file.mimetype === 'video/quicktime') {
         cb(null, true);
     } else {
         cb(null, false);
@@ -207,7 +214,7 @@ router.post('/googleAuth', async (req, res) => {
 });
 
 router.get('/getUserList', async (req, res) => {
-    const objUser = await User.find();
+    const objUser = await User.find().select('-userPassword');
 
     if (objUser != null) {
         res.json({ result: "success", msg: "User List Found", data: objUser });
@@ -222,9 +229,12 @@ router.post('/loginByUser', async (req, res) => {
 
     const objUser = await User.findOne({ userEmail: req.body.userEmail, isActive: true });
 
-    console.log(objUser);
-
     if (objUser != null && verifyPassword(req.body.userPassword, objUser.userPassword)) {
+        const actualRole = normalizeAccountType(objUser.userType)
+        const requestedRole = normalizeAccountType(req.body.accountType || req.body.role || req.body.userType)
+        if (requestedRole && actualRole !== requestedRole) {
+            return res.json({ result: "fail", msg: `This account is registered as ${actualRole}. Select the correct account type.`, data: null });
+        }
         if (!isHashedPassword(objUser.userPassword)) {
             await User.updateOne({ _id: objUser._id }, { userPassword: hashPassword(req.body.userPassword) })
         }
@@ -272,6 +282,19 @@ router.post('/getUser', async (req, res) => {
     }
 });
 
+router.post('/authStatus', async (req, res) => {
+    if (!req.body.id) {
+        return res.json({ result: "failure", msg: "User ID is required", data: null });
+    }
+
+    const objUser = await User.findOne({ _id: req.body.id }).select('-userPassword');
+    if (!objUser || objUser.isActive === false) {
+        return res.json({ result: "inactive", msg: "Account is inactive", data: null });
+    }
+
+    res.json({ result: "success", msg: "Account active", data: objUser });
+});
+
 router.post('/updateUser', async (req, res) => {
     const updateFields = {}
     if (req.body.userFname !== undefined) updateFields.userFname = req.body.userFname
@@ -298,7 +321,7 @@ router.post('/updateUser', async (req, res) => {
 
 router.get('/getPropertyList', async (req, res) => {
     const objProperty = await Property.find({ $and: [publicPropertyQuery, buildPropertyFilters(req.query)] }).
-        populate('userIDFK', ['userFname', 'userLname', 'userType']).populate('propertyTypeIDFK', ['typeName']);
+        populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact']).populate('propertyTypeIDFK', ['typeName']);
     // var data = [];
     // data["propertyCount"]= objProperty.length;
     if (objProperty != null) {
@@ -399,12 +422,13 @@ router.post('/getVisitorList', async (req, res) => {
           '$match': {
             'user._id': mongoose.Types.ObjectId(req.body.userIDFK),
           }
+        }, {
+          '$unset': ['visituser.userPassword', 'user.userPassword']
         }
       ]
         ;
     const aggCursor = Visit.aggregate(pipeline);
     for await (const doc of aggCursor) {
-        console.log(doc);
         objData.push(doc);
     }
 
@@ -567,12 +591,13 @@ router.post('/getInquiry', async (req, res) => {
             '$match': {
                 'user._id': mongoose.Types.ObjectId(req.body.userIDFK),
             }
+        }, {
+            '$unset': ['inquiryuser.userPassword', 'user.userPassword']
         }
     ]
         ;
     const aggCursor = Inquiry.aggregate(pipeline);
     for await (const doc of aggCursor) {
-        console.log(doc);
         objData.push(doc);
     }
 
@@ -611,7 +636,7 @@ router.post('/getPropertyById', async (req, res) => {
         ? { _id: req.body.id }
         : { _id: req.body.id, ...publicPropertyQuery }
     const objProperty = await Property.findOne(filters).
-        populate('userIDFK', ['userFname', 'userLname', 'userType']).populate('propertyTypeIDFK', ['typeName']);
+        populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact']).populate('propertyTypeIDFK', ['typeName']);
     if (objProperty != null) {
         res.json({ result: "success", msg: "Property List Found", data: objProperty });
 
@@ -719,12 +744,33 @@ router.post('/getShortlistByVendor', async (req, res) => {
         return res.json({ result: 'success', msg: 'No shortlist activity found', data: [] });
     }
 
-    const objShort = await Shortlisted.find({ propertyIDFK: { $in: propertyIds }, isActive: true })
-        .populate('userIDFK', ['userFname', 'userLname', 'userEmail', 'contact'])
-        .populate('propertyIDFK', ['propertyName', 'propertyImage', 'rent', 'address', 'areaName', 'isActive', 'approvalStatus']);
+    const shortlistSummary = await Shortlisted.aggregate([
+        { $match: { propertyIDFK: { $in: propertyIds }, isActive: true } },
+        { $group: { _id: '$propertyIDFK', wishlistCount: { $sum: 1 }, latestActivity: { $max: '$addedOn' } } },
+        { $lookup: { from: 'propertymasters', localField: '_id', foreignField: '_id', as: 'property' } },
+        { $unwind: '$property' },
+        {
+            $project: {
+                _id: 0,
+                propertyId: '$_id',
+                wishlistCount: 1,
+                latestActivity: 1,
+                property: {
+                    _id: '$property._id',
+                    propertyName: '$property.propertyName',
+                    rent: '$property.rent',
+                    address: '$property.address',
+                    areaName: '$property.areaName',
+                    cityName: '$property.cityName',
+                    approvalStatus: '$property.approvalStatus',
+                    isActive: '$property.isActive',
+                },
+            },
+        },
+    ]);
 
-    const visibleShortlist = objShort.filter((item) => item.propertyIDFK && item.propertyIDFK.isActive !== false && (item.propertyIDFK.approvalStatus || 'Approved') === 'Approved');
-    res.json({ result: 'success', msg: 'ShortList Found', data: visibleShortlist });
+    const visibleShortlist = shortlistSummary.filter((item) => item.property && item.property.isActive !== false && (item.property.approvalStatus || 'Approved') === 'Approved');
+    res.json({ result: 'success', msg: 'Shortlist analytics found', data: visibleShortlist });
 });
 
 router.post('/getShortlistByPropertyId', async (req, res) => {
@@ -786,6 +832,10 @@ router.post('/addInterest', async (req, res) => {
         propertyIDFK: req.body.propertyIDFK,
         subject: req.body.subject || 'Property interest',
         description: req.body.description || 'A user has expressed interest in this property.',
+        preferredVisitTime: req.body.preferredVisitTime || req.body.visitTime || '',
+        moveInPreference: req.body.moveInPreference || '',
+        leadStage: 'qualified',
+        isConverted: false,
         userIDFK: req.body.userIDFK,
         reply: '',
         status: false,
@@ -818,7 +868,10 @@ router.post('/addPropertyImages', upload.single('propertyImage'), async (req, re
 router.post('/addVisit', async (req, res) => {
     var objVisit = new Visit({ userIDFK: req.body.userIDFK, propertyIDFK: req.body.propertyIDFK });
     objVisit.visitDate = req.body.visitDate,
-        objVisit.visitTime = "-",
+        objVisit.visitTime = req.body.visitTime || "-",
+        objVisit.moveInPreference = req.body.moveInPreference || "",
+        objVisit.leadStage = "qualified",
+        objVisit.isConverted = false,
         objVisit.userIDFK = req.body.userIDFK,
         objVisit.propertyIDFK = req.body.propertyIDFK,
         objVisit.status = "0",
@@ -833,6 +886,20 @@ router.post('/addVisit', async (req, res) => {
     } else {
         res.json({ result: "failure", msg: "Visit Not Inserted", data: 0 });
     }
+});
+
+router.post('/markLeadConverted', async (req, res) => {
+    const allowedTypes = ['visit', 'inquiry']
+    if (!allowedTypes.includes(req.body.type) || !req.body.id) {
+        return res.json({ result: 'failure', msg: 'Lead type and ID are required', data: 0 })
+    }
+
+    const Model = req.body.type === 'visit' ? Visit : Inquiry
+    const updated = await Model.updateOne({ _id: req.body.id }, { isConverted: true, leadStage: 'converted' })
+    if (updated.modifiedCount > 0) {
+        return res.json({ result: 'success', msg: 'Lead marked as converted', data: 1 })
+    }
+    res.json({ result: 'failure', msg: 'Lead conversion was not updated', data: 0 })
 });
 
 router.post('/addReview', async (req, res) => {
@@ -939,12 +1006,14 @@ router.get('/getPropertyType', async (req, res) => {
     }
 });
 
-router.post('/addProperty', upload.single('propertyImage'), async (req, res) => {
+router.post('/addProperty', upload.fields([{ name: 'propertyImage', maxCount: 10 }, { name: 'video', maxCount: 1 }]), async (req, res) => {
     const imageUrls = parseStringList(req.body.propertyImageUrls)
     const mealsAvailable = parseStringList(req.body.mealsAvailable || req.body.foodOptions)
     const menuPhotoUrls = parseStringList(req.body.menuPhotoUrls)
-    const primaryImage = req.file
-        ? req.file.filename
+    const uploadedImages = (req.files?.propertyImage || []).map((file) => file.filename)
+    const uploadedVideo = req.files?.video?.[0]?.filename || ''
+    const primaryImage = uploadedImages[0]
+        ? uploadedImages[0]
         : (req.body.propertyImage || imageUrls[0] || 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80')
     var objProperty = new Property({ userIDFK: req.body.userIDFK });
     objProperty.userIDFK = req.body.userIDFK,
@@ -963,9 +1032,16 @@ router.post('/addProperty', upload.single('propertyImage'), async (req, res) => 
         objProperty.menuPhoto = req.body.menuPhoto || menuPhotoUrls[0] || "",
         objProperty.menuPhotoUrls = menuPhotoUrls,
         objProperty.propertyImage = primaryImage,
-        objProperty.propertyImageUrls = imageUrls.length ? imageUrls : [primaryImage],
-        objProperty.videoUrl = req.body.videoUrl || "",
+        objProperty.propertyImageUrls = [...uploadedImages, ...imageUrls].length ? [...uploadedImages, ...imageUrls] : [primaryImage],
+        objProperty.videoUrl = uploadedVideo || req.body.videoUrl || "",
         objProperty.depositAmount = req.body.depositAmount || "",
+        objProperty.availableBeds = toNumberOrUndefined(req.body.availableBeds) || 0,
+        objProperty.vacancyStatus = req.body.vacancyStatus || "Available",
+        objProperty.availableFrom = req.body.availableFrom || "",
+        objProperty.sharingAvailability = req.body.sharingAvailability || "",
+        objProperty.parkingAvailable = toBoolean(req.body.parkingAvailable),
+        objProperty.acAvailable = toBoolean(req.body.acAvailable),
+        objProperty.rating = toNumberOrUndefined(req.body.rating) || 4.6,
         objProperty.propertyCategory = req.body.propertyCategory || req.body.propertySegment || "PG",
         objProperty.pricingUnit = req.body.pricingUnit || "month",
         objProperty.dailyRate = req.body.dailyRate || "",
@@ -1001,8 +1077,6 @@ router.post('/resetPassword', async (req, res) => {
     const objUser = await User.updateOne({ userEmail: req.body.userEmail }, {
         userPassword: hashPassword(req.body.userPassword),
     });
-    
-    console.log(req.body.userEmail + " " + req.body.userPassword);
     if (objUser != null) {
         res.json({ result: "success", msg: "Password reset Successfully", data: 1 });
 
@@ -1036,7 +1110,6 @@ router.post('/updateVisitStatus', async (req, res) => {
         propertyIDFK: req.body.propertyIDFK,
         status: "2"
     });
-    console.log(req.body);
     if (objVisit != null) {
         res.json({ result: "success", msg: "Visit status update Successfully", data: 1 });
 
@@ -1070,8 +1143,6 @@ router.post('/updateReply', async (req, res) => {
         reply: req.body.reply,
         status: true
     });
-    // res.send(objUser);
-    console.log(req.body.id + " " + req.body.userPassword);
     if (objInquiry != null) {
         res.json({ result: "success", msg: "Inquiry update Successfully", data: 1 });
 
@@ -1152,7 +1223,7 @@ router.post('/reviewProperty', async (req, res) => {
 
     if (updated.modifiedCount > 0) {
         const objProperty = await Property.findOne({ _id: req.body.id, isActive: true }).
-            populate('userIDFK', ['userFname', 'userLname', 'userType']).populate('propertyTypeIDFK', ['typeName'])
+            populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact']).populate('propertyTypeIDFK', ['typeName'])
         res.json({ result: "success", msg: "Property review updated", data: objProperty })
     } else {
         res.json({ result: "failure", msg: "Property review not updated", data: 0 })
@@ -1197,6 +1268,13 @@ router.post('/updateProperty', async (req, res) => {
     }
     if (req.body.videoUrl !== undefined) updateFields.videoUrl = req.body.videoUrl
     if (req.body.depositAmount !== undefined) updateFields.depositAmount = req.body.depositAmount
+    if (req.body.availableBeds !== undefined) updateFields.availableBeds = toNumberOrUndefined(req.body.availableBeds) || 0
+    if (req.body.vacancyStatus !== undefined) updateFields.vacancyStatus = req.body.vacancyStatus
+    if (req.body.availableFrom !== undefined) updateFields.availableFrom = req.body.availableFrom
+    if (req.body.sharingAvailability !== undefined) updateFields.sharingAvailability = req.body.sharingAvailability
+    if (req.body.parkingAvailable !== undefined) updateFields.parkingAvailable = toBoolean(req.body.parkingAvailable)
+    if (req.body.acAvailable !== undefined) updateFields.acAvailable = toBoolean(req.body.acAvailable)
+    if (req.body.rating !== undefined) updateFields.rating = toNumberOrUndefined(req.body.rating) || 4.6
     if (req.body.propertyCategory !== undefined) updateFields.propertyCategory = req.body.propertyCategory
     if (req.body.propertySegment !== undefined) updateFields.propertyCategory = req.body.propertySegment
     if (req.body.pricingUnit !== undefined) updateFields.pricingUnit = req.body.pricingUnit
@@ -1211,7 +1289,7 @@ router.post('/updateProperty', async (req, res) => {
 
     const updated = await Property.updateOne({ _id: req.body.id }, { $set: updateFields })
     if (updated.modifiedCount > 0) {
-        const objProperty = await Property.findOne({ _id: req.body.id, isActive: true }).populate('userIDFK', ['userFname', 'userLname', 'userType']).populate('propertyTypeIDFK', ['typeName'])
+        const objProperty = await Property.findOne({ _id: req.body.id, isActive: true }).populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact']).populate('propertyTypeIDFK', ['typeName'])
         res.json({ result: "success", msg: "Property Updated", data: objProperty })
     } else {
         const existingProperty = await Property.findOne({ _id: req.body.id, isActive: true })
@@ -1233,7 +1311,7 @@ router.post('/deleteProperty', async (req, res) => {
 })
 
 router.get('/getAdminStats', async (req, res) => {
-    const [users, vendors, activeProperties, inactiveProperties, inquiries, pendingProperties, visitLeads] = await Promise.all([
+    const [users, vendors, activeProperties, inactiveProperties, inquiries, pendingProperties, visitLeads, convertedVisits, convertedInquiries] = await Promise.all([
         User.countDocuments({ isActive: true, userType: { $ne: "Admin" } }),
         User.countDocuments({ isActive: true, userType: { $in: ["Vendor", "Owner", "vendor", "owner"] } }),
         Property.countDocuments({ isActive: true }),
@@ -1241,12 +1319,14 @@ router.get('/getAdminStats', async (req, res) => {
         Inquiry.countDocuments({ isActive: true }),
         Property.countDocuments({ isActive: true, approvalStatus: "Pending" }),
         Visit.countDocuments({ isActive: true }),
+        Visit.countDocuments({ isActive: true, isConverted: true }),
+        Inquiry.countDocuments({ isActive: true, isConverted: true }),
     ])
 
     res.json({
         result: "success",
         msg: "Admin stats found",
-        data: { users, vendors, properties: activeProperties, inactiveProperties, inquiries, pendingProperties, leads: inquiries + visitLeads },
+        data: { users, vendors, properties: activeProperties, inactiveProperties, inquiries, pendingProperties, leads: inquiries + visitLeads, conversions: convertedVisits + convertedInquiries },
     })
 })
 
@@ -1334,7 +1414,7 @@ router.post('/updateUserStatus', async (req, res) => {
 
 router.post('/getPropertyListByType', async (req, res) => {
     const objProperty = await Property.find({ propertyTypeIDFK: req.body.propertyTypeIDFK, ...publicPropertyQuery }).
-        populate('userIDFK', ['userFname', 'userLname', 'userType']).populate('propertyTypeIDFK', ['typeName']);;
+        populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact']).populate('propertyTypeIDFK', ['typeName']);;
     // var data = [];
     // data["propertyCount"]= objProperty.length;
     if (objProperty != null) {
@@ -1348,7 +1428,7 @@ router.post('/getPropertyListByType', async (req, res) => {
 
 router.post('/getPropertyListByTypeId', async (req, res) => {
     const objProperty = await Property.find({ userIDFK: req.body.userIDFK, propertyTypeIDFK: req.body.propertyTypeIDFK, isActive: true }).
-        populate('userIDFK', ['userFname', 'userLname', 'userType']).populate('propertyTypeIDFK', ['typeName']);;
+        populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact']).populate('propertyTypeIDFK', ['typeName']);;
     // var data = [];
     // data["propertyCount"]= objProperty.length;
     if (objProperty != null) {
@@ -1361,13 +1441,11 @@ router.post('/getPropertyListByTypeId', async (req, res) => {
 });
 
 router.post('/updateuserPassword', async (req, res) => {
+    const objUser = await User.findOne({ _id: req.body.id, isActive: true });
 
-    console.log(req.body);
-    const objUser = await User.findOne({ _id: req.body.id, userPassword: req.body.oldPassword });
-
-    if (objUser != null) {
+    if (objUser != null && verifyPassword(req.body.oldPassword, objUser.userPassword)) {
         const updated = await User.updateOne({ _id: req.body.id }, {
-            userPassword: req.body.userPassword,
+            userPassword: hashPassword(req.body.userPassword),
         });
         if (updated != null) {
             res.json({ result: "success", msg: "User password updated Successfully", data: 1 });

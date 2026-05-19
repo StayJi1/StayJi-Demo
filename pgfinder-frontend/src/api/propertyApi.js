@@ -1,4 +1,21 @@
-import axiosClient from './axiosClient'
+import axiosClient, { baseURL } from './axiosClient'
+
+const toAssetUrl = (value) => {
+  if (!value) return ''
+  if (/^https?:\/\//i.test(value)) return value
+  const clean = value.toString().replace(/^\/+/, '')
+  if (clean.startsWith('upload/')) return `${baseURL}/${clean}`
+  if (clean.startsWith('public/upload/')) return `${baseURL}/${clean.replace(/^public\//, '')}`
+  return `${baseURL}/upload/PropertyImage/${clean}`
+}
+
+const toUploadUrl = (value) => {
+  if (!value) return ''
+  if (/^https?:\/\//i.test(value)) return value
+  const clean = value.toString().replace(/^\/+/, '')
+  if (clean.startsWith('upload/')) return `${baseURL}/${clean}`
+  return `${baseURL}/upload/${clean}`
+}
 
 const normalizeProperty = (property) => {
   if (!property) return property
@@ -21,7 +38,7 @@ const normalizeProperty = (property) => {
     ...(Array.isArray(property.propertyImageUrls) ? property.propertyImageUrls : []),
     property.propertyImage,
     property.image,
-  ].filter(Boolean)
+  ].filter(Boolean).map(toAssetUrl)
   const coordinates = {
     mumbai: { lat: 19.076, lng: 72.8777 },
     bangalore: { lat: 12.9716, lng: 77.5946 },
@@ -46,12 +63,15 @@ const normalizeProperty = (property) => {
     id: property._id || property.id,
     name: property.propertyName || property.name,
     description: property.description || property.summary,
+    ownerId: property.userIDFK?._id || property.userIDFK || property.ownerId || '',
     address: property.address || '',
     latitude: property.latitude,
     longitude: property.longitude,
     location: normalizedLocation,
     locationLabel: property.address || property.areaName || property.city || '',
     city: property.cityName || property.city || '',
+    contact: property.contact || property.userIDFK?.contact || '',
+    ownerName: [property.userIDFK?.userFname, property.userIDFK?.userLname].filter(Boolean).join(' '),
     type: inferredCategory,
     propertyTypeName: property.propertyTypeIDFK?.typeName || property.type || '',
     category: inferredCategory,
@@ -60,17 +80,24 @@ const normalizeProperty = (property) => {
     pricingUnit: property.pricingUnit || 'month',
     perDayCheckIn: Boolean(property.perDayCheckIn),
     depositAmount: Number(property.depositAmount) || property.depositAmount || 0,
+    availableBeds: Number(property.availableBeds) || 0,
+    vacancyStatus: property.vacancyStatus || (property.isAvailable === false ? 'Fully occupied' : 'Available now'),
+    availableFrom: property.availableFrom || '',
+    sharingAvailability: property.sharingAvailability || property.sharing || '',
+    parkingAvailable: Boolean(property.parkingAvailable) || amenities.some((item) => /parking/i.test(item)),
+    acAvailable: Boolean(property.acAvailable) || amenities.some((item) => /ac|air conditioning/i.test(item)),
     sharing: property.sharing || property.roomType || '',
     gender: property.genderType || property.gender || 'Co-ed',
     foodIncluded: mealsAvailable.length > 0 || amenities.some((item) => /meal|food/i.test(item)),
     mealsAvailable,
-    menuPhoto: property.menuPhoto || property.menuPhotoUrls?.[0] || '',
-    menuPhotoUrls: property.menuPhotoUrls || [],
+    menuPhoto: toAssetUrl(property.menuPhoto || property.menuPhotoUrls?.[0] || ''),
+    menuPhotoUrls: (property.menuPhotoUrls || []).map(toAssetUrl),
     image: imageUrls[0] || fallbackImage,
     images: imageUrls.length ? [...new Set(imageUrls)] : [fallbackImage],
-    videoUrl: property.videoUrl || '',
+    videoUrl: toUploadUrl(property.videoUrl || ''),
     status: property.isAvailable === false ? 'Booked' : 'Available',
     approvalStatus: property.approvalStatus || 'Approved',
+    rating: Number(property.rating) || property.rating || 4.6,
     amenities,
   }
 }
@@ -123,8 +150,8 @@ const propertyApi = {
   shortlistByUser: (userIDFK) => axiosClient.post('/client/getShortlistById', { userIDFK }).then((res) => (res.data?.data || []).map(normalizeShortlistItem)),
 
   // Book visit uses /addVisit (expects userIDFK, propertyIDFK, visitDate)
-  bookVisit: ({ userIDFK, propertyIDFK, visitDate }) => axiosClient.post('/client/addVisit', { userIDFK, propertyIDFK, visitDate }).then((res) => res.data && res.data.data),
-  expressInterest: ({ userIDFK, propertyIDFK, subject, description }) => axiosClient.post('/client/addInterest', { userIDFK, propertyIDFK, subject, description }).then((res) => res.data && res.data.data),
+  bookVisit: ({ userIDFK, propertyIDFK, visitDate, visitTime, moveInPreference }) => axiosClient.post('/client/addVisit', { userIDFK, propertyIDFK, visitDate, visitTime, moveInPreference }).then((res) => res.data && res.data.data),
+  expressInterest: ({ userIDFK, propertyIDFK, subject, description, preferredVisitTime, moveInPreference }) => axiosClient.post('/client/addInterest', { userIDFK, propertyIDFK, subject, description, preferredVisitTime, moveInPreference }).then((res) => res.data && res.data.data),
 
   create: (payload) => axiosClient.post('/client/addProperty', payload, {
     headers: { 'Content-Type': 'multipart/form-data' },

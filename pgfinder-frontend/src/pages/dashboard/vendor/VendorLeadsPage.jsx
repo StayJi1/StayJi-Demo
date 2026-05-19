@@ -9,9 +9,22 @@ import { useAuth } from '../../../context/AuthContext'
 function VendorLeadsPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [leads, setLeads] = useState({ visits: [], inquiries: [], shortlists: [], totalLeads: 0 })
+  const [leads, setLeads] = useState({ visits: [], inquiries: [], shortlists: [], totalLeads: 0, shortlistCount: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+
+  const markConverted = async (type, id) => {
+    try {
+      await dashboardService.markLeadConverted({ type, id })
+      setLeads((current) => ({
+        ...current,
+        visits: type === 'visit' ? current.visits.map((item) => (item._id === id ? { ...item, isConverted: true, leadStage: 'converted' } : item)) : current.visits,
+        inquiries: type === 'inquiry' ? current.inquiries.map((item) => (item._id === id ? { ...item, isConverted: true, leadStage: 'converted' } : item)) : current.inquiries,
+      }))
+    } catch (err) {
+      setError(err?.message || 'Unable to mark lead converted.')
+    }
+  }
 
   useEffect(() => {
     const loadLeads = async () => {
@@ -49,7 +62,7 @@ function VendorLeadsPage() {
         <Card className="p-8">
           <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Total leads</p>
           <p className="mt-4 text-5xl font-semibold text-white">{loading ? '…' : leads.totalLeads}</p>
-          <p className="mt-4 text-sm text-slate-400">Includes visit requests, inquiries, and wishlist saves.</p>
+          <p className="mt-4 text-sm text-slate-400">Qualified leads only: visits and owner-contact requests.</p>
         </Card>
         <Card className="p-8">
           <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Visit requests</p>
@@ -63,8 +76,8 @@ function VendorLeadsPage() {
         </Card>
         <Card className="p-8">
           <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Wishlist saves</p>
-          <p className="mt-4 text-5xl font-semibold text-white">{loading ? '…' : leads.shortlists.length}</p>
-          <p className="mt-4 text-sm text-slate-400">Students who added your property to their wishlist.</p>
+          <p className="mt-4 text-5xl font-semibold text-white">{loading ? '…' : leads.shortlistCount}</p>
+          <p className="mt-4 text-sm text-slate-400">Analytics only. User phone numbers stay private at this stage.</p>
         </Card>
       </div>
 
@@ -95,8 +108,12 @@ function VendorLeadsPage() {
                       <div className="text-right">
                         <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Visit date</p>
                         <p className="mt-2 font-semibold text-white">{visit.visitDate ? new Date(visit.visitDate).toLocaleString() : 'TBD'}</p>
+                        <p className="mt-1 text-sm text-slate-400">Move-in: {visit.moveInPreference || 'Not shared'}</p>
                       </div>
                     </div>
+                    <button type="button" onClick={() => markConverted('visit', visit._id)} className="mt-4 rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10">
+                      {visit.isConverted ? 'Converted' : 'Mark converted'}
+                    </button>
                   </div>
                 ))
               ) : (
@@ -131,6 +148,10 @@ function VendorLeadsPage() {
                       </div>
                     </div>
                     <p className="mt-3 text-slate-300">{inquiry.subject || 'Interested in this property'}</p>
+                    <p className="mt-2 text-sm text-slate-400">Preferred visit: {inquiry.preferredVisitTime || 'Not shared'} • Move-in: {inquiry.moveInPreference || 'Not shared'}</p>
+                    <button type="button" onClick={() => markConverted('inquiry', inquiry._id)} className="mt-4 rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10">
+                      {inquiry.isConverted ? 'Converted' : 'Mark converted'}
+                    </button>
                   </div>
                 ))
               ) : (
@@ -151,16 +172,16 @@ function VendorLeadsPage() {
                 <p className="text-slate-400">Loading wishlist saves…</p>
               ) : leads.shortlists.length ? (
                 leads.shortlists.map((save) => (
-                  <div key={`${save._id || save.id}-${save.propertyIDFK?._id || save.propertyIDFK?.id}`} className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4">
+                  <div key={`${save.propertyId || save.property?._id}`} className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-sm text-slate-400">Student</p>
-                        <p className="text-lg font-semibold text-white">{save.userIDFK?.userFname || 'Unknown'} {save.userIDFK?.userLname || ''}</p>
-                        <p className="text-sm text-slate-400">{save.userIDFK?.contact || save.userIDFK?.userEmail || 'No contact available'}</p>
+                        <p className="text-sm text-slate-400">Wishlist analytics</p>
+                        <p className="text-lg font-semibold text-white">{save.wishlistCount || 0} users shortlisted</p>
+                        <p className="text-sm text-slate-400">Contact details unlock only after callback, visit, chat, or owner-contact.</p>
                       </div>
                       <div className="text-right">
                         <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Property</p>
-                        <p className="mt-2 font-semibold text-white">{save.propertyIDFK?.propertyName || 'Unknown property'}</p>
+                        <p className="mt-2 font-semibold text-white">{save.property?.propertyName || 'Unknown property'}</p>
                       </div>
                     </div>
                   </div>

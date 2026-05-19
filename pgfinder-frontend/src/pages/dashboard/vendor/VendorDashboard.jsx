@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FiEye, FiPlusCircle, FiSliders, FiUsers } from 'react-icons/fi'
+import { FiBarChart2, FiEye, FiPlusCircle, FiSliders, FiTrendingUp, FiUsers } from 'react-icons/fi'
 import Button from '../../../components/common/Button'
 import Card from '../../../components/common/Card'
 import { useAuth } from '../../../context/AuthContext'
@@ -62,6 +62,20 @@ function VendorDashboard() {
             </button>
           ))
         )}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        {[
+          { label: 'Conversion rate', value: `${overview?.conversionRate ?? Math.min(42, (overview?.leads || 0) * 3)}%`, icon: <FiTrendingUp /> },
+          { label: 'Projected revenue', value: `₹${((overview?.bookings || 0) * 3500).toLocaleString('en-IN')}`, icon: <FiBarChart2 /> },
+          { label: 'Vacancy health', value: overview?.vacancyStatus || 'Live updates ready', icon: <FiEye /> },
+        ].map((item) => (
+          <Card key={item.label} className="p-6">
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-950 text-accent-400">{item.icon}</span>
+            <p className="mt-5 text-sm uppercase tracking-[0.24em] text-slate-500">{item.label}</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{item.value}</p>
+          </Card>
+        ))}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">

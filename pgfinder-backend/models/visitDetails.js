@@ -7,6 +7,17 @@ visitSchema = mongoose.Schema({
     visitTime:{
         type:String
     },
+    moveInPreference:{
+        type:String
+    },
+    leadStage:{
+        type:String,
+        default:"qualified"
+    },
+    isConverted:{
+        type:Boolean,
+        default:false
+    },
     propertyIDFK:{
         type:mongoose.Schema.Types.ObjectId,
         ref:'propertyMaster'
