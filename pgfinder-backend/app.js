@@ -26,7 +26,7 @@ app.disable('x-powered-by');
 const corsOrigins = [
     "http://localhost:5173",
     "http://localhost:3000",
-    "https://final-pg-finder-alpha.vercel.app"
+    "https://pg-finder-alpha.vercel.app/"
 ];
 
 // Add environment variable CORS origins if provided
