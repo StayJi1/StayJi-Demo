@@ -33,6 +33,8 @@ const ownerData = [
 
 const propertyTypes = [
   ['PG', 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=900&q=80'],
+  ['Flat', 'https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=900&q=80'],
+  ['Hotel', 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=900&q=80'],
   ['Hostel', 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=900&q=80'],
   ['Studio', 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=900&q=80'],
   ['Shared Room', 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80'],
@@ -130,11 +132,13 @@ const buildProperties = (owners, types) => names.map((propertyName, index) => {
   const genderType = ['Boys', 'Girls', 'Co-ed'][index % 3]
   const rent = 6500 + ((index * 725) % 8500)
   const type = types[index % types.length]
+  const propertyCategory = ['PG', 'Flat', 'Hotel', 'Hostel'][index % 4]
 
   return {
     userIDFK: owners[index % owners.length]._id,
+    vendorId: owners[index % owners.length]._id,
     propertyName,
-    description: `${genderType} ${type.typeName.toLowerCase()} in ${areaName} with clean furnished rooms, reliable food, fast WiFi, and easy access to colleges, offices, cafes, and public transport.`,
+    description: `${genderType} ${propertyCategory.toLowerCase()} in ${areaName} with clean furnished rooms, reliable food, fast WiFi, and easy access to colleges, offices, cafes, and public transport.`,
     address: `${areaName}, ${city.cityName}`,
     rent: String(rent),
     sharing,
@@ -142,6 +146,13 @@ const buildProperties = (owners, types) => names.map((propertyName, index) => {
     areaName,
     cityName: city.cityName,
     propertyTypeIDFK: type._id,
+    propertyCategory,
+    approvalStatus: 'Approved',
+    roomInventory: [
+      { sharingType: 'Single sharing', totalRooms: 6, vacantRooms: index % 3, bedsPerRoom: 1, vacantBeds: index % 3, monthlyRent: String(rent + 2500) },
+      { sharingType: 'Double sharing', totalRooms: 8, vacantRooms: (index + 1) % 4, bedsPerRoom: 2, vacantBeds: ((index + 1) % 4) * 2, monthlyRent: String(rent) },
+      { sharingType: 'Triple sharing', totalRooms: 5, vacantRooms: (index + 2) % 3, bedsPerRoom: 3, vacantBeds: ((index + 2) % 3) * 3, monthlyRent: String(Math.max(4500, rent - 1800)) },
+    ],
     aminityFeatures: amenities[index % amenities.length],
     propertyImage: imageUrls[index % imageUrls.length],
     isAvailable: index % 9 !== 0,
@@ -170,8 +181,9 @@ async function seed() {
 
     const properties = buildProperties(owners, types)
     const propertyNames = properties.map((property) => property.propertyName)
+    const oldSeededProperties = await Property.find({ propertyName: { $in: propertyNames } }).select('_id')
+    await PropertyImage.deleteMany({ propertyIDFK: { $in: oldSeededProperties.map((property) => property._id) } })
     await Property.deleteMany({ propertyName: { $in: propertyNames } })
-    await PropertyImage.deleteMany({})
 
     const inserted = await Property.insertMany(properties)
     const gallery = inserted.flatMap((property, index) => [

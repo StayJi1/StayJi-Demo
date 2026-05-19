@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { FiArrowLeft, FiClock, FiMapPin, FiPhone, FiShield, FiShuffle, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome } from 'react-icons/fi'
+import { FiArrowLeft, FiClock, FiPhone, FiShield, FiShuffle, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome } from 'react-icons/fi'
 import Loader from '../components/common/Loader'
 import Button from '../components/common/Button'
 import PropertyMap from '../components/map/PropertyMap'
@@ -37,7 +37,7 @@ function PropertyDetailPage() {
         setProperty(data)
         const viewed = JSON.parse(localStorage.getItem('stayjiViewed') || '[]')
         localStorage.setItem('stayjiViewed', JSON.stringify([id, ...viewed.filter((item) => item !== id)].slice(0, 20)))
-      } catch (err) {
+      } catch {
         setError('Unable to load property details.')
       } finally {
         setLoading(false)
@@ -47,6 +47,7 @@ function PropertyDetailPage() {
   }, [id])
 
   const { user, role } = useAuth()
+  const isAdmin = role === 'admin'
 
   useEffect(() => {
     if (!property || role !== 'vendor') return
@@ -242,34 +243,53 @@ function PropertyDetailPage() {
                 <p className="mt-2 text-white">{property.nextVisit || 'Tomorrow 3:00 PM'}</p>
               </div>
             </div>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <label className="text-sm text-slate-300">
-                Preferred visit time
-                <input
-                  type="datetime-local"
-                  value={leadPrefs.preferredVisitTime}
-                  onChange={(event) => setLeadPrefs((current) => ({ ...current, preferredVisitTime: event.target.value }))}
-                  className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-accent-400"
-                />
-              </label>
-              <label className="text-sm text-slate-300">
-                Move-in preference
-                <input
-                  type="text"
-                  value={leadPrefs.moveInPreference}
-                  onChange={(event) => setLeadPrefs((current) => ({ ...current, moveInPreference: event.target.value }))}
-                  placeholder="Immediately, this week, next month"
-                  className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-accent-400"
-                />
-              </label>
-            </div>
-            <div className="mt-8 flex flex-wrap gap-4">
-              <Button onClick={handleShortlist} className="w-full sm:w-auto">Shortlist</Button>
-              <Button onClick={handleExpressInterest} className="w-full sm:w-auto">Request callback</Button>
-              <Button onClick={handleBookVisit} variant="secondary" className="w-full sm:w-auto">Book visit</Button>
-              <Button onClick={handleCompare} variant="secondary" className="w-full sm:w-auto"><FiShuffle className="mr-2" /> Compare</Button>
-              <a href="/compare" className="inline-flex w-full items-center justify-center rounded-3xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cyan-300/60 hover:bg-white/15 sm:w-auto">Open comparison</a>
-            </div>
+            {isAdmin ? (
+              <div className="mt-6 rounded-3xl border border-accent-500/40 bg-accent-500/10 p-5 text-slate-200">
+                <p className="font-semibold text-white">StayJi verification checklist</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {['Identity checked', 'Ownership checked', 'Photos match listing', 'Map location verified', 'Pricing verified', 'Safety basics checked'].map((item) => (
+                    <label key={item} className="inline-flex items-center gap-2 text-sm">
+                      <input type="checkbox" className="h-5 w-5 rounded border-slate-700 bg-slate-900 text-accent-400" />
+                      {item}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                  <label className="text-sm text-slate-300">
+                    Preferred visit date and time
+                    <input
+                      type="datetime-local"
+                      value={leadPrefs.preferredVisitTime}
+                      onChange={(event) => setLeadPrefs((current) => ({ ...current, preferredVisitTime: event.target.value }))}
+                      className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-accent-400"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-300">
+                    Move-in preference
+                    <select
+                      value={leadPrefs.moveInPreference}
+                      onChange={(event) => setLeadPrefs((current) => ({ ...current, moveInPreference: event.target.value }))}
+                      className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-accent-400"
+                    >
+                      <option value="">Select move-in preference</option>
+                      <option value="Immediately">Immediately</option>
+                      <option value="This week">This week</option>
+                      <option value="Next month">Next month</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="mt-8 flex flex-wrap gap-4">
+                  <Button onClick={handleShortlist} className="w-full sm:w-auto">Shortlist</Button>
+                  <Button onClick={handleExpressInterest} className="w-full sm:w-auto">Request callback</Button>
+                  <Button onClick={handleBookVisit} variant="secondary" className="w-full sm:w-auto">Book visit</Button>
+                  <Button onClick={handleCompare} variant="secondary" className="w-full sm:w-auto"><FiShuffle className="mr-2" /> Compare</Button>
+                  <a href="/compare" className="inline-flex w-full items-center justify-center rounded-3xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cyan-300/60 hover:bg-white/15 sm:w-auto">Open comparison</a>
+                </div>
+              </>
+            )}
           </div>
         </section>
 
@@ -282,6 +302,13 @@ function PropertyDetailPage() {
                 <p className="mt-1 text-sm">beds available</p>
               </div>
               <p className="rounded-3xl bg-slate-950/80 p-4 text-sm text-slate-300">{property.sharingAvailability || property.sharing || 'Sharing availability will be confirmed by owner.'}</p>
+              {property.roomInventory?.length ? (
+                <div className="space-y-2 rounded-3xl bg-slate-950/80 p-4 text-sm text-slate-300">
+                  {property.roomInventory.map((row) => (
+                    <p key={row.sharingType}>{row.sharingType}: {row.vacantRooms || 0} rooms · {row.vacantBeds || 0} beds vacant</p>
+                  ))}
+                </div>
+              ) : null}
               <p className="rounded-3xl bg-slate-950/80 p-4 text-sm text-slate-300">Available from: {property.availableFrom || 'Immediately'}</p>
               {property.contact ? (
                 <a

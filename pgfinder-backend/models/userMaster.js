@@ -31,6 +31,17 @@ userSchema = mongoose.Schema({
     userType:{
         type:String
     },
+    verificationStatus:{
+        type:String,
+        enum:["Pending","Verified","Rejected"],
+        default:"Pending"
+    },
+    resetOtp:{
+        type:String
+    },
+    resetOtpExpiresAt:{
+        type:Date
+    },
     profile:{
         type:String
     },

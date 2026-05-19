@@ -8,7 +8,7 @@ import { useAuth } from '../../../context/AuthContext'
 import propertyService from '../../../services/propertyService'
 
 function AddPropertyPage() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const { propertyId } = useParams()
   const navigate = useNavigate()
   const isEditMode = Boolean(propertyId)
@@ -37,6 +37,11 @@ function AddPropertyPage() {
     description: '',
     imageUrls: '',
     videoUrl: '',
+    roomInventory: [
+      { sharingType: 'Single sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 1, vacantBeds: '', monthlyRent: '' },
+      { sharingType: 'Double sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 2, vacantBeds: '', monthlyRent: '' },
+      { sharingType: 'Triple sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 3, vacantBeds: '', monthlyRent: '' },
+    ],
   })
   const [status, setStatus] = useState('idle')
   const [message, setMessage] = useState('')
@@ -78,6 +83,11 @@ function AddPropertyPage() {
           videoUrl: property.videoUrl || '',
           propertyTypeIDFK: property.propertyTypeIDFK || '',
           isAvailable: property.status !== 'Booked',
+          roomInventory: property.roomInventory?.length ? property.roomInventory : [
+            { sharingType: 'Single sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 1, vacantBeds: '', monthlyRent: '' },
+            { sharingType: 'Double sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 2, vacantBeds: '', monthlyRent: '' },
+            { sharingType: 'Triple sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 3, vacantBeds: '', monthlyRent: '' },
+          ],
         })
       } catch (err) {
         setMessage(err?.message || 'Unable to load property details.')
@@ -102,6 +112,13 @@ function AddPropertyPage() {
       mealsAvailable: current.mealsAvailable.includes(meal)
         ? current.mealsAvailable.filter((item) => item !== meal)
         : [...current.mealsAvailable, meal],
+    }))
+  }
+
+  const handleRoomInventoryChange = (index, field, value) => {
+    setForm((current) => ({
+      ...current,
+      roomInventory: current.roomInventory.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)),
     }))
   }
 
@@ -183,6 +200,7 @@ function AddPropertyPage() {
     payload.append('menuPhoto', form.menuPhotoUrls.split(/\n|,/).map((item) => item.trim()).filter(Boolean)[0] || '')
     payload.append('propertyImageUrls', form.imageUrls)
     payload.append('propertyImage', form.imageUrls.split(/\n|,/).map((item) => item.trim()).filter(Boolean)[0] || '')
+    payload.append('roomInventory', JSON.stringify(form.roomInventory))
     imageFiles.forEach((file) => payload.append('propertyImage', file))
     if (videoFile) payload.append('video', videoFile)
     payload.append('videoUrl', form.videoUrl)
@@ -223,7 +241,8 @@ function AddPropertyPage() {
           videoUrl: form.videoUrl,
           isAvailable: form.isAvailable,
           propertyTypeIDFK: form.propertyTypeIDFK,
-        })
+          roomInventory: form.roomInventory,
+          })
         setMessage('Property updated successfully. Admin approval is required before it appears live.')
       } else {
         await propertyService.createProperty(payload)
@@ -255,6 +274,11 @@ function AddPropertyPage() {
           videoUrl: '',
           propertyTypeIDFK: '',
           isAvailable: true,
+          roomInventory: [
+            { sharingType: 'Single sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 1, vacantBeds: '', monthlyRent: '' },
+            { sharingType: 'Double sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 2, vacantBeds: '', monthlyRent: '' },
+            { sharingType: 'Triple sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 3, vacantBeds: '', monthlyRent: '' },
+          ],
         })
         setImageFiles([])
         setVideoFile(null)
@@ -262,7 +286,7 @@ function AddPropertyPage() {
       }
       setStatus('success')
       if (isEditMode) {
-        navigate('/dashboard/vendor/properties')
+        navigate(role === 'admin' ? `/dashboard/admin/properties/${propertyId}` : '/dashboard/vendor/properties')
       }
     } catch (error) {
       setMessage(error.message || 'Unable to save property.')
@@ -325,6 +349,20 @@ function AddPropertyPage() {
           <div className="grid gap-5 sm:grid-cols-2">
             <Input label="Beds / rooms available" name="availableBeds" type="number" value={form.availableBeds} onChange={handleChange} placeholder="10" />
             <Input label="Available from" name="availableFrom" type="date" value={form.availableFrom} onChange={handleChange} />
+          </div>
+          <div className="rounded-[1.75rem] border border-slate-800 bg-slate-950/70 p-5">
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-accent-400">Sharing-wise vacancy</p>
+            <div className="mt-5 grid gap-4">
+              {form.roomInventory.map((row, index) => (
+                <div key={row.sharingType} className="grid gap-3 rounded-3xl border border-slate-800 bg-slate-900/60 p-4 md:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr_0.8fr]">
+                  <Input label="Type" value={row.sharingType} onChange={(event) => handleRoomInventoryChange(index, 'sharingType', event.target.value)} />
+                  <Input label="Total rooms" type="number" value={row.totalRooms} onChange={(event) => handleRoomInventoryChange(index, 'totalRooms', event.target.value)} />
+                  <Input label="Vacant rooms" type="number" value={row.vacantRooms} onChange={(event) => handleRoomInventoryChange(index, 'vacantRooms', event.target.value)} />
+                  <Input label="Vacant beds" type="number" value={row.vacantBeds} onChange={(event) => handleRoomInventoryChange(index, 'vacantBeds', event.target.value)} />
+                  <Input label="Rent" type="number" value={row.monthlyRent} onChange={(event) => handleRoomInventoryChange(index, 'monthlyRent', event.target.value)} />
+                </div>
+              ))}
+            </div>
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="block text-sm text-slate-200">

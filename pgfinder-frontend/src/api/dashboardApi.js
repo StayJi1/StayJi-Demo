@@ -31,7 +31,7 @@ const normalizeProperty = (property) => ({
   status: property.isAvailable === false ? 'Booked' : 'Available',
 })
 
-const getUsers = () => axiosClient.get('/client/getUserList').then((res) => (res.data?.data || []).map(normalizeUser))
+
 const getAdminUsers = (params) => axiosClient.get('/client/getAdminUsers', { params }).then((res) => (res.data?.data || []).map(normalizeUser))
 const getProperties = () => axiosClient.get('/client/getAllPropertyList').then((res) => (res.data?.data || []).map(normalizeProperty))
 const getPropertiesByUser = (userIDFK) => axiosClient.post('/client/getPropertyListByUser', { userIDFK }).then((res) => (res.data?.data || []).map(normalizeProperty))
@@ -40,6 +40,20 @@ const getShortlist = (userIDFK) => axiosClient.post('/client/getShortlistById', 
 const getVendorVisits = (userIDFK) => axiosClient.post('/client/getVisitorList', { userIDFK }).then((res) => res.data?.data || [])
 const getVendorInquiries = (userIDFK) => axiosClient.post('/client/getInquiry', { userIDFK }).then((res) => res.data?.data || [])
 const getVendorShortlists = (userIDFK) => axiosClient.post('/client/getShortlistByVendor', { userIDFK }).then((res) => res.data?.data || [])
+
+// New synchronized full-profile endpoints
+const adminSearchProperty = ({ q, limit } = {}) => axiosClient
+  .post('/client/admin/searchProperty', { q, limit })
+  .then((res) => res.data?.data || { properties: [] })
+
+const getVendorFullProfile = (vendorId) => axiosClient
+  .post('/client/admin/getVendorFullProfile', { vendorId })
+  .then((res) => res.data?.data || null)
+
+const getVendorFullProfileForVendor = (vendorId) => axiosClient
+  .post('/client/vendor/getVendorFullProfile', { vendorId })
+  .then((res) => res.data?.data || null)
+
 
 const dashboardApi = {
   adminStats: async () => {
@@ -73,7 +87,11 @@ const dashboardApi = {
     }
   },
   adminUsers: getAdminUsers,
+  adminSearchProperty,
+  getVendorFullProfile,
+  getVendorFullProfileForVendor,
   adminVendorLeadSummary: async () => {
+
     const res = await axiosClient.get('/client/getAdminVendorLeadSummary')
     return res.data?.data || { totalLeads: 0, vendors: [] }
   },

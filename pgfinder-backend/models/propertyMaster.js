@@ -4,6 +4,10 @@ propertySchema = mongoose.Schema({
         type:mongoose.Schema.Types.ObjectId,
         ref:'userMaster'
     },
+    vendorId:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:'userMaster'
+    },
     propertyName:{
         type:String
     },
@@ -84,6 +88,25 @@ propertySchema = mongoose.Schema({
         type:Number,
         default:0
     },
+    roomInventory:{
+        type:[{
+            sharingType:String,
+            totalRooms:{ type:Number, default:0 },
+            vacantRooms:{ type:Number, default:0 },
+            bedsPerRoom:{ type:Number, default:1 },
+            vacantBeds:{ type:Number, default:0 },
+            monthlyRent:String
+        }],
+        default:[]
+    },
+    verificationChecklist:{
+        identity:Boolean,
+        ownership:Boolean,
+        photos:Boolean,
+        location:Boolean,
+        pricing:Boolean,
+        safety:Boolean
+    },
     vacancyStatus:{
         type:String,
         default:"Available"
@@ -121,5 +144,10 @@ propertySchema = mongoose.Schema({
         type:Boolean,
         default:true
     }
+});
+propertySchema.pre('save', function(next) {
+    if (!this.vendorId && this.userIDFK) this.vendorId = this.userIDFK;
+    if (!this.userIDFK && this.vendorId) this.userIDFK = this.vendorId;
+    next();
 });
 module.exports = mongoose.model('propertyMaster',propertySchema);

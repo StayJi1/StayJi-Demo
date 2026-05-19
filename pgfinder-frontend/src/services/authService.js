@@ -45,6 +45,16 @@ const authService = {
     err.response = { data: res }
     throw err
   },
+  requestPasswordReset: async (payload) => {
+    const res = await authApi.requestPasswordReset(payload)
+    if (res?.result === 'success') return res
+    throw new Error(res?.msg || 'Unable to start password reset')
+  },
+  resetPasswordWithOtp: async (payload) => {
+    const res = await authApi.resetPasswordWithOtp(payload)
+    if (res?.result === 'success') return res
+    throw new Error(res?.msg || 'Unable to reset password')
+  },
 }
 
 export default authService

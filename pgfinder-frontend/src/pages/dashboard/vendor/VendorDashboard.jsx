@@ -1,20 +1,44 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FiBarChart2, FiEye, FiPlusCircle, FiSliders, FiTrendingUp, FiUsers } from 'react-icons/fi'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { FiBarChart2, FiEye, FiMessageSquare, FiPlusCircle, FiSliders, FiTrash2, FiTrendingUp, FiUsers } from 'react-icons/fi'
 import Button from '../../../components/common/Button'
 import Card from '../../../components/common/Card'
 import { useAuth } from '../../../context/AuthContext'
 import dashboardService from '../../../services/dashboardService'
+import adminApi from '../../../api/adminApi'
 
 function VendorDashboard() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const [overview, setOverview] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const [overview, setOverview] = useState({ totalProperties: 0, inquiries: 0, bookings: 0, views: 0, leads: 0 })
+  const [loading, setLoading] = useState(false)
+  const [reply, setReply] = useState('')
+  const vendorId = user?._id || user?.id
+  const { data: messages = [] } = useQuery({
+    queryKey: ['vendor-admin-messages', vendorId],
+    queryFn: () => adminApi.vendorMessages(vendorId, { viewer: 'vendor' }),
+    enabled: Boolean(vendorId),
+    refetchInterval: 15_000,
+  })
+  const replyMutation = useMutation({
+    mutationFn: () => adminApi.sendVendorMessage(vendorId, { message: reply, senderRole: 'vendor' }),
+    onSuccess: () => {
+      setReply('')
+      queryClient.invalidateQueries({ queryKey: ['vendor-admin-messages', vendorId] })
+    },
+  })
+  const deleteMessageMutation = useMutation({
+    mutationFn: ({ messageId, scope }) => adminApi.deleteVendorMessage(vendorId, messageId, { viewer: 'vendor', scope }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['vendor-admin-messages', vendorId] }),
+  })
 
   useEffect(() => {
+    if (!user?._id) return
     const load = async () => {
       try {
+        setLoading(true)
         const data = await dashboardService.getVendorOverview(user?._id)
         setOverview(data)
       } catch {
@@ -23,8 +47,7 @@ function VendorDashboard() {
         setLoading(false)
       }
     }
-    if (user?._id) load()
-    else setLoading(false)
+    load()
   }, [user?._id])
 
   return (
@@ -101,6 +124,33 @@ function VendorDashboard() {
           </div>
         </Card>
       </div>
+
+      <Card>
+        <div className="flex items-center gap-3">
+          <FiMessageSquare className="text-accent-400" />
+          <div>
+            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">StayJi admin messages</p>
+            <h2 className="mt-1 text-2xl font-semibold text-white">Private support thread</h2>
+          </div>
+        </div>
+        <div className="mt-5 max-h-80 space-y-3 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+          {messages.map((item) => (
+            <div key={item._id} className={`rounded-2xl p-3 text-sm ${item.senderRole === 'vendor' ? 'bg-accent-500/10 text-accent-100' : 'bg-slate-900/80 text-slate-300'}`}>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.senderRole === 'vendor' ? 'You' : 'StayJi admin'} · {item.addedOn ? new Date(item.addedOn).toLocaleString() : ''}</p>
+              <p className="mt-2">{item.message}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={() => deleteMessageMutation.mutate({ messageId: item._id, scope: 'self' })} className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-rose-400"><FiTrash2 className="inline" /> Delete for me</button>
+                <button type="button" onClick={() => deleteMessageMutation.mutate({ messageId: item._id, scope: 'both' })} className="rounded-full border border-rose-500/50 px-3 py-1 text-xs text-rose-200 hover:bg-rose-500/10">Delete both</button>
+              </div>
+            </div>
+          ))}
+          {!messages.length ? <p className="text-sm text-slate-400">No admin messages yet.</p> : null}
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+          <input value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Reply to StayJi admin" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+          <Button onClick={() => replyMutation.mutate()} disabled={!vendorId || !reply.trim()}>Send</Button>
+        </div>
+      </Card>
     </div>
   )
 }

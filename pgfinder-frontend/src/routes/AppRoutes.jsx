@@ -17,6 +17,8 @@ import AddPropertyPage from '../pages/dashboard/vendor/AddPropertyPage'
 import ManagePropertiesPage from '../pages/dashboard/vendor/ManagePropertiesPage'
 import VendorLeadsPage from '../pages/dashboard/vendor/VendorLeadsPage'
 import ManageUsersPage from '../pages/dashboard/admin/ManageUsersPage'
+import AdminVendorDetailPage from '../pages/dashboard/admin/AdminVendorDetailPage'
+import AdminPropertyDetailPage from '../pages/dashboard/admin/AdminPropertyDetailPage'
 import ProtectedRoute from '../components/common/ProtectedRoute'
 import RoleProtectedRoute from '../components/common/RoleProtectedRoute'
 
@@ -62,6 +64,30 @@ function AppRoutes() {
           element={
             <RoleProtectedRoute role="admin">
               <ManageUsersPage />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/vendors/:vendorId"
+          element={
+            <RoleProtectedRoute role="admin">
+              <AdminVendorDetailPage />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/properties/:propertyId"
+          element={
+            <RoleProtectedRoute role="admin">
+              <AdminPropertyDetailPage />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/properties/:propertyId/edit"
+          element={
+            <RoleProtectedRoute role="admin">
+              <AddPropertyPage />
             </RoleProtectedRoute>
           }
         />

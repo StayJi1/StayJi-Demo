@@ -5,6 +5,14 @@ inquirySchema = mongoose.Schema({
         type:mongoose.Schema.Types.ObjectId,
         ref:'propertyMaster'
     },
+    propertyId:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:'propertyMaster'
+    },
+    vendorId:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:'userMaster'
+    },
     subject:{
         type:String
     },
@@ -42,5 +50,10 @@ inquirySchema = mongoose.Schema({
         type:Boolean,
         default:true
     }
+});
+inquirySchema.pre('save', function(next) {
+    if (!this.propertyId && this.propertyIDFK) this.propertyId = this.propertyIDFK;
+    if (!this.propertyIDFK && this.propertyId) this.propertyIDFK = this.propertyId;
+    next();
 });
 module.exports = mongoose.model('inquiryMaster',inquirySchema);

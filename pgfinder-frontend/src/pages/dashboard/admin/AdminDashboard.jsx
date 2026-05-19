@@ -1,381 +1,301 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FiBarChart2, FiUsers, FiHome, FiThumbsUp, FiX } from 'react-icons/fi'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { FiBarChart2, FiCheck, FiEye, FiHome, FiRefreshCw, FiSearch, FiUsers } from 'react-icons/fi'
 import Button from '../../../components/common/Button'
 import Card from '../../../components/common/Card'
-import dashboardService from '../../../services/dashboardService'
-import propertyService from '../../../services/propertyService'
+import adminApi from '../../../api/adminApi'
+import useDebouncedValue from '../../../hooks/useDebouncedValue'
+
+const statusTone = {
+  Approved: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200',
+  Pending: 'border-amber-500/40 bg-amber-500/10 text-amber-200',
+  Rejected: 'border-rose-500/40 bg-rose-500/10 text-rose-200',
+}
+
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString('en-IN')
+}
 
 function AdminDashboard() {
   const navigate = useNavigate()
-  const [stats, setStats] = useState(null)
-  const [leadSummary, setLeadSummary] = useState({ totalLeads: 0, vendors: [] })
-  const [properties, setProperties] = useState([])
-  const [inactiveProperties, setInactiveProperties] = useState([])
-  const [filters, setFilters] = useState({ approvalStatus: '', category: '', search: '' })
-  const [selectedProperty, setSelectedProperty] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [actionError, setActionError] = useState('')
+  const queryClient = useQueryClient()
+  const [filters, setFilters] = useState({ search: '', city: '', propertyType: '', approvalStatus: '', active: '', occupancy: '', sort: 'newest' })
+  const [selected, setSelected] = useState([])
+  const debouncedSearch = useDebouncedValue(filters.search)
 
-  const fetchDashboard = async () => {
-    try {
-      setLoading(true)
-      const [data, propertyList, inactiveList, leadData] = await Promise.all([
-        dashboardService.getAdminStats(),
-        propertyService.fetchAllProperties(),
-        propertyService.fetchAllProperties({ status: 'inactive' }),
-        dashboardService.getAdminVendorLeadSummary(),
-      ])
-      setStats(data)
-      setProperties(propertyList || [])
-      setInactiveProperties(inactiveList || [])
-      setLeadSummary(leadData)
-    } catch {
-      setStats({ users: 0, vendors: 0, properties: 0, inactiveProperties: 0, inquiries: 0, pendingProperties: 0 })
-      setProperties([])
-      setInactiveProperties([])
-    } finally {
-      setLoading(false)
-    }
+  const propertyParams = useMemo(() => ({ ...filters, search: debouncedSearch, limit: 30 }), [debouncedSearch, filters])
+  const { data: analytics, isLoading: analyticsLoading } = useQuery({ queryKey: ['admin-analytics'], queryFn: adminApi.analytics, refetchInterval: 30_000 })
+  const { data: propertiesData, isFetching: propertiesLoading, error } = useQuery({ queryKey: ['admin-properties', propertyParams], queryFn: () => adminApi.properties(propertyParams), refetchInterval: 30_000 })
+  const { data: vendorData } = useQuery({ queryKey: ['admin-vendors', debouncedSearch], queryFn: () => adminApi.vendors({ search: debouncedSearch, limit: 8 }), enabled: Boolean(debouncedSearch) })
+
+  const properties = propertiesData?.items || []
+  const summary = analytics?.summary || {}
+  const vendorMatches = vendorData?.items || []
+
+  const refreshAdmin = () => {
+    queryClient.invalidateQueries({ queryKey: ['admin-analytics'] })
+    queryClient.invalidateQueries({ queryKey: ['admin-properties'] })
+    queryClient.invalidateQueries({ queryKey: ['admin-vendors'] })
   }
 
-  useEffect(() => {
-    fetchDashboard()
-  }, [])
+  const statusMutation = useMutation({
+    mutationFn: ({ id, payload }) => adminApi.updatePropertyStatus(id, payload),
+    onSuccess: refreshAdmin,
+  })
 
-  const filteredProperties = useMemo(() => {
-    const search = filters.search.trim().toLowerCase()
-    return properties.filter((property) => {
-      if (filters.approvalStatus && (property.approvalStatus || 'Approved') !== filters.approvalStatus) return false
-      if (filters.category && ![property.category, property.type, property.propertyTypeName].includes(filters.category)) return false
-      if (!search) return true
-      return [
-        property.name,
-        property.description,
-        property.address,
-        property.city,
-        property.areaName,
-        property.category,
-        property.type,
-        property.propertyTypeName,
-      ].filter(Boolean).join(' ').toLowerCase().includes(search)
-    })
-  }, [filters, properties])
+  const bulkMutation = useMutation({
+    mutationFn: (payload) => adminApi.bulkProperties(payload),
+    onSuccess: () => {
+      setSelected([])
+      refreshAdmin()
+    },
+  })
 
-  const handleReview = async (propertyId, approvalStatus) => {
-    setActionError('')
-    try {
-      const updated = await propertyService.reviewProperty(propertyId, approvalStatus)
-      setProperties((current) => current.map((property) => (property.id === propertyId ? updated : property)))
-      setSelectedProperty((current) => (current?.id === propertyId ? updated : current))
-    } catch (error) {
-      setActionError(error?.message || 'Unable to update property approval.')
-    }
-  }
+  const selectedIds = selected.length ? selected : properties.map((property) => property.id)
+  const handleBulk = (action) => bulkMutation.mutate({ ids: selectedIds, action })
+  const toggleSelected = (id) => setSelected((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]))
 
-  const handleDeactivate = async (propertyId) => {
-    setActionError('')
-    try {
-      await propertyService.deleteProperty(propertyId)
-      setProperties((current) => current.filter((property) => property.id !== propertyId))
-      const [statsData, inactiveList] = await Promise.all([
-        dashboardService.getAdminStats(),
-        propertyService.fetchAllProperties({ status: 'inactive' }),
-      ])
-      setStats(statsData)
-      setInactiveProperties(inactiveList || [])
-    } catch (error) {
-      setActionError(error?.message || 'Unable to deactivate property.')
-    }
-  }
-
-  const handleReactivate = async (propertyId) => {
-    setActionError('')
-    try {
-      const updated = await propertyService.reactivateProperty(propertyId)
-      setInactiveProperties((current) => current.filter((property) => property.id !== propertyId))
-      setProperties((current) => [updated, ...current])
-      setStats(await dashboardService.getAdminStats())
-    } catch (error) {
-      setActionError(error?.message || 'Unable to reactivate property.')
-    }
-  }
-
-  const handleBulkReview = async (approvalStatus) => {
-    setActionError('')
-    try {
-      const targets = filteredProperties.filter((property) => (property.approvalStatus || 'Approved') !== approvalStatus)
-      const updatedProperties = await Promise.all(targets.map((property) => propertyService.reviewProperty(property.id, approvalStatus)))
-      const updatedById = new Map(updatedProperties.map((property) => [property.id, property]))
-      setProperties((current) => current.map((property) => updatedById.get(property.id) || property))
-      setStats(await dashboardService.getAdminStats())
-    } catch (error) {
-      setActionError(error?.message || `Unable to ${approvalStatus.toLowerCase()} selected properties.`)
-    }
-  }
-
-  const pendingProperties = filteredProperties.filter((property) => (property.approvalStatus || 'Approved') === 'Pending')
+  const statCards = [
+    { label: 'Total users', value: summary.totalUsers, icon: <FiUsers />, onClick: () => navigate('/dashboard/admin/users') },
+    { label: 'Vendors', value: summary.vendors, icon: <FiHome />, onClick: () => navigate('/dashboard/admin/users?role=Owner') },
+    { label: 'Active listings', value: summary.activeListings, icon: <FiBarChart2 />, onClick: () => { setFilters((current) => ({ ...current, active: 'true' })); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) } },
+    { label: 'Leads', value: summary.leads, icon: <FiCheck />, onClick: () => document.getElementById('lead-analytics')?.scrollIntoView({ behavior: 'smooth' }) },
+  ]
 
   return (
     <div className="space-y-8">
       <header className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Admin dashboard</p>
-            <h1 className="mt-3 text-4xl font-semibold text-white">Manage users, vendors, and properties</h1>
+            <p className="text-sm uppercase tracking-[0.28em] text-accent-400">StayJi command center</p>
+            <h1 className="mt-3 text-4xl font-semibold text-white">Live platform management</h1>
           </div>
-          <Button>{pendingProperties.length} pending approvals</Button>
+          <Button onClick={refreshAdmin} variant="secondary"><FiRefreshCw /> Refresh live data</Button>
         </div>
       </header>
 
-      <div className="grid gap-6 xl:grid-cols-4">
-        {loading ? (
-          <Card className="p-8">
-            <p className="text-slate-300">Loading metrics…</p>
-          </Card>
-        ) : (
-          [
-            { label: 'Total users', value: stats.users, icon: <FiUsers />, onClick: () => navigate('/dashboard/admin/users') },
-            { label: 'Vendors', value: stats.vendors, icon: <FiHome />, onClick: () => navigate('/dashboard/admin/users?role=Owner') },
-            { label: 'Properties', value: stats.properties, icon: <FiBarChart2 />, onClick: () => document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) },
-            { label: 'Leads', value: stats.leads || leadSummary.totalLeads, icon: <FiThumbsUp />, onClick: () => document.getElementById('admin-vendor-leads')?.scrollIntoView({ behavior: 'smooth' }) },
-          ].map((item) => (
-            <button key={item.label} type="button" onClick={item.onClick} className="text-left">
-              <Card className="h-full p-6 transition hover:border-accent-500">
-              <div className="flex items-center justify-between gap-4 text-slate-300">
-                <span className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-950 text-accent-400">{item.icon}</span>
+      <div className="grid gap-5 xl:grid-cols-4">
+        {statCards.map((item) => (
+          <button key={item.label} type="button" onClick={item.onClick} className="text-left">
+            <Card className="h-full p-5 transition hover:border-accent-500">
+              <div className="flex items-center justify-between gap-4">
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-accent-400">{item.icon}</span>
                 <div className="text-right">
-                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">{item.label}</p>
-                  <p className="mt-3 text-3xl font-semibold text-white">{item.value}</p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{item.label}</p>
+                  <p className="mt-2 text-3xl font-semibold text-white">{analyticsLoading ? '...' : formatNumber(item.value)}</p>
                 </div>
               </div>
-              </Card>
-            </button>
-          ))
-        )}
+            </Card>
+          </button>
+        ))}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-4">
+      <div className="grid gap-5 xl:grid-cols-4">
         {[
-          { label: 'Revenue pipeline', value: `₹${((stats?.leads || leadSummary.totalLeads || 0) * 2500).toLocaleString('en-IN')}` },
-          { label: 'Active listings', value: stats?.properties || 0 },
-          { label: 'Pending reviews', value: stats?.pendingProperties || pendingProperties.length },
-          { label: 'Conversions', value: stats?.conversions || 0 },
+          { label: 'Live vacancies', value: summary.liveVacancies, onClick: () => setFilters((current) => ({ ...current, occupancy: 'vacant' })) },
+          { label: 'Occupancy rate', value: `${summary.occupancyRate || 0}%`, onClick: () => setFilters((current) => ({ ...current, occupancy: 'full' })) },
+          { label: 'Conversion rate', value: `${summary.conversionRate || 0}%`, onClick: () => document.getElementById('lead-analytics')?.scrollIntoView({ behavior: 'smooth' }) },
+          { label: 'Revenue analytics', value: `₹${formatNumber(summary.revenue)}`, onClick: () => document.getElementById('lead-analytics')?.scrollIntoView({ behavior: 'smooth' }) },
         ].map((item) => (
-          <Card key={item.label} className="p-5">
-            <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{item.label}</p>
+          <Card key={item.label} className="p-0">
+            <button type="button" onClick={() => { item.onClick(); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) }} className="h-full w-full p-5 text-left transition hover:bg-slate-900/50">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{item.label}</p>
             <p className="mt-2 text-2xl font-semibold text-white">{item.value}</p>
+            </button>
           </Card>
         ))}
       </div>
 
-      <Card id="admin-vendor-leads">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Vendor delivery</p>
-            <h2 className="mt-3 text-2xl font-semibold text-white">Vendor lead breakdown</h2>
+      <div id="lead-analytics" className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+        <Card>
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Lead analytics</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">Monthly lead and conversion trend</h2>
+          <div className="mt-6 h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={analytics?.trends || []}>
+                <defs>
+                  <linearGradient id="leadGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.55} />
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="#1e293b" />
+                <XAxis dataKey="month" stroke="#94a3b8" />
+                <YAxis stroke="#94a3b8" />
+                <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', color: '#e2e8f0' }} />
+                <Area type="monotone" dataKey="leads" stroke="#22c55e" fill="url(#leadGradient)" />
+                <Area type="monotone" dataKey="conversions" stroke="#38bdf8" fill="transparent" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
-          <Button variant="secondary">{leadSummary.totalLeads} total leads</Button>
-        </div>
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {leadSummary.vendors.slice(0, 6).map((vendor) => (
-            <div key={vendor.vendorId} className="rounded-3xl border border-slate-800 bg-slate-950/80 p-5">
-              <p className="text-sm uppercase tracking-[0.24em] text-slate-500">{vendor.vendor.name || 'Vendor'}</p>
-              <p className="mt-2 text-lg font-semibold text-white">{vendor.totalLeads}</p>
-              <p className="mt-2 text-slate-400">Visits: {vendor.visitCount} • Interest: {vendor.inquiryCount}</p>
-            </div>
-          ))}
-          {!leadSummary.vendors.length ? (
-            <p className="text-slate-400">No vendor leads have been recorded yet.</p>
-          ) : null}
-        </div>
-      </Card>
+        </Card>
+
+        <Card>
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">City heatmap</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">Listings by city</h2>
+          <div className="mt-6 h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={analytics?.cityHeatmap || []}>
+                <CartesianGrid stroke="#1e293b" />
+                <XAxis dataKey="city" stroke="#94a3b8" />
+                <YAxis stroke="#94a3b8" />
+                <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', color: '#e2e8f0' }} />
+                <Bar dataKey="listings" fill="#38bdf8" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
 
       <Card>
-        <div className="grid gap-4 md:grid-cols-[1fr_0.7fr_0.7fr_auto]">
-          <input
-            type="search"
-            value={filters.search}
-            onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
-            placeholder="Search property, city, area"
-            className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400"
-          />
-          <select
-            value={filters.approvalStatus}
-            onChange={(event) => setFilters((current) => ({ ...current, approvalStatus: event.target.value }))}
-            className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400"
-          >
-            <option value="">All approvals</option>
-            <option value="Pending">Pending</option>
-            <option value="Approved">Approved</option>
-            <option value="Rejected">Rejected</option>
-          </select>
-          <select
-            value={filters.category}
-            onChange={(event) => setFilters((current) => ({ ...current, category: event.target.value }))}
-            className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400"
-          >
-            <option value="">All categories</option>
+        <div className="grid gap-4 lg:grid-cols-[1.4fr_0.7fr_0.7fr_0.7fr_0.7fr_0.7fr_auto]">
+          <label className="flex items-center gap-3 rounded-3xl border border-slate-700 bg-slate-950/70 px-4 text-slate-300">
+            <FiSearch />
+            <input
+              type="search"
+              value={filters.search}
+              onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
+              placeholder="Search vendor, property, city, area, ID, email, phone"
+              className="w-full bg-transparent py-3 text-sm text-slate-100 outline-none"
+            />
+          </label>
+          <input value={filters.city} onChange={(event) => setFilters((current) => ({ ...current, city: event.target.value }))} placeholder="City" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+          <select value={filters.propertyType} onChange={(event) => setFilters((current) => ({ ...current, propertyType: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400">
+            <option value="">All types</option>
             <option value="PG">PG</option>
             <option value="Flat">Flat</option>
             <option value="Hotel">Hotel</option>
             <option value="Hostel">Hostel</option>
           </select>
-          <Button variant="secondary" onClick={() => setFilters({ approvalStatus: '', category: '', search: '' })}>Clear</Button>
+          <select value={filters.approvalStatus} onChange={(event) => setFilters((current) => ({ ...current, approvalStatus: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400">
+            <option value="">All approvals</option>
+            <option value="Pending">Pending</option>
+            <option value="Approved">Approved</option>
+            <option value="Rejected">Rejected</option>
+          </select>
+          <select value={filters.occupancy} onChange={(event) => setFilters((current) => ({ ...current, occupancy: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400">
+            <option value="">Occupancy</option>
+            <option value="vacant">Vacant</option>
+            <option value="full">Full</option>
+          </select>
+          <select value={filters.active} onChange={(event) => setFilters((current) => ({ ...current, active: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400">
+            <option value="">All active</option>
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
+          <Button variant="secondary" onClick={() => setFilters({ search: '', city: '', propertyType: '', approvalStatus: '', active: '', occupancy: '', sort: 'newest' })}>Clear</Button>
+        </div>
+        {vendorMatches.length ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {vendorMatches.map((vendor) => (
+              <button key={vendor.id} type="button" onClick={() => navigate(`/dashboard/admin/vendors/${vendor.id}`)} className="rounded-full border border-accent-500/50 px-3 py-2 text-xs text-accent-200 hover:bg-accent-500/10">
+                {vendor.name || vendor.email} · {vendor.totalProperties || 0} properties
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </Card>
+
+      <Card id="admin-properties" className="overflow-hidden p-0">
+        <div className="flex flex-col gap-3 border-b border-slate-800 p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Property operations</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">MongoDB powered listing control</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => handleBulk('approve')} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Verify all</button>
+            <button type="button" onClick={() => handleBulk('activate')} className="rounded-full border border-cyan-500/60 px-4 py-2 text-sm text-cyan-200">Activate selected</button>
+            <button type="button" onClick={() => handleBulk('reject')} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200">Reject all</button>
+            <button type="button" onClick={() => handleBulk('deactivate')} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Deactivate selected</button>
+          </div>
+        </div>
+        {error ? <p className="p-5 text-sm text-rose-300">{error.message}</p> : null}
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
+            <thead className="bg-slate-950/70 text-xs uppercase tracking-[0.16em] text-slate-500">
+              <tr>
+                <th className="px-5 py-4">Select</th>
+                <th className="px-5 py-4">Property</th>
+                <th className="px-5 py-4">Vendor</th>
+                <th className="px-5 py-4">Occupancy</th>
+                <th className="px-5 py-4">Leads</th>
+                <th className="px-5 py-4">Status</th>
+                <th className="px-5 py-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800 text-slate-300">
+              {properties.map((property) => (
+                <tr key={property.id} className="hover:bg-slate-900/70">
+                  <td className="px-5 py-4"><input type="checkbox" checked={selected.includes(property.id)} onChange={() => toggleSelected(property.id)} /></td>
+                  <td className="px-5 py-4">
+                    <button type="button" onClick={() => navigate(`/dashboard/admin/properties/${property.id}`)} className="font-semibold text-white hover:text-accent-300">{property.name}</button>
+                    <p className="mt-1 text-xs text-slate-500">{property.city || '-'} · {property.area || property.areaName || '-'} · {property.id}</p>
+                  </td>
+                  <td className="px-5 py-4">
+                    <button type="button" onClick={() => navigate(`/dashboard/admin/vendors/${property.vendorId}`)} className="text-accent-200 hover:text-accent-100">{property.vendor?.name || property.owner?.name || '-'}</button>
+                    <p className="mt-1 text-xs text-slate-500">{property.vendor?.email || property.owner?.email || '-'}</p>
+                  </td>
+                  <td className="px-5 py-4">{property.occupancy || 0}% · {property.vacancyStatus || '-'}</td>
+                  <td className="px-5 py-4">{property.totalLeads || 0} leads · {property.totalVisits || 0} visits</td>
+                  <td className="px-5 py-4">
+                    <span className={`rounded-full border px-3 py-1 text-xs ${statusTone[property.approvalStatus] || statusTone.Pending}`}>{property.approvalStatus || 'Pending'}</span>
+                    <p className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs ${
+                      property.isActive
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+                        : 'border-rose-500/40 bg-rose-500/10 text-rose-200'
+                    }`}>{property.isActive ? 'Active' : 'Inactive'}</p>
+                  </td>
+                  <td className="px-5 py-4">
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => navigate(`/dashboard/admin/properties/${property.id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200"><FiEye /> View</button>
+                      <button type="button" onClick={() => navigate(`/dashboard/admin/properties/${property.id}/edit`)} className="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200">Edit</button>
+                      <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { approvalStatus: 'Approved' } })} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">Verify</button>
+                      <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { approvalStatus: 'Rejected' } })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
+                      <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { isActive: !property.isActive } })} className={`rounded-full border px-3 py-2 text-xs transition ${
+                        property.isActive
+                          ? 'border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
+                          : 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
+                      }`}>{property.isActive ? 'Deactivate' : 'Activate'}</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!properties.length ? (
+                <tr><td className="px-5 py-8 text-center text-slate-400" colSpan="7">{propertiesLoading ? 'Loading live properties...' : 'No properties match these filters.'}</td></tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-6 xl:grid-cols-[1fr_0.65fr]">
         <Card>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Property reviews</p>
-              <h2 className="mt-3 text-2xl font-semibold text-white">Vendor listing approvals</h2>
-            </div>
-            <Button variant="secondary">{filteredProperties.length} shown</Button>
-          </div>
-          {actionError ? <p className="mt-4 text-sm text-rose-300">{actionError}</p> : null}
-          <div className="mt-5 flex flex-wrap gap-2">
-            <button type="button" onClick={() => handleBulkReview('Approved')} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10">
-              Accept all shown
-            </button>
-            <button type="button" onClick={() => handleBulkReview('Rejected')} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200 hover:bg-rose-500/10">
-              Reject all shown
-            </button>
-          </div>
-          <div className="mt-6 space-y-4">
-            {pendingProperties.length ? (
-              pendingProperties.map((property) => (
-                <div key={property.id} className="rounded-3xl border border-slate-800 bg-slate-950/80 p-5">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent-400">{property.category || property.type || 'PG'} • {property.city || 'Unknown city'}</p>
-                      <button type="button" onClick={() => setSelectedProperty(property)} className="mt-2 text-left text-lg font-semibold text-white hover:text-accent-300">{property.name}</button>
-                      <p className="mt-2 text-sm text-slate-400">₹{property.rent || '0'}/mo • Deposit ₹{property.depositAmount || '0'}</p>
-                      {property.perDayCheckIn ? <p className="mt-1 text-sm text-emerald-300">Per-day check-in enabled</p> : null}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleReview(property.id, 'Approved')}
-                        className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleReview(property.id, 'Rejected')}
-                        className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200 hover:bg-rose-500/10"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-slate-300">No pending vendor listings right now.</p>
-            )}
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Top lead generators</p>
+          <div className="mt-5 space-y-3">
+            {(analytics?.topProperties || []).map((item) => (
+              <button key={item.propertyId} type="button" onClick={() => navigate(`/dashboard/admin/properties/${item.propertyId}`)} className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-left hover:border-accent-500">
+                <span><span className="font-semibold text-white">{item.name}</span><span className="ml-2 text-sm text-slate-500">{item.city}</span></span>
+                <span className="text-accent-200">{item.inquiries} leads</span>
+              </button>
+            ))}
           </div>
         </Card>
-
-        <Card id="admin-properties">
-          <div>
-            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Metrics</p>
-            <h2 className="mt-3 text-2xl font-semibold text-white">All property controls</h2>
-          </div>
-          <div className="mt-6 max-h-[360px] space-y-3 overflow-y-auto rounded-[1.75rem] bg-slate-950/80 p-4 text-slate-300">
-            {filteredProperties.length ? (
-              filteredProperties.map((property) => (
-                <div key={property.id} className="flex flex-col gap-3 rounded-3xl border border-slate-800 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <button type="button" onClick={() => setSelectedProperty(property)} className="font-semibold text-white hover:text-accent-300">{property.name}</button>
-                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
-                      {property.category || property.type || 'PG'} • {property.approvalStatus || 'Approved'}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={() => setSelectedProperty(property)} className="rounded-full border border-slate-600 px-3 py-2 text-xs text-slate-200">View</button>
-                    {property.approvalStatus !== 'Approved' ? (
-                      <button type="button" onClick={() => handleReview(property.id, 'Approved')} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">Approve</button>
-                    ) : null}
-                    {property.approvalStatus !== 'Rejected' ? (
-                      <button type="button" onClick={() => handleReview(property.id, 'Rejected')} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
-                    ) : null}
-                    <button type="button" onClick={() => handleDeactivate(property.id)} className="rounded-full border border-slate-600 px-3 py-2 text-xs text-slate-200">Deactivate</button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p>No properties found.</p>
-            )}
-          </div>
-        </Card>
-
         <Card>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Inactive folder</p>
-              <h2 className="mt-3 text-2xl font-semibold text-white">Deactivated properties</h2>
-            </div>
-            <Button variant="secondary">{inactiveProperties.length} stored</Button>
-          </div>
-          <div className="mt-6 max-h-[360px] space-y-3 overflow-y-auto rounded-[1.75rem] bg-slate-950/80 p-4 text-slate-300">
-            {inactiveProperties.length ? (
-              inactiveProperties.map((property) => (
-                <div key={property.id} className="flex flex-col gap-3 rounded-3xl border border-slate-800 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="font-semibold text-white">{property.name}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
-                      {property.category || property.type || 'PG'} • {property.city || 'Unknown city'}
-                    </p>
-                  </div>
-                  <button type="button" onClick={() => handleReactivate(property.id)} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">
-                    Activate again
-                  </button>
-                </div>
-              ))
-            ) : (
-              <p>No deactivated properties stored.</p>
-            )}
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Approval mix</p>
+          <div className="mt-6 h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={[{ name: 'Pending', value: summary.pendingProperties || 0 }, { name: 'Live', value: summary.activeListings || 0 }, { name: 'Inactive', value: summary.inactiveListings || 0 }]} dataKey="value" outerRadius={90}>
+                  {['#f59e0b', '#22c55e', '#64748b'].map((color) => <Cell key={color} fill={color} />)}
+                </Pie>
+                <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', color: '#e2e8f0' }} />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
         </Card>
       </div>
-      {selectedProperty ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4">
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[2rem] border border-slate-800 bg-surface-900 p-6 shadow-card">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm uppercase tracking-[0.24em] text-accent-400">{selectedProperty.category || selectedProperty.type || 'PG'} • {selectedProperty.approvalStatus || 'Approved'}</p>
-                <h2 className="mt-2 text-3xl font-semibold text-white">{selectedProperty.name}</h2>
-              </div>
-              <button type="button" onClick={() => setSelectedProperty(null)} className="rounded-full border border-slate-700 p-2 text-slate-300 hover:border-accent-500">
-                <FiX />
-              </button>
-            </div>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <p className="text-slate-300">City: {selectedProperty.city || '-'}</p>
-              <p className="text-slate-300">Address: {selectedProperty.address || selectedProperty.locationLabel || '-'}</p>
-              <p className="text-slate-300">Latitude: {selectedProperty.location?.lat ?? selectedProperty.latitude ?? '-'}</p>
-              <p className="text-slate-300">Longitude: {selectedProperty.location?.lng ?? selectedProperty.longitude ?? '-'}</p>
-              <p className="text-slate-300">Rent: ₹{selectedProperty.rent || '0'}</p>
-              <p className="text-slate-300">Deposit: ₹{selectedProperty.depositAmount || '0'}</p>
-            </div>
-            <p className="mt-5 text-slate-300">{selectedProperty.description || 'No description available.'}</p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              {(selectedProperty.images || [selectedProperty.image]).filter(Boolean).slice(0, 6).map((image) => (
-                <img key={image} src={image} alt={selectedProperty.name} className="h-40 w-full rounded-2xl object-cover" />
-              ))}
-            </div>
-            {selectedProperty.menuPhoto ? <img src={selectedProperty.menuPhoto} alt={`${selectedProperty.name} menu`} className="mt-4 max-h-72 w-full rounded-2xl object-cover" /> : null}
-            <div className="mt-6 flex flex-wrap gap-2">
-              <button type="button" onClick={() => handleReview(selectedProperty.id, 'Approved')} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Approve</button>
-              <button type="button" onClick={() => handleReview(selectedProperty.id, 'Rejected')} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200">Reject</button>
-              <button type="button" onClick={() => handleDeactivate(selectedProperty.id)} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Deactivate</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   )
 }

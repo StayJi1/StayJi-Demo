@@ -141,7 +141,7 @@ export const AuthProvider = ({ children }) => {
       const nextRole = normalizedUser.role || userRole || 'user'
       const requestedRole = normalizeRole(userRole)
       if (requestedRole && requestedRole !== nextRole) {
-        throw new Error(`This account is registered as ${nextRole}. Select the correct account type to continue.`)
+        throw new Error('Account type mismatch. Select the correct account type to continue.')
       }
       setUser(normalizedUser)
       setToken(response.token)

@@ -80,7 +80,6 @@ function PropertiesPage() {
   const [mapSearchMessage, setMapSearchMessage] = useState('')
   const { user, isAuthenticated, role } = useAuth()
   const [savedPropertyIds, setSavedPropertyIds] = useState(new Set())
-  const [wishlistLoading, setWishlistLoading] = useState(true)
   const {
     position,
     loading: locationLoading,
@@ -99,7 +98,6 @@ function PropertiesPage() {
     const loadWishlist = async () => {
       if (!isAuthenticated || !user?._id) {
         setSavedPropertyIds(new Set())
-        setWishlistLoading(false)
         return
       }
 
@@ -114,8 +112,6 @@ function PropertiesPage() {
       } catch (error) {
         console.error('Unable to load wishlist state', error)
         setSavedPropertyIds(new Set())
-      } finally {
-        setWishlistLoading(false)
       }
     }
 
@@ -372,6 +368,29 @@ function PropertiesPage() {
               <p className="mt-3 text-sm text-emerald-300">
                 Searching within {searchRadiusKm} km first. Search for PG, hotel, flat, hostel, or an area to narrow it down.
               </p>
+            ) : null}
+            {hasUserLocation && nearbyMode ? (
+              <label className="mt-4 block text-sm text-slate-300">
+                Result range
+                <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                  <input
+                    type="range"
+                    min="1"
+                    max="50"
+                    value={searchRadiusKm}
+                    onChange={(event) => setSearchRadiusKm(Number(event.target.value))}
+                    className="w-full accent-cyan-400"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={searchRadiusKm}
+                    onChange={(event) => setSearchRadiusKm(Math.max(1, Number(event.target.value) || 1))}
+                    className="w-full rounded-3xl border border-slate-700/80 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400 sm:w-32"
+                  />
+                </div>
+              </label>
             ) : null}
             {hasUserLocation && nearbyMode && nearbyCount === 0 && searchRadiusKm === defaultNearbyRadiusKm ? (
               <div className="mt-4 rounded-3xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-100">

@@ -81,6 +81,7 @@ const normalizeProperty = (property) => {
     perDayCheckIn: Boolean(property.perDayCheckIn),
     depositAmount: Number(property.depositAmount) || property.depositAmount || 0,
     availableBeds: Number(property.availableBeds) || 0,
+    roomInventory: Array.isArray(property.roomInventory) ? property.roomInventory : [],
     vacancyStatus: property.vacancyStatus || (property.isAvailable === false ? 'Fully occupied' : 'Available now'),
     availableFrom: property.availableFrom || '',
     sharingAvailability: property.sharingAvailability || property.sharing || '',
