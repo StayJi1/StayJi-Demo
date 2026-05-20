@@ -17,6 +17,7 @@ var Inquiry = require("../models/inquiryMaster");
 var Visit = require("../models/visitDetails");
 var Payment = require("../models/paymentMaster");
 var AdminMessage = require("../models/adminMessage");
+var Notification = require("../models/notification");
 const { hashPassword, isHashedPassword, verifyPassword } = require('../utils/security');
 const messageSecret = crypto.createHash('sha256').update(process.env.MESSAGE_SECRET || process.env.SESSION_SECRET || 'stayji-local-message-secret').digest()
 
@@ -93,6 +94,53 @@ const decryptMessage = (value = '') => {
     } catch (error) {
         return ''
     }
+}
+
+const asObjectId = (value) => {
+    if (!value || !mongoose.Types.ObjectId.isValid(value)) return null
+    return new mongoose.Types.ObjectId(value)
+}
+
+const createNotification = async (payload = {}) => {
+    try {
+        const recipientId = asObjectId(payload.recipientId)
+        const actorId = asObjectId(payload.actorId)
+        const propertyId = asObjectId(payload.propertyId)
+        if (!recipientId && !payload.recipientRole) return null
+        return Notification.create({
+            recipientId,
+            recipientRole: payload.recipientRole || 'user',
+            actorId,
+            propertyId,
+            type: payload.type || 'general',
+            title: payload.title || 'StayJi update',
+            message: payload.message || '',
+            link: payload.link || '/',
+            metadata: payload.metadata || {},
+        })
+    } catch (error) {
+        console.error('Notification creation failed:', error.message)
+        return null
+    }
+}
+
+const notifyAdmins = async (payload = {}) => {
+    const admins = await User.find({ userType: { $in: ['Admin', 'admin'] }, isActive: true }).select('_id')
+    await Promise.all(admins.map((admin) => createNotification({ ...payload, recipientId: admin._id, recipientRole: 'admin' })))
+}
+
+const notifyPropertyOwner = async (propertyId, payload = {}) => {
+    const property = await Property.findOne({ _id: propertyId }).select('userIDFK vendorId propertyName')
+    const ownerId = property?.vendorId || property?.userIDFK
+    if (!ownerId) return null
+    return createNotification({
+        ...payload,
+        recipientId: ownerId,
+        recipientRole: 'vendor',
+        propertyId,
+        link: payload.link || `/dashboard/vendor/properties/${propertyId}`,
+        metadata: { ...(payload.metadata || {}), propertyName: property.propertyName },
+    })
 }
 
 const propertyPopulate = () => [
@@ -878,6 +926,20 @@ router.post('/addInquiry', async (req, res) => {
     const inserted = await objInquiry.save();
 
     if (inserted != null) {
+        await notifyPropertyOwner(req.body.propertyIDFK, {
+            actorId: req.body.userIDFK,
+            type: 'callback_request',
+            title: 'New callback request',
+            message: 'A user asked for more details about your property.',
+        })
+        await notifyAdmins({
+            actorId: req.body.userIDFK,
+            propertyId: req.body.propertyIDFK,
+            type: 'lead_update',
+            title: 'New property inquiry',
+            message: 'A new inquiry was created from a property detail page.',
+            link: `/dashboard/admin/properties/${req.body.propertyIDFK}`,
+        })
         res.json({ result: "success", msg: "Inquiry Inserted", data: 1 });
     } else {
         res.json({ result: "failure", msg: "Inquiry Not Inserted", data: 0 });
@@ -906,6 +968,20 @@ router.post('/addInterest', async (req, res) => {
     const inserted = await objInquiry.save();
 
     if (inserted != null) {
+        await notifyPropertyOwner(req.body.propertyIDFK, {
+            actorId: req.body.userIDFK,
+            type: 'callback_request',
+            title: 'New interested lead',
+            message: 'A user requested a callback for your property.',
+        })
+        await notifyAdmins({
+            actorId: req.body.userIDFK,
+            propertyId: req.body.propertyIDFK,
+            type: 'lead_update',
+            title: 'New interested lead',
+            message: 'A user expressed interest in a property.',
+            link: `/dashboard/admin/properties/${req.body.propertyIDFK}`,
+        })
         res.json({ result: 'success', msg: 'Interest submitted', data: 1 });
     } else {
         res.json({ result: 'failure', msg: 'Interest could not be submitted', data: 0 });
@@ -946,6 +1022,20 @@ router.post('/addVisit', async (req, res) => {
     const inserted = await objVisit.save();
 
     if (inserted != null) {
+        await notifyPropertyOwner(req.body.propertyIDFK, {
+            actorId: req.body.userIDFK,
+            type: 'visit_request',
+            title: 'New visit request',
+            message: 'A user requested a property visit.',
+        })
+        await notifyAdmins({
+            actorId: req.body.userIDFK,
+            propertyId: req.body.propertyIDFK,
+            type: 'visit_request',
+            title: 'New visit request',
+            message: 'A new visit request needs tracking.',
+            link: `/dashboard/admin/properties/${req.body.propertyIDFK}`,
+        })
         res.json({ result: "success", msg: "Visit Inserted", data: 1 });
     } else {
         res.json({ result: "failure", msg: "Visit Not Inserted", data: 0 });
@@ -961,6 +1051,27 @@ router.post('/markLeadConverted', async (req, res) => {
     const Model = req.body.type === 'visit' ? Visit : Inquiry
     const updated = await Model.updateOne({ _id: req.body.id }, { isConverted: true, leadStage: 'converted' })
     if (updated.modifiedCount > 0) {
+        const lead = await Model.findOne({ _id: req.body.id }).select('userIDFK propertyIDFK vendorId')
+        if (lead) {
+            await createNotification({
+                recipientId: lead.userIDFK,
+                recipientRole: 'user',
+                propertyId: lead.propertyIDFK,
+                type: 'lead_update',
+                title: 'Lead converted',
+                message: 'Your StayJi lead was marked as converted.',
+                link: `/properties/${lead.propertyIDFK}`,
+            })
+            await createNotification({
+                recipientId: lead.vendorId,
+                recipientRole: 'vendor',
+                propertyId: lead.propertyIDFK,
+                type: 'lead_update',
+                title: 'Conversion recorded',
+                message: 'A lead for your property was marked as converted.',
+                link: `/dashboard/vendor/properties/${lead.propertyIDFK}`,
+            })
+        }
         return res.json({ result: 'success', msg: 'Lead marked as converted', data: 1 })
     }
     res.json({ result: 'failure', msg: 'Lead conversion was not updated', data: 0 })
@@ -1003,6 +1114,12 @@ router.post('/addShortlist', async (req, res) => {
         objShortlist.isActive = true;
         objShortlist.addedOn = new Date();
         await objShortlist.save();
+        await notifyPropertyOwner(req.body.propertyIDFK, {
+            actorId: req.body.userIDFK,
+            type: 'wishlist_activity',
+            title: 'Property wishlisted again',
+            message: 'A user saved your property to their wishlist.',
+        })
 
         return res.json({
             result: 'success',
@@ -1019,6 +1136,12 @@ router.post('/addShortlist', async (req, res) => {
     const inserted = await objShortlist.save();
 
     if (inserted != null) {
+        await notifyPropertyOwner(req.body.propertyIDFK, {
+            actorId: req.body.userIDFK,
+            type: 'wishlist_activity',
+            title: 'New wishlist save',
+            message: 'A user saved your property to their wishlist.',
+        })
         res.json({
             result: 'success',
             msg: 'Shortlist Inserted Successfully',
@@ -1210,6 +1333,15 @@ router.post('/updateReply', async (req, res) => {
         status: true
     });
     if (objInquiry != null) {
+        await createNotification({
+            recipientId: req.body.userIDFK,
+            recipientRole: 'user',
+            propertyId: req.body.propertyIDFK,
+            type: 'vendor_reply',
+            title: 'Vendor replied to your inquiry',
+            message: req.body.reply || 'The vendor replied to your property inquiry.',
+            link: `/properties/${req.body.propertyIDFK}`,
+        })
         res.json({ result: "success", msg: "Inquiry update Successfully", data: 1 });
 
     } else {
@@ -1808,6 +1940,14 @@ router.post('/updateUserStatus', async (req, res) => {
     const updated = await User.updateOne({ _id: req.body.id }, { $set: updateFields })
     if (updated.modifiedCount > 0) {
         const user = await User.findOne({ _id: req.body.id }).select('-userPassword')
+        await createNotification({
+            recipientId: req.body.id,
+            recipientRole: normalizeAccountType(user?.userType || 'user'),
+            type: updateFields.isActive === false ? 'account_deactivated' : 'account_updated',
+            title: updateFields.isActive === false ? 'Account deactivated' : 'Account status updated',
+            message: updateFields.isActive === false ? 'Your StayJi account was deactivated by admin. Active sessions will be signed out.' : 'Your StayJi account status was updated.',
+            link: '/login',
+        })
         res.json({ result: "success", msg: "User updated", data: user })
     } else {
         res.json({ result: "failure", msg: "User was not updated", data: 0 })
@@ -2018,6 +2158,18 @@ router.post('/properties/:id/status', async (req, res) => {
     if (req.body.isAvailable !== undefined) update.isAvailable = req.body.isAvailable === true || req.body.isAvailable === 'true'
     if (!Object.keys(update).length) return res.json({ result: 'failure', msg: 'No status update supplied', data: null })
     const updated = await Property.findOneAndUpdate({ _id: req.params.id }, { $set: update }, { new: true }).populate(propertyPopulate())
+    if (updated) {
+        const owner = updated.vendorId || updated.userIDFK
+        await createNotification({
+            recipientId: owner?._id || owner,
+            recipientRole: 'vendor',
+            propertyId: updated._id,
+            type: update.approvalStatus ? 'property_review' : 'property_status',
+            title: update.approvalStatus ? `Property ${update.approvalStatus}` : 'Property status updated',
+            message: update.approvalStatus ? `Admin marked ${updated.propertyName} as ${update.approvalStatus}.` : `Admin updated ${updated.propertyName}.`,
+            link: `/dashboard/vendor/properties/${updated._id}`,
+        })
+    }
     res.json({ result: updated ? 'success' : 'failure', msg: updated ? 'Property updated' : 'Property not found', data: updated ? propertyDto(updated) : null })
 })
 
@@ -2032,6 +2184,16 @@ router.post('/properties/bulk', async (req, res) => {
     if (req.body.isActive !== undefined) update.isActive = req.body.isActive === true || req.body.isActive === 'true'
     if (!ids.length || !Object.keys(update).length) return res.json({ result: 'failure', msg: 'No properties selected', data: { modifiedCount: 0 } })
     const result = await Property.updateMany({ _id: { $in: ids } }, { $set: update })
+    const rows = await Property.find({ _id: { $in: ids } }).select('_id propertyName userIDFK vendorId')
+    await Promise.all(rows.map((row) => createNotification({
+        recipientId: row.vendorId || row.userIDFK,
+        recipientRole: 'vendor',
+        propertyId: row._id,
+        type: 'property_status',
+        title: 'Property status updated',
+        message: `Admin updated ${row.propertyName}.`,
+        link: `/dashboard/vendor/properties/${row._id}`,
+    })))
     res.json({ result: 'success', msg: 'Bulk property update complete', data: { modifiedCount: result.modifiedCount || 0 } })
 })
 
@@ -2107,6 +2269,27 @@ router.post('/vendors/:id/messages', async (req, res) => {
         senderRole: req.body.senderRole || 'admin',
         message: encryptMessage(req.body.message.trim()),
     })
+    if ((req.body.senderRole || 'admin') === 'vendor') {
+        await notifyAdmins({
+            actorId: req.params.id,
+            propertyId: req.body.propertyId,
+            type: 'message',
+            title: 'Vendor replied',
+            message: 'A vendor replied in the private support thread.',
+            link: `/dashboard/admin/vendors/${req.params.id}`,
+        })
+    } else {
+        await createNotification({
+            recipientId: req.params.id,
+            recipientRole: 'vendor',
+            actorId: req.body.adminId,
+            propertyId: req.body.propertyId,
+            type: 'message',
+            title: 'New admin message',
+            message: 'StayJi admin sent you a private message.',
+            link: '/dashboard/vendor',
+        })
+    }
     res.json({ result: 'success', msg: 'Message sent.', data: { ...message.toObject(), message: req.body.message.trim() } })
 })
 
@@ -2119,6 +2302,43 @@ router.post('/vendors/:id/messages/:messageId/delete', async (req, res) => {
     else update.deletedForAdmin = true
     const message = await AdminMessage.findOneAndUpdate({ _id: req.params.messageId, vendorId: req.params.id }, { $set: update }, { new: true })
     res.json({ result: message ? 'success' : 'failure', msg: message ? 'Message deleted.' : 'Message not found.', data: message })
+})
+
+router.get('/notifications', async (req, res) => {
+    const userId = asObjectId(req.query.userId || req.query.recipientId)
+    const role = normalizeAccountType(req.query.role || req.query.recipientRole || 'user')
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit || 20)))
+    const filters = { isActive: true }
+    const recipients = [{ recipientRole: 'all' }]
+    if (userId) recipients.push({ recipientId: userId })
+    if (role) recipients.push({ recipientRole: role })
+    filters.$or = recipients
+    if (req.query.unreadOnly === 'true') filters.readAt = { $exists: false }
+
+    const [items, unreadCount] = await Promise.all([
+        Notification.find(filters).sort({ addedOn: -1 }).limit(limit).lean(),
+        Notification.countDocuments({ ...filters, readAt: { $exists: false } }),
+    ])
+    res.json({ result: 'success', msg: 'Notifications found', data: { items, unreadCount } })
+})
+
+router.post('/notifications/:id/read', async (req, res) => {
+    const notification = await Notification.findOneAndUpdate(
+        { _id: req.params.id },
+        { $set: { readAt: new Date() } },
+        { new: true },
+    )
+    res.json({ result: notification ? 'success' : 'failure', msg: notification ? 'Notification read' : 'Notification not found', data: notification })
+})
+
+router.post('/notifications/mark-read', async (req, res) => {
+    const userId = asObjectId(req.body.userId || req.body.recipientId)
+    const role = normalizeAccountType(req.body.role || req.body.recipientRole || 'user')
+    const recipients = [{ recipientRole: 'all' }]
+    if (userId) recipients.push({ recipientId: userId })
+    if (role) recipients.push({ recipientRole: role })
+    const result = await Notification.updateMany({ isActive: true, readAt: { $exists: false }, $or: recipients }, { $set: { readAt: new Date() } })
+    res.json({ result: 'success', msg: 'Notifications marked as read', data: { modifiedCount: result.modifiedCount || 0 } })
 })
 
 router.post('/getPropertyListByType', async (req, res) => {

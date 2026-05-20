@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { FiHeart, FiMapPin, FiStar } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import propertyService from '../../services/propertyService'
@@ -9,12 +9,9 @@ import { formatDistance } from '../../utils/distance'
 function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
-  const [saved, setSaved] = useState(Boolean(savedProp))
+  const [internalSaved, setInternalSaved] = useState(Boolean(savedProp))
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    setSaved(Boolean(savedProp))
-  }, [savedProp])
+  const saved = onToggleSave ? Boolean(savedProp) : internalSaved
 
   const handleShortlist = async () => {
     if (!isAuthenticated || !user?._id) {
@@ -27,14 +24,13 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
     try {
       if (onToggleSave) {
         await onToggleSave(propertyIDFK, !saved)
-        setSaved(!saved)
       } else {
         if (saved) {
           await propertyService.removeShortlistProperty({ userIDFK: user._id, propertyIDFK })
-          setSaved(false)
+          setInternalSaved(false)
         } else {
           await propertyService.shortlistProperty({ userIDFK: user._id, propertyIDFK })
-          setSaved(true)
+          setInternalSaved(true)
         }
       }
     } catch {
@@ -49,7 +45,7 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
       layout
       whileHover={{ y: -6 }}
       transition={{ type: 'spring', stiffness: 220, damping: 20 }}
-      className="group overflow-hidden rounded-[2rem] border border-slate-800/70 bg-slate-950/90 shadow-card"
+      className="group min-w-0 overflow-hidden rounded-[1.5rem] border border-slate-800/70 bg-slate-950/90 shadow-card sm:rounded-[2rem]"
     >
       <div className="relative overflow-hidden">
         <div className="absolute right-4 top-4 z-20 rounded-full bg-slate-950/70 px-3 py-2 text-xs font-semibold text-white backdrop-blur-xl">
@@ -62,11 +58,11 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
           className="h-64 w-full object-cover transition duration-500 group-hover:scale-105"
         />
       </div>
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 p-5 sm:p-6">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-accent-500">{property.category || property.type || 'PG'}</p>
-            <h3 className="mt-2 text-xl font-semibold text-white">{property.name}</h3>
+            <h3 className="mt-2 line-clamp-2 text-xl font-semibold text-white">{property.name}</h3>
           </div>
           <button
             type="button"
@@ -82,7 +78,7 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-400">
           <FiMapPin className="h-4 w-4" />
-          <span>{property.locationLabel || property.city}</span>
+          <span className="truncate">{property.locationLabel || property.city}</span>
           {property.distanceKm !== undefined ? <span>• {formatDistance(property.distanceKm)}</span> : null}
         </div>
         <div className="grid gap-3 sm:grid-cols-3">

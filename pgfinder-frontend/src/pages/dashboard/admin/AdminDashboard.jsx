@@ -66,11 +66,11 @@ function AdminDashboard() {
 
   return (
     <div className="space-y-8">
-      <header className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
+      <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm uppercase tracking-[0.28em] text-accent-400">StayJi command center</p>
-            <h1 className="mt-3 text-4xl font-semibold text-white">Live platform management</h1>
+            <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">Live platform management</h1>
           </div>
           <Button onClick={refreshAdmin} variant="secondary"><FiRefreshCw /> Refresh live data</Button>
         </div>
@@ -150,7 +150,7 @@ function AdminDashboard() {
       </div>
 
       <Card>
-        <div className="grid gap-4 lg:grid-cols-[1.4fr_0.7fr_0.7fr_0.7fr_0.7fr_0.7fr_auto]">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.4fr_0.7fr_0.7fr_0.7fr_0.7fr_0.7fr_auto]">
           <label className="flex items-center gap-3 rounded-3xl border border-slate-700 bg-slate-950/70 px-4 text-slate-300">
             <FiSearch />
             <input
@@ -213,7 +213,7 @@ function AdminDashboard() {
         </div>
         {error ? <p className="p-5 text-sm text-rose-300">{error.message}</p> : null}
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
+          <table className="min-w-[980px] divide-y divide-slate-800 text-left text-sm">
             <thead className="bg-slate-950/70 text-xs uppercase tracking-[0.16em] text-slate-500">
               <tr>
                 <th className="px-5 py-4">Select</th>

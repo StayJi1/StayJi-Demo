@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import authService from '../services/authService'
 import userService from '../services/userService'
 import axiosClient from '../api/axiosClient'
@@ -62,7 +62,18 @@ export const AuthProvider = ({ children }) => {
   const [role, setRole] = useState(() => normalizeRole(storedAuth?.role || storedUser?.role || 'user'))
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState(null)
-  const lastActivityRef = useRef(Date.now())
+  const lastActivityRef = useRef(0)
+
+  const logout = useCallback(() => {
+    setUser(null)
+    setToken(null)
+    setRole(null)
+    setStatus('idle')
+    setError(null)
+    sessionStorage.removeItem(storageKey)
+    localStorage.removeItem(storageKey)
+    delete axiosClient.defaults.headers.common.Authorization
+  }, [])
 
   useEffect(() => {
     if (token) {
@@ -112,7 +123,7 @@ export const AuthProvider = ({ children }) => {
       activityEvents.forEach((eventName) => window.removeEventListener(eventName, refreshActivity))
       window.clearInterval(timer)
     }
-  }, [user])
+  }, [logout, user])
 
   useEffect(() => {
     if (!user?._id) return undefined
@@ -128,7 +139,7 @@ export const AuthProvider = ({ children }) => {
     verifyAccount()
     const timer = window.setInterval(verifyAccount, 30 * 1000)
     return () => window.clearInterval(timer)
-  }, [user?._id])
+  }, [logout, user?._id])
 
   const login = async ({ email, password, role: userRole }) => {
     setStatus('loading')
@@ -208,7 +219,7 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  const updateProfile = async (updates) => {
+  const updateProfile = useCallback(async (updates) => {
     if (!user?._id) {
       throw new Error('No authenticated user to update')
     }
@@ -226,27 +237,17 @@ export const AuthProvider = ({ children }) => {
       setStatus('error')
       throw err
     }
-  }
-
-  const logout = () => {
-    setUser(null)
-    setToken(null)
-    setRole(null)
-    setStatus('idle')
-    setError(null)
-    sessionStorage.removeItem(storageKey)
-    localStorage.removeItem(storageKey)
-    delete axiosClient.defaults.headers.common.Authorization
-  }
+  }, [role, user])
 
   const value = useMemo(
     () => ({ user, token, role, isAuthenticated: Boolean(user), status, error, login, signup, googleSignup, updateProfile, logout }),
-    [user, token, role, status, error],
+    [user, token, role, status, error, logout, updateProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext)
   if (!context) {

@@ -1,0 +1,10 @@
+{
+  "buildCommand": "cd pgfinder-frontend && npm install && npm run build",
+  "outputDirectory": "pgfinder-frontend/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

@@ -37,10 +37,14 @@ function AppRoutes() {
         <Route path="/" element={<HomePage />} />
         <Route path="/properties" element={<PropertiesPage />} />
         <Route path="/properties/:id" element={<PropertyDetailPage />} />
+        <Route path="/property/:id" element={<PropertyDetailPage />} />
         <Route path="/compare" element={<ComparePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
       </Route>
+
+      <Route path="/admin" element={<Navigate to="/dashboard/admin" replace />} />
+      <Route path="/vendor" element={<Navigate to="/dashboard/vendor" replace />} />
 
       <Route
         path="/dashboard"
@@ -120,6 +124,14 @@ function AppRoutes() {
           element={
             <RoleProtectedRoute role="vendor">
               <ManagePropertiesPage />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="vendor/properties/:propertyId"
+          element={
+            <RoleProtectedRoute role="vendor">
+              <PropertyDetailPage />
             </RoleProtectedRoute>
           }
         />

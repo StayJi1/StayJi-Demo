@@ -206,6 +206,16 @@ app.use('/api/vendors', clientController);
 
 app.use('/api/admin', clientController);
 
+app.use('/api/leads', (req, res, next) => {
+    req.url = req.url === '/' ? '/leads' : `/leads${req.url}`;
+    clientController(req, res, next);
+});
+
+app.use('/api/notifications', (req, res, next) => {
+    req.url = req.url === '/' ? '/notifications' : `/notifications${req.url}`;
+    clientController(req, res, next);
+});
+
 /*
 |--------------------------------------------------------------------------
 | Start Server

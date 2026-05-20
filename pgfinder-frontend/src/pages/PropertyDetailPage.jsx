@@ -22,7 +22,8 @@ const getAmenityIcon = (amenity) => {
 }
 
 function PropertyDetailPage() {
-  const { id } = useParams()
+  const { id, propertyId } = useParams()
+  const activePropertyId = id || propertyId
   const navigate = useNavigate()
   const [property, setProperty] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -33,10 +34,10 @@ function PropertyDetailPage() {
   useEffect(() => {
     const loadProperty = async () => {
       try {
-        const data = await propertyService.fetchPropertyById(id)
+        const data = await propertyService.fetchPropertyById(activePropertyId)
         setProperty(data)
         const viewed = JSON.parse(localStorage.getItem('stayjiViewed') || '[]')
-        localStorage.setItem('stayjiViewed', JSON.stringify([id, ...viewed.filter((item) => item !== id)].slice(0, 20)))
+        localStorage.setItem('stayjiViewed', JSON.stringify([activePropertyId, ...viewed.filter((item) => item !== activePropertyId)].slice(0, 20)))
       } catch {
         setError('Unable to load property details.')
       } finally {
@@ -44,7 +45,7 @@ function PropertyDetailPage() {
       }
     }
     loadProperty()
-  }, [id])
+  }, [activePropertyId])
 
   const { user, role } = useAuth()
   const isAdmin = role === 'admin'

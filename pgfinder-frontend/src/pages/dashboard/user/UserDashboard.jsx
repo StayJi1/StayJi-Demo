@@ -27,8 +27,10 @@ function UserDashboard() {
       }
     }
     load()
-    setCompareCount(JSON.parse(localStorage.getItem('stayjiCompare') || '[]').length)
-    setViewedCount(JSON.parse(localStorage.getItem('stayjiViewed') || '[]').length)
+    window.setTimeout(() => {
+      setCompareCount(JSON.parse(localStorage.getItem('stayjiCompare') || '[]').length)
+      setViewedCount(JSON.parse(localStorage.getItem('stayjiViewed') || '[]').length)
+    }, 0)
   }, [user?._id])
 
   const handleRemoveWishlist = async (event, propertyIDFK) => {
@@ -48,11 +50,11 @@ function UserDashboard() {
 
   return (
     <div className="space-y-8">
-      <header className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
+      <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm uppercase tracking-[0.28em] text-accent-400">User dashboard</p>
-            <h1 className="mt-3 text-4xl font-semibold text-white">Track your shortlist, visits, and messages</h1>
+            <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">Track your shortlist, visits, and messages</h1>
           </div>
           <Link to="/properties">
             <Button>Find more stays</Button>
@@ -129,7 +131,7 @@ function UserDashboard() {
             <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Support</p>
             <h2 className="mt-3 text-2xl font-semibold text-white">Contact support</h2>
           </div>
-          <p className="mt-6 text-slate-300">Need help with a booking or vendor query? Reach the StayJi team at stayji@gmail.com or 1234567899.</p>
+          <p className="mt-6 text-slate-300">Need help with a booking or vendor query? Reach the StayJi team at hello.stayji@gmail.com or 1234567899.</p>
         </Card>
       </div>
 

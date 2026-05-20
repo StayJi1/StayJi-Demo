@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FiEdit2, FiEye, FiTrash2 } from 'react-icons/fi'
+import { FiBarChart2, FiEdit2, FiEye, FiTrash2 } from 'react-icons/fi'
 import Card from '../../../components/common/Card'
 import dashboardService from '../../../services/dashboardService'
 import propertyService from '../../../services/propertyService'
@@ -28,7 +28,7 @@ function ManagePropertiesPage() {
       }
     }
     if (user?._id) load()
-    else setLoading(false)
+    else window.setTimeout(() => setLoading(false), 0)
   }, [user?._id])
 
   const handleDelete = async (propertyId) => {
@@ -68,15 +68,15 @@ function ManagePropertiesPage() {
 
   return (
     <div className="space-y-8">
-      <header className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
+      <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
         <div>
           <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Property management</p>
-          <h1 className="mt-3 text-4xl font-semibold text-white">Your active listings</h1>
+          <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">Your active listings</h1>
         </div>
       </header>
 
       <Card>
-        <div className="grid gap-4 md:grid-cols-[1fr_0.65fr_0.65fr_0.65fr_auto]">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr_0.65fr_0.65fr_0.65fr_auto]">
           <input
             type="search"
             value={filters.search}
@@ -114,10 +114,10 @@ function ManagePropertiesPage() {
       ) : filteredProperties.length ? (
         <div className="space-y-4">
           {filteredProperties.map((property) => (
-            <Card key={property.id || property._id} className="grid gap-4 rounded-[2rem] p-6 sm:grid-cols-[1.3fr_0.7fr]">
-              <div>
+            <Card key={property.id || property._id} className="grid gap-4 rounded-[1.5rem] p-5 sm:grid-cols-[1.3fr_0.7fr] sm:rounded-[2rem] sm:p-6">
+              <div className="min-w-0">
                 <p className="text-sm uppercase tracking-[0.24em] text-accent-400">{property.city || 'Unknown city'}</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">{property.name}</h2>
+                <h2 className="mt-2 truncate text-2xl font-semibold text-white">{property.name}</h2>
                 <p className="mt-3 text-slate-300">{property.description?.substring(0, 100) || 'No description available.'}</p>
                 <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.18em]">
                   <span className="rounded-full bg-slate-950/80 px-3 py-2 text-slate-300">{property.category || property.type || 'PG'}</span>
@@ -132,7 +132,7 @@ function ManagePropertiesPage() {
                   </span>
                 </div>
               </div>
-              <div className="flex flex-col items-start justify-between gap-4 sm:items-end">
+              <div className="flex min-w-0 flex-col items-start justify-between gap-4 sm:items-end">
                 <div className="space-y-2 text-sm text-slate-400">
                   <p>Rent: ₹{property.rent || '8,500'}</p>
                   <p>Deposit: ₹{property.depositAmount || '0'}</p>
@@ -144,10 +144,17 @@ function ManagePropertiesPage() {
                 <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
-                    onClick={() => setSelectedProperty(property)}
+                    onClick={() => navigate(`/dashboard/vendor/properties/${property.id || property._id}`)}
                     className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-accent-500"
                   >
                     <FiEye /> View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/dashboard/vendor/leads?propertyId=${property.id || property._id}`)}
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-accent-500"
+                  >
+                    <FiBarChart2 /> Analytics
                   </button>
                   <button
                     type="button"

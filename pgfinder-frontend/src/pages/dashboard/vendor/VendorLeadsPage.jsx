@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { FiArrowLeft, FiMail, FiPhone, FiUser, FiUsers, FiCalendar, FiBookmark } from 'react-icons/fi'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { FiMail, FiCalendar, FiBookmark } from 'react-icons/fi'
 import Button from '../../../components/common/Button'
 import Card from '../../../components/common/Card'
 import dashboardService from '../../../services/dashboardService'
@@ -9,6 +9,8 @@ import { useAuth } from '../../../context/AuthContext'
 function VendorLeadsPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const selectedPropertyId = searchParams.get('propertyId')
   const [leads, setLeads] = useState({ visits: [], inquiries: [], shortlists: [], totalLeads: 0, shortlistCount: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -31,7 +33,22 @@ function VendorLeadsPage() {
       try {
         if (!user?._id) return
         const data = await dashboardService.getVendorLeads(user._id)
-        setLeads(data)
+        if (selectedPropertyId) {
+          const matchesProperty = (item) => {
+            const propertyId = item.propertyIDFK?._id || item.propertyIDFK || item.property?._id || item.propertyId || item.property?.id
+            return propertyId?.toString() === selectedPropertyId
+          }
+          setLeads({
+            ...data,
+            visits: data.visits.filter(matchesProperty),
+            inquiries: data.inquiries.filter(matchesProperty),
+            shortlists: data.shortlists.filter(matchesProperty),
+            totalLeads: data.visits.filter(matchesProperty).length + data.inquiries.filter(matchesProperty).length,
+            shortlistCount: data.shortlists.filter(matchesProperty).reduce((sum, item) => sum + (Number(item.wishlistCount) || 0), 0),
+          })
+        } else {
+          setLeads(data)
+        }
       } catch (err) {
         console.error(err)
         setError('Unable to load your leads. Please try again later.')
@@ -40,15 +57,15 @@ function VendorLeadsPage() {
       }
     }
     loadLeads()
-  }, [user?._id])
+  }, [selectedPropertyId, user?._id])
 
   return (
     <div className="space-y-8">
-      <header className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
+      <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Vendor leads</p>
-            <h1 className="mt-3 text-4xl font-semibold text-white">Student leads and visit requests</h1>
+            <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">Student leads and visit requests</h1>
             <p className="mt-3 max-w-3xl text-slate-400">Review every student who expressed interest or requested a visit for your properties.</p>
           </div>
           <div className="flex flex-wrap gap-3">

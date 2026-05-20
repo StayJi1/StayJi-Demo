@@ -1,6 +1,7 @@
 import axios from 'axios'
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+const isLocalHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
+const baseURL = import.meta.env.VITE_API_BASE_URL || (isLocalHost ? 'http://localhost:3000' : 'https://stayji.onrender.com')
 
 const axiosClient = axios.create({
   baseURL,

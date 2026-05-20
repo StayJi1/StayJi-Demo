@@ -119,7 +119,7 @@ function PropertiesPage() {
   }, [isAuthenticated, navigate, role, user?._id])
 
   useEffect(() => {
-    setSearchQuery(searchParams.get('search') || '')
+    window.setTimeout(() => setSearchQuery(searchParams.get('search') || ''), 0)
   }, [searchParams])
 
   const handleToggleSave = async (propertyIDFK, shouldSave) => {
@@ -162,7 +162,7 @@ function PropertiesPage() {
 
   useEffect(() => {
     if (hasUserLocation && nearbyMode) {
-      setSortBy('nearest')
+      window.setTimeout(() => setSortBy('nearest'), 0)
     }
   }, [hasUserLocation, nearbyMode])
 

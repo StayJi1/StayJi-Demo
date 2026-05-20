@@ -52,11 +52,11 @@ function VendorDashboard() {
 
   return (
     <div className="space-y-8">
-      <header className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
+      <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Vendor dashboard</p>
-            <h1 className="mt-3 text-4xl font-semibold text-white">Manage your stay listings and inquiries</h1>
+            <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">Manage your stay listings and inquiries</h1>
           </div>
           <Button onClick={() => navigate('/dashboard/vendor/add-property')}>New property</Button>
         </div>

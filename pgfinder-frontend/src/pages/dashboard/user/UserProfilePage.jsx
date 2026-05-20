@@ -17,14 +17,16 @@ function UserProfilePage() {
 
   useEffect(() => {
     if (user) {
-      setForm({
-        firstName: user.firstName || user.userFname || '',
-        lastName: user.lastName || user.userLname || '',
-        email: user.userEmail || user.email || '',
-        contact: user.contact || '',
-        occupation: user.occupation || '',
-        gender: user.gender || '',
-      })
+      window.setTimeout(() => {
+        setForm({
+          firstName: user.firstName || user.userFname || '',
+          lastName: user.lastName || user.userLname || '',
+          email: user.userEmail || user.email || '',
+          contact: user.contact || '',
+          occupation: user.occupation || '',
+          gender: user.gender || '',
+        })
+      }, 0)
     }
   }, [user])
 
@@ -52,10 +54,10 @@ function UserProfilePage() {
 
   return (
     <div className="space-y-8">
-      <header className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
+      <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
         <div>
           <p className="text-sm uppercase tracking-[0.28em] text-accent-400">My profile</p>
-          <h1 className="mt-3 text-4xl font-semibold text-white">Update your account details</h1>
+          <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">Update your account details</h1>
         </div>
       </header>
 

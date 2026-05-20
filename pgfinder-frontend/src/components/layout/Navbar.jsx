@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { FiMenu, FiX } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
+import NotificationBell from '../notifications/NotificationBell'
 
 const navItems = [
   { label: 'Home', to: '/' },
@@ -50,6 +51,7 @@ function Navbar() {
           ))}
           {isAuthenticated ? (
             <div className="flex items-center gap-4">
+              <NotificationBell />
               <NavLink
                 to={`/dashboard/${dashboardRole}`}
                 className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-100"
@@ -66,13 +68,16 @@ function Navbar() {
           ) : null}
         </div>
 
-        <button
-          className="inline-flex items-center justify-center rounded-2xl border border-white/20 p-2 text-slate-200 transition hover:bg-white/10 md:hidden"
-          onClick={() => setOpen((current) => !current)}
-          aria-label="Menu"
-        >
-          {open ? <FiX size={20} /> : <FiMenu size={20} />}
-        </button>
+        <div className="flex items-center gap-2 md:hidden">
+          <NotificationBell />
+          <button
+            className="inline-flex items-center justify-center rounded-2xl border border-white/20 p-2 text-slate-200 transition hover:bg-white/10"
+            onClick={() => setOpen((current) => !current)}
+            aria-label="Menu"
+          >
+            {open ? <FiX size={20} /> : <FiMenu size={20} />}
+          </button>
+        </div>
       </div>
 
       {open ? (

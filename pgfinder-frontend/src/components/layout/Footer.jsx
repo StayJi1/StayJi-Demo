@@ -39,7 +39,7 @@ function Footer() {
           </div>
           <div>
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-[0.24em] text-slate-900">Contact</h3>
-            <p className="text-sm leading-6">stayji@gmail.com</p>
+            <p className="text-sm leading-6">hello.stayji@gmail.com</p>
             <p className="text-sm leading-6">1234567899</p>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
-import { FiArrowRight, FiCheckCircle, FiHeart, FiMapPin, FiNavigation, FiSearch, FiShield, FiSliders, FiStar, FiUsers } from 'react-icons/fi'
+import { FiArrowRight, FiCheckCircle, FiMapPin, FiNavigation, FiSearch, FiShield, FiSliders, FiStar, FiUsers } from 'react-icons/fi'
 import Button from '../components/common/Button'
 import Loader from '../components/common/Loader'
 import PropertyCard from '../components/property/PropertyCard'
@@ -57,7 +57,6 @@ function HomePage() {
   const [popular, setPopular] = useState([])
   const [savedPropertyIds, setSavedPropertyIds] = useState(new Set())
   const [loading, setLoading] = useState(true)
-  const [wishlistLoading, setWishlistLoading] = useState(true)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
@@ -78,7 +77,6 @@ function HomePage() {
     const loadWishlist = async () => {
       if (!isAuthenticated || !user?._id) {
         setSavedPropertyIds(new Set())
-        setWishlistLoading(false)
         return
       }
 
@@ -94,8 +92,6 @@ function HomePage() {
       } catch (error) {
         console.error('Unable to load wishlist state', error)
         setSavedPropertyIds(new Set())
-      } finally {
-        setWishlistLoading(false)
       }
     }
 
