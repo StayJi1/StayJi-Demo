@@ -6,6 +6,15 @@ import Input from '../../../components/common/Input'
 import Card from '../../../components/common/Card'
 import { useAuth } from '../../../context/AuthContext'
 import propertyService from '../../../services/propertyService'
+import { bangaloreLocalities } from '../../../data/seoContent'
+
+const slugify = (value = '') => value
+  .toString()
+  .trim()
+  .toLowerCase()
+  .replace(/&/g, ' and ')
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
 
 function AddPropertyPage() {
   const { user, role } = useAuth()
@@ -170,6 +179,11 @@ function AddPropertyPage() {
       setMessage('Please login again before adding a property.')
       return
     }
+    if (!form.area || !form.city || !form.latitude || !form.longitude) {
+      setStatus('error')
+      setMessage('Locality and Google Maps/OpenStreetMap coordinates are mandatory so this listing appears on locality pages.')
+      return
+    }
 
     const payload = new FormData()
     payload.append('userIDFK', user._id)
@@ -193,6 +207,7 @@ function AddPropertyPage() {
     payload.append('sharing', form.sharing)
     payload.append('genderType', form.gender)
     payload.append('areaName', form.area)
+    payload.append('localitySlug', slugify(form.area))
     payload.append('cityName', form.city)
     payload.append('aminityFeatures', form.mealsAvailable.length ? 'WiFi, Meals, Laundry, Security' : 'WiFi, Laundry, Security')
     payload.append('mealsAvailable', JSON.stringify(form.mealsAvailable))
@@ -231,6 +246,7 @@ function AddPropertyPage() {
           sharing: form.sharing,
           genderType: form.gender,
           areaName: form.area,
+          localitySlug: slugify(form.area),
           cityName: form.city,
           aminityFeatures: form.mealsAvailable.length ? 'WiFi, Meals, Laundry, Security' : 'WiFi, Laundry, Security',
           mealsAvailable: form.mealsAvailable,
@@ -324,15 +340,29 @@ function AddPropertyPage() {
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
             <Input label="City" name="city" value={form.city} onChange={handleChange} required />
-            <Input label="Area / locality" name="area" value={form.area} onChange={handleChange} required />
+            <label className="block text-sm text-slate-200">
+              <span className="mb-2 block text-slate-300">Area / locality</span>
+              <select
+                name="area"
+                value={form.area}
+                onChange={handleChange}
+                required
+                className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
+              >
+                <option value="">Select Bangalore locality</option>
+                {bangaloreLocalities.map((locality) => (
+                  <option key={locality.slug} value={locality.name}>{locality.name}</option>
+                ))}
+              </select>
+            </label>
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
             <Input label="Address" name="address" value={form.address} onChange={handleChange} required />
             <Input label="Monthly price" name="rent" type="number" value={form.rent} onChange={handleChange} required />
           </div>
           <div className="grid gap-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-            <Input label="Latitude" name="latitude" type="number" step="any" value={form.latitude} onChange={handleChange} placeholder="18.5204" />
-            <Input label="Longitude" name="longitude" type="number" step="any" value={form.longitude} onChange={handleChange} placeholder="73.8567" />
+            <Input label="Latitude" name="latitude" type="number" step="any" value={form.latitude} onChange={handleChange} placeholder="12.9716" required />
+            <Input label="Longitude" name="longitude" type="number" step="any" value={form.longitude} onChange={handleChange} placeholder="77.5946" required />
             <button
               type="button"
               onClick={handleFindCoordinates}

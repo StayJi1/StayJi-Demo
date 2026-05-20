@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { FiArrowLeft, FiClock, FiPhone, FiShield, FiShuffle, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome } from 'react-icons/fi'
+import { FiArrowLeft, FiClock, FiMessageSquare, FiShield, FiShuffle, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome } from 'react-icons/fi'
 import Loader from '../components/common/Loader'
 import Button from '../components/common/Button'
 import PropertyMap from '../components/map/PropertyMap'
@@ -29,6 +29,8 @@ function PropertyDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [leadPrefs, setLeadPrefs] = useState({ preferredVisitTime: '', moveInPreference: '' })
+  const [moveInForm, setMoveInForm] = useState({ ownerName: '', joiningDate: '', userNote: '', paymentScreenshot: null, roomImage: null })
+  const [moveInMessage, setMoveInMessage] = useState('')
   const { position, loading: locationLoading, error: locationError, hasUserLocation, requestLocation } = useCurrentLocation()
 
   useEffect(() => {
@@ -110,6 +112,29 @@ function PropertyDetailPage() {
     } catch (err) {
       console.error(err)
       alert('Unable to book visit.')
+    }
+  }
+
+  const handleSubmitMoveIn = async (event) => {
+    event.preventDefault()
+    if (!user || !user._id) {
+      navigate('/login', { replace: true })
+      return
+    }
+    const payload = new FormData()
+    payload.append('userId', user._id)
+    payload.append('propertyId', property._id || property.id)
+    payload.append('ownerName', moveInForm.ownerName)
+    payload.append('joiningDate', moveInForm.joiningDate)
+    payload.append('userNote', moveInForm.userNote)
+    if (moveInForm.paymentScreenshot) payload.append('paymentScreenshot', moveInForm.paymentScreenshot)
+    if (moveInForm.roomImage) payload.append('roomImage', moveInForm.roomImage)
+    try {
+      await propertyService.submitMoveIn(payload)
+      setMoveInMessage('Move-in submitted. StayJi admin will verify proof, vendor confirmation, and occupancy before cashback or commission is processed.')
+      setMoveInForm({ ownerName: '', joiningDate: '', userNote: '', paymentScreenshot: null, roomImage: null })
+    } catch (err) {
+      setMoveInMessage(err?.message || 'Unable to submit move-in proof.')
     }
   }
 
@@ -229,14 +254,14 @@ function PropertyDetailPage() {
               <FiShield className="text-accent-400" size={24} />
               <div>
                 <p className="font-semibold text-white">Verified host details</p>
-                <p className="text-sm text-slate-400">Connect with the owner, save the property, or book a visit directly.</p>
+            <p className="text-sm text-slate-400">Phone numbers stay private. Message, request callback, or book a verified visit inside StayJi.</p>
               </div>
             </div>
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               <div className="rounded-3xl bg-slate-950/80 p-5">
-                <FiPhone className="text-accent-400" />
+                <FiMessageSquare className="text-accent-400" />
                 <p className="mt-3 text-sm text-slate-400">Owner contact</p>
-                <p className="mt-2 text-white">{property.contact || '1234567899'}</p>
+                <p className="mt-2 text-white">Hidden until StayJi verifies the lead</p>
               </div>
               <div className="rounded-3xl bg-slate-950/80 p-5">
                 <FiClock className="text-accent-400" />
@@ -284,6 +309,7 @@ function PropertyDetailPage() {
                 </div>
                 <div className="mt-8 flex flex-wrap gap-4">
                   <Button onClick={handleShortlist} className="w-full sm:w-auto">Shortlist</Button>
+                  <Button onClick={handleExpressInterest} variant="secondary" className="w-full sm:w-auto">Message owner</Button>
                   <Button onClick={handleExpressInterest} className="w-full sm:w-auto">Request callback</Button>
                   <Button onClick={handleBookVisit} variant="secondary" className="w-full sm:w-auto">Book visit</Button>
                   <Button onClick={handleCompare} variant="secondary" className="w-full sm:w-auto"><FiShuffle className="mr-2" /> Compare</Button>
@@ -292,6 +318,44 @@ function PropertyDetailPage() {
               </>
             )}
           </div>
+
+          {!isAdmin ? (
+            <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
+              <p className="text-sm uppercase tracking-[0.28em] text-emerald-300">Verified move-in</p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">Moved In Successfully</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-400">
+                Submit proof only after joining. StayJi verifies payment proof, vendor confirmation, and occupancy before marking a lead converted, generating vendor commission, or processing user cashback.
+              </p>
+              <form onSubmit={handleSubmitMoveIn} className="mt-6 grid gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="text-sm text-slate-300">
+                    Owner name
+                    <input value={moveInForm.ownerName} onChange={(event) => setMoveInForm((current) => ({ ...current, ownerName: event.target.value }))} required className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-accent-400" />
+                  </label>
+                  <label className="text-sm text-slate-300">
+                    Joining date
+                    <input type="date" value={moveInForm.joiningDate} onChange={(event) => setMoveInForm((current) => ({ ...current, joiningDate: event.target.value }))} required className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-accent-400" />
+                  </label>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="text-sm text-slate-300">
+                    Payment screenshot
+                    <input type="file" accept="image/*" onChange={(event) => setMoveInForm((current) => ({ ...current, paymentScreenshot: event.target.files?.[0] || null }))} className="mt-2 block w-full text-sm text-slate-300 file:mr-4 file:rounded-full file:border-0 file:bg-accent-500 file:px-4 file:py-2 file:font-semibold file:text-slate-950" />
+                  </label>
+                  <label className="text-sm text-slate-300">
+                    Room image optional
+                    <input type="file" accept="image/*" onChange={(event) => setMoveInForm((current) => ({ ...current, roomImage: event.target.files?.[0] || null }))} className="mt-2 block w-full text-sm text-slate-300 file:mr-4 file:rounded-full file:border-0 file:bg-accent-500 file:px-4 file:py-2 file:font-semibold file:text-slate-950" />
+                  </label>
+                </div>
+                <label className="text-sm text-slate-300">
+                  Confirmation note
+                  <textarea value={moveInForm.userNote} onChange={(event) => setMoveInForm((current) => ({ ...current, userNote: event.target.value }))} rows="3" className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-accent-400" />
+                </label>
+                {moveInMessage ? <p className="text-sm text-emerald-300">{moveInMessage}</p> : null}
+                <Button type="submit" className="w-full sm:w-auto">Submit move-in proof</Button>
+              </form>
+            </div>
+          ) : null}
         </section>
 
         <aside className="space-y-6">
@@ -311,16 +375,9 @@ function PropertyDetailPage() {
                 </div>
               ) : null}
               <p className="rounded-3xl bg-slate-950/80 p-4 text-sm text-slate-300">Available from: {property.availableFrom || 'Immediately'}</p>
-              {property.contact ? (
-                <a
-                  href={`https://wa.me/91${property.contact}?text=${encodeURIComponent(`Hi, I found ${property.name} on StayJi and want to know vacancy details.`)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-3xl bg-emerald-500 px-5 py-3 text-center text-sm font-semibold text-white"
-                >
-                  WhatsApp owner
-                </a>
-              ) : null}
+              <button type="button" onClick={handleExpressInterest} className="rounded-3xl bg-emerald-500 px-5 py-3 text-center text-sm font-semibold text-white">
+                Message owner privately
+              </button>
             </div>
           </div>
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">

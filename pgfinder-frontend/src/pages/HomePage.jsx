@@ -9,14 +9,16 @@ import PropertyMap from '../components/map/PropertyMap'
 import propertyService from '../services/propertyService'
 import useCurrentLocation from '../hooks/useCurrentLocation'
 import { useAuth } from '../context/AuthContext'
+import SEO from '../components/SEO'
+import { bangaloreLocalities } from '../data/seoContent'
 
 const cities = [
-  { name: 'Mumbai', count: '128 stays', tone: 'from-blue-600 to-cyan-500' },
-  { name: 'Bangalore', count: '95 stays', tone: 'from-purple-600 to-blue-500' },
-  { name: 'Pune', count: '76 stays', tone: 'from-cyan-500 to-blue-600' },
-  { name: 'Delhi', count: '112 stays', tone: 'from-indigo-600 to-purple-600' },
-  { name: 'Hyderabad', count: '68 stays', tone: 'from-blue-500 to-indigo-600' },
-  { name: 'Chennai', count: '54 stays', tone: 'from-cyan-500 to-purple-600' },
+  { name: 'Whitefield', slug: 'whitefield', count: 'PGs near ITPL', tone: 'from-blue-600 to-cyan-500' },
+  { name: 'HSR Layout', slug: 'hsr-layout', count: 'Co-living hub', tone: 'from-indigo-600 to-blue-500' },
+  { name: 'Electronic City', slug: 'electronic-city', count: 'Budget PGs', tone: 'from-cyan-600 to-blue-600' },
+  { name: 'Marathahalli', slug: 'marathahalli', count: 'ORR access', tone: 'from-sky-600 to-indigo-600' },
+  { name: 'Koramangala', slug: 'koramangala', count: 'Student stays', tone: 'from-blue-500 to-violet-600' },
+  { name: 'Bellandur', slug: 'bellandur', count: 'Tech corridor', tone: 'from-cyan-500 to-blue-700' },
 ]
 
 const reasons = [
@@ -29,12 +31,12 @@ const reasons = [
 const testimonials = [
   {
     name: 'Aditi Sharma',
-    role: 'Student, Mumbai',
+    role: 'Student, Bangalore',
     quote: 'StayJi helped me compare safe PGs near college and book visits without calling ten different owners.',
   },
   {
     name: 'Rahul Mehta',
-    role: 'Working professional, Pune',
+    role: 'Working professional, Whitefield',
     quote: 'The listings felt premium and transparent. I found a flat close to office in one evening.',
   },
   {
@@ -46,7 +48,7 @@ const testimonials = [
 
 const stats = [
   { label: 'Verified stays', value: '250+' },
-  { label: 'Indian cities', value: '18+' },
+  { label: 'Bangalore localities', value: `${bangaloreLocalities.length}+` },
   { label: 'Avg. rating', value: '4.8' },
 ]
 
@@ -132,19 +134,25 @@ function HomePage() {
 
   return (
     <div className="overflow-hidden">
+      <SEO
+        title="StayJi - PG in Bangalore, Boys PG, Girls PG and Co-living"
+        description="Find verified PGs, hostels, co-living rooms, flats, visits, reviews, and lead-managed accommodation across Bangalore localities."
+        path="/"
+        keywords={['PG in Bangalore', 'Boys PG in Bangalore', 'Girls PG in Bangalore', 'Co-living Bangalore', 'Student accommodation Bangalore']}
+      />
       <section className="relative isolate min-h-[calc(100vh-76px)] overflow-hidden bg-slate-950 text-white">
         <div className="absolute inset-0 stayji-grid opacity-70" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(37,99,235,0.36),transparent_34%),radial-gradient(circle_at_80%_10%,rgba(6,182,212,0.24),transparent_30%),linear-gradient(135deg,#0F172A_0%,#111827_52%,#1E1B4B_100%)]" />
         <div className="relative mx-auto grid max-w-7xl gap-12 px-4 py-12 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:py-20">
           <motion.div initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65 }}>
             <span className="inline-flex rounded-full border border-cyan-300/30 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.26em] text-cyan-100 backdrop-blur-xl">
-              Indian stays, made simpler
+              Bangalore stays, made simpler
             </span>
             <h1 className="mt-7 max-w-3xl text-5xl font-semibold leading-tight tracking-tight sm:text-6xl lg:text-7xl">
               Find Your Perfect Stay
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-200">
-              StayJi helps students and working professionals discover verified PGs, hostels, flats, and short stays with live availability, maps, filters, visits, and wishlist built in.
+              StayJi helps students and working professionals discover verified PGs, hostels, flats, and short stays across Bangalore with live availability, maps, filters, visits, and wishlist built in.
             </p>
 
             <form onSubmit={handleSearch} className="mt-9 glass-card grid gap-3 rounded-[2rem] p-3 sm:grid-cols-[1fr_auto_auto]">
@@ -153,7 +161,7 @@ function HomePage() {
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search city, college, locality, or stay name"
+                  placeholder="Search Whitefield, HSR, Electronic City, or PG name"
                   className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500"
                 />
               </label>
@@ -241,8 +249,8 @@ function HomePage() {
           <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-purple-600">Search by city</p>
-              <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Where are you moving next?</h2>
-              <p className="mt-4 text-slate-600">Browse student and professional stays across India’s fastest-moving education and work hubs.</p>
+              <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Choose your Bangalore locality</h2>
+              <p className="mt-4 text-slate-600">Browse student and professional stays around Bangalore’s IT corridors, colleges, metro routes, and residential hubs.</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {cities.map((city) => (
@@ -250,7 +258,7 @@ function HomePage() {
                   key={city.name}
                   whileHover={{ y: -5 }}
                   type="button"
-                  onClick={() => navigate(`/properties?search=${city.name}`)}
+                  onClick={() => navigate(`/bangalore/${city.slug}`)}
                   className={`rounded-[1.75rem] bg-gradient-to-br ${city.tone} p-5 text-left text-white shadow-card`}
                 >
                   <p className="text-xl font-semibold">{city.name}</p>

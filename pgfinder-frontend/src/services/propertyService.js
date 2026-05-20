@@ -12,6 +12,7 @@ const propertyService = {
   fetchShortlist: (userIDFK) => propertyApi.shortlistByUser(userIDFK),
   bookVisit: ({ userIDFK, propertyIDFK, visitDate, visitTime, moveInPreference }) => propertyApi.bookVisit({ userIDFK, propertyIDFK, visitDate, visitTime, moveInPreference }),
   expressInterest: ({ userIDFK, propertyIDFK, subject, description, preferredVisitTime, moveInPreference }) => propertyApi.expressInterest({ userIDFK, propertyIDFK, subject, description, preferredVisitTime, moveInPreference }),
+  submitMoveIn: (payload) => propertyApi.submitMoveIn(payload),
   createProperty: (payload) => propertyApi.create(payload),
   updateProperty: (id, payload) => propertyApi.update(id, payload),
   reviewProperty: (id, approvalStatus) => propertyApi.review({ id, approvalStatus }),

@@ -11,6 +11,7 @@ import propertyService from '../services/propertyService'
 import useCurrentLocation from '../hooks/useCurrentLocation'
 import { useAuth } from '../context/AuthContext'
 import { getDistanceKm } from '../utils/distance'
+import SEO from '../components/SEO'
 
 const filterOptions = [
   'PG',
@@ -315,9 +316,15 @@ function PropertiesPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <SEO
+        title="Search PG in Bangalore"
+        description="Search verified PGs, boys PG, girls PG, hostels, flats, and co-living rooms across Bangalore localities with filters, maps, wishlist, and visit booking."
+        path="/properties"
+        keywords={['PG in Bangalore', 'Affordable PG Bangalore', 'PG near Whitefield', 'PG near Electronic City']}
+      />
       <div className="grid gap-10 lg:grid-cols-[0.95fr_0.45fr]">
         <section>
-          <SectionHeading title="Search stays" description="Explore PGs, flats, hostels, and hotels with price filters and daily check-in options." />
+          <SectionHeading title="Search Bangalore stays" description="Explore Bangalore PGs, flats, hostels, and co-living rooms with price filters, maps, and daily check-in options." />
           <div className="mt-6 grid gap-4 md:grid-cols-4">
             {[
               { label: 'Live listings', value: properties.length },
@@ -506,9 +513,9 @@ function PropertiesPage() {
 
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
             <p className="text-sm uppercase tracking-[0.24em] text-accent-500">Featured area</p>
-            <h3 className="mt-3 text-xl font-semibold text-white">Koregaon Park</h3>
+            <h3 className="mt-3 text-xl font-semibold text-white">Whitefield</h3>
             <p className="mt-3 text-sm leading-6 text-slate-400">
-              Explore premium student-friendly PGs near cafes, co-working spaces, and top colleges.
+              Explore verified PGs near ITPL, EPIP Zone, metro access, cafes, and Bangalore’s eastern tech corridor.
             </p>
             <div className="mt-6 gap-2 text-sm text-slate-300">
               <p>• High-speed WiFi</p>

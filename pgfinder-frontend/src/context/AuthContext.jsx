@@ -178,6 +178,8 @@ export const AuthProvider = ({ children }) => {
         userPassword: payload.password || payload.userPassword,
         gender: payload.gender || 'Male',
         contact: payload.contact || '',
+        acceptTerms: payload.acceptTerms,
+        acceptPrivacy: payload.acceptPrivacy,
         userType: payload.role ? payload.role.charAt(0).toUpperCase() + payload.role.slice(1) : 'User',
       }
       const response = await authService.signup(mapped)
@@ -203,6 +205,8 @@ export const AuthProvider = ({ children }) => {
         credential: payload.credential,
         contact: payload.contact,
         gender: payload.gender || '',
+        acceptTerms: payload.acceptTerms,
+        acceptPrivacy: payload.acceptPrivacy,
         userType: payload.role ? payload.role.charAt(0).toUpperCase() + payload.role.slice(1) : 'User',
       })
       const normalizedUser = normalizeUser(response.user)

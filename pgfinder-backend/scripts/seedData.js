@@ -5,6 +5,8 @@ const User = require('../models/userMaster')
 const PropertyType = require('../models/propertyType')
 const Property = require('../models/propertyMaster')
 const PropertyImage = require('../models/propertyImage')
+const UserReview = require('../models/userReview')
+const { hashPassword } = require('../utils/security')
 
 const now = () => new Date().toISOString()
 
@@ -20,7 +22,7 @@ const ownerData = [
   userFname,
   userLname,
   userEmail,
-  userPassword: 'Host1234',
+  userPassword: hashPassword('Host1234'),
   dob: '',
   gender,
   contact: '9876543210',
@@ -40,18 +42,23 @@ const propertyTypes = [
   ['Shared Room', 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80'],
 ].map(([typeName, image]) => ({ typeName, image, addedOn: now(), isActive: true }))
 
-const cities = [
-  { cityName: 'Mumbai', areas: ['Andheri West', 'Vashi', 'Powai', 'Bandra', 'Dadar'] },
-  { cityName: 'Bangalore', areas: ['Koramangala', 'Indiranagar', 'BTM Layout', 'Whitefield', 'Banashankari'] },
-  { cityName: 'Pune', areas: ['Hinjewadi', 'Baner', 'Kothrud', 'Viman Nagar', 'Wakad'] },
-  { cityName: 'Delhi', areas: ['Lodhi Road', 'South Extension', 'Karol Bagh', 'Saket', 'Mukherjee Nagar'] },
-  { cityName: 'Hyderabad', areas: ['Jubilee Hills', 'Gachibowli', 'Madhapur', 'Ameerpet', 'Kondapur'] },
-  { cityName: 'Chennai', areas: ['Anna Nagar', 'Taramani', 'Velachery', 'Adyar', 'Nungambakkam'] },
-  { cityName: 'Kolkata', areas: ['Park Street', 'Salt Lake', 'New Town', 'Ballygunge', 'Rajarhat'] },
-  { cityName: 'Jaipur', areas: ['Civil Lines', 'Malviya Nagar', 'C Scheme', 'Mansarovar', 'Vaishali Nagar'] },
-  { cityName: 'Ahmedabad', areas: ['Navrangpura', 'Satellite', 'Bopal', 'Prahlad Nagar', 'Vastrapur'] },
-  { cityName: 'Gurgaon', areas: ['Sector 44', 'DLF Phase 3', 'Sohna Road', 'Cyber City', 'Sector 56'] },
-]
+const slugify = (value = '') => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+
+const localities = [
+  ['Whitefield', 12.9698, 77.7500],
+  ['HSR Layout', 12.9116, 77.6474],
+  ['Electronic City', 12.8452, 77.6602],
+  ['Marathahalli', 12.9569, 77.7011],
+  ['Bellandur', 12.9304, 77.6784],
+  ['Koramangala', 12.9352, 77.6245],
+  ['Indiranagar', 12.9784, 77.6408],
+  ['Hebbal', 13.0358, 77.5970],
+  ['Yelahanka', 13.1007, 77.5963],
+  ['Sarjapur Road', 12.9063, 77.6938],
+  ['JP Nagar', 12.9063, 77.5857],
+  ['BTM Layout', 12.9166, 77.6101],
+  ['KR Puram', 13.0076, 77.6959],
+].map(([areaName, lat, lng]) => ({ cityName: 'Bangalore', areaName, lat, lng }))
 
 const names = [
   'Blue Haven PG',
@@ -126,8 +133,8 @@ const amenities = [
 ]
 
 const buildProperties = (owners, types) => names.map((propertyName, index) => {
-  const city = cities[index % cities.length]
-  const areaName = city.areas[index % city.areas.length]
+  const locality = localities[index % localities.length]
+  const areaName = locality.areaName
   const sharing = ['Single', '2 Sharing', '3 Sharing', '4 Sharing'][index % 4]
   const genderType = ['Boys', 'Girls', 'Co-ed'][index % 3]
   const rent = 6500 + ((index * 725) % 8500)
@@ -139,14 +146,21 @@ const buildProperties = (owners, types) => names.map((propertyName, index) => {
     vendorId: owners[index % owners.length]._id,
     propertyName,
     description: `${genderType} ${propertyCategory.toLowerCase()} in ${areaName} with clean furnished rooms, reliable food, fast WiFi, and easy access to colleges, offices, cafes, and public transport.`,
-    address: `${areaName}, ${city.cityName}`,
+    address: `${areaName}, Bangalore`,
     rent: String(rent),
     sharing,
     genderType,
     areaName,
-    cityName: city.cityName,
+    localitySlug: slugify(areaName),
+    cityName: 'Bangalore',
+    latitude: locality.lat + ((index % 5) * 0.002),
+    longitude: locality.lng + ((index % 7) * 0.002),
     propertyTypeIDFK: type._id,
     propertyCategory,
+    isFeatured: index % 6 === 0,
+    boostScore: index % 6 === 0 ? 20 : index % 5,
+    localityPriority: 100 - index,
+    rating: 4 + ((index % 10) / 10),
     approvalStatus: 'Approved',
     roomInventory: [
       { sharingType: 'Single sharing', totalRooms: 6, vacantRooms: index % 3, bedsPerRoom: 1, vacantBeds: index % 3, monthlyRent: String(rent + 2500) },
@@ -183,6 +197,7 @@ async function seed() {
     const propertyNames = properties.map((property) => property.propertyName)
     const oldSeededProperties = await Property.find({ propertyName: { $in: propertyNames } }).select('_id')
     await PropertyImage.deleteMany({ propertyIDFK: { $in: oldSeededProperties.map((property) => property._id) } })
+    await UserReview.deleteMany({ propertyIDFK: { $in: oldSeededProperties.map((property) => property._id) } })
     await Property.deleteMany({ propertyName: { $in: propertyNames } })
 
     const inserted = await Property.insertMany(properties)
@@ -192,8 +207,25 @@ async function seed() {
       { propertyIDFK: property._id, image: imageUrls[(index + 2) % imageUrls.length], addedOn: now(), isActive: true },
     ])
     await PropertyImage.insertMany(gallery)
+    const reviewTexts = [
+      'Food quality is reliable, rooms are clean, and the commute to office areas is manageable.',
+      'Good safety setup with CCTV and responsive staff. Best for students who want predictable meals.',
+      'WiFi and laundry worked well during my stay. The locality has enough cafes and grocery stores nearby.',
+      'Budget-friendly compared with nearby co-living spaces, with transparent rent and deposit terms.',
+    ]
+    const reviews = inserted.flatMap((property, index) => [0, 1, 2].map((offset) => ({
+      propertyIDFK: property._id,
+      propertyId: property._id,
+      userIDFK: owners[(index + offset) % owners.length]._id,
+      userId: owners[(index + offset) % owners.length]._id,
+      rating: String(4 + ((index + offset) % 10) / 10),
+      details: reviewTexts[(index + offset) % reviewTexts.length],
+      addedOn: now(),
+      isActive: true,
+    })))
+    await UserReview.insertMany(reviews)
 
-    console.log(`Inserted ${inserted.length} dummy PG properties and ${gallery.length} gallery images.`)
+    console.log(`Inserted ${inserted.length} Bangalore properties, ${gallery.length} gallery images, and ${reviews.length} reviews.`)
     await mongoose.connection.close()
     process.exit(0)
   } catch (error) {

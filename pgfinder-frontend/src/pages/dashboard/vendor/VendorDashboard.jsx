@@ -13,6 +13,7 @@ function VendorDashboard() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const [overview, setOverview] = useState({ totalProperties: 0, inquiries: 0, bookings: 0, views: 0, leads: 0 })
+  const [moveIns, setMoveIns] = useState([])
   const [loading, setLoading] = useState(false)
   const [reply, setReply] = useState('')
   const vendorId = user?._id || user?.id
@@ -41,6 +42,8 @@ function VendorDashboard() {
         setLoading(true)
         const data = await dashboardService.getVendorOverview(user?._id)
         setOverview(data)
+        const moveInRows = await dashboardService.moveIns({ vendorId: user?._id, limit: 20 })
+        setMoveIns(moveInRows)
       } catch {
         setOverview({ totalProperties: 0, inquiries: 0, bookings: 0, views: 0 })
       } finally {
@@ -90,7 +93,7 @@ function VendorDashboard() {
       <div className="grid gap-6 xl:grid-cols-3">
         {[
           { label: 'Conversion rate', value: `${overview?.conversionRate ?? Math.min(42, (overview?.leads || 0) * 3)}%`, icon: <FiTrendingUp /> },
-          { label: 'Projected revenue', value: `₹${((overview?.bookings || 0) * 3500).toLocaleString('en-IN')}`, icon: <FiBarChart2 /> },
+          { label: 'Commission due', value: `₹${moveIns.filter((item) => item.status === 'Verified').reduce((sum, item) => sum + (Number(item.commissionAmount) || 0), 0).toLocaleString('en-IN')}`, icon: <FiBarChart2 /> },
           { label: 'Vacancy health', value: overview?.vacancyStatus || 'Live updates ready', icon: <FiEye /> },
         ].map((item) => (
           <Card key={item.label} className="p-6">
@@ -126,6 +129,23 @@ function VendorDashboard() {
       </div>
 
       <Card>
+        <div className="mb-6">
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Move-in conversions</p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">Commission and verification queue</h2>
+        </div>
+        <div className="grid gap-3">
+          {moveIns.slice(0, 5).map((item) => (
+            <div key={item._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+              <p className="font-semibold text-white">{item.propertyId?.propertyName || 'StayJi property'} · {item.status}</p>
+              <p className="mt-1">Commission ₹{item.commissionAmount || 0} · Cashback ₹{item.cashbackAmount || 0}</p>
+              <p className="mt-1 text-slate-500">Joining: {item.joiningDate || '-'}</p>
+            </div>
+          ))}
+          {!moveIns.length ? <p className="text-sm text-slate-400">Verified move-ins will appear here after users submit proof.</p> : null}
+        </div>
+      </Card>
+
+      <Card>
         <div className="flex items-center gap-3">
           <FiMessageSquare className="text-accent-400" />
           <div>
@@ -140,7 +160,6 @@ function VendorDashboard() {
               <p className="mt-2">{item.message}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" onClick={() => deleteMessageMutation.mutate({ messageId: item._id, scope: 'self' })} className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-rose-400"><FiTrash2 className="inline" /> Delete for me</button>
-                <button type="button" onClick={() => deleteMessageMutation.mutate({ messageId: item._id, scope: 'both' })} className="rounded-full border border-rose-500/50 px-3 py-1 text-xs text-rose-200 hover:bg-rose-500/10">Delete both</button>
               </div>
             </div>
           ))}

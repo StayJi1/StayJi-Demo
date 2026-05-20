@@ -28,6 +28,35 @@ userSchema = mongoose.Schema({
     occupation:{
         type:String
     },
+    bio:{
+        type:String
+    },
+    city:{
+        type:String
+    },
+    socialLinks:{
+        type:[String],
+        default:[]
+    },
+    emailVerified:{
+        type:Boolean,
+        default:false
+    },
+    phoneVerified:{
+        type:Boolean,
+        default:false
+    },
+    accountStatus:{
+        type:String,
+        enum:["active","suspended","blocked","pending_verification"],
+        default:"active"
+    },
+    termsAcceptedAt:{
+        type:Date
+    },
+    privacyAcceptedAt:{
+        type:Date
+    },
     userType:{
         type:String
     },

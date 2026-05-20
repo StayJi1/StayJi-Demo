@@ -45,6 +45,31 @@ svg {
   max-width: 100%;
 }
 
+* {
+  box-sizing: border-box;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+@media (max-width: 640px) {
+  .recharts-wrapper,
+  .recharts-surface {
+    max-width: 100%;
+  }
+
+  .leaflet-container {
+    min-height: 18rem;
+  }
+}
+
 ::selection {
   background: rgba(56, 189, 248, 0.28);
 }

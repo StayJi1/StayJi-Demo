@@ -6,8 +6,10 @@ import NotificationBell from '../notifications/NotificationBell'
 
 const navItems = [
   { label: 'Home', to: '/' },
-  { label: 'Explore stays', to: '/properties' },
+  { label: 'Bangalore PGs', to: '/bangalore' },
+  { label: 'Explore stays', to: '/properties?search=Bangalore' },
   { label: 'Compare', to: '/compare' },
+  { label: 'FAQs', to: '/faq' },
   { label: 'Login', to: '/login' },
   { label: 'Signup', to: '/signup' },
 ]
@@ -26,14 +28,14 @@ function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/75 backdrop-blur-2xl">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-        <Link to="/" className="flex items-center gap-3 text-lg font-semibold text-white">
-          <span className="inline-flex h-12 w-12 overflow-hidden rounded-2xl bg-white shadow-glow ring-1 ring-white/20">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <Link to="/" className="flex min-w-0 items-center gap-3 text-lg font-semibold text-white">
+          <span className="inline-flex h-11 w-11 shrink-0 overflow-hidden rounded-2xl bg-white shadow-glow ring-1 ring-white/20 sm:h-12 sm:w-12">
             <img src="/stayji-logo.png" alt="StayJi" className="h-full w-full object-cover" />
           </span>
-          <span className="leading-tight">
-            <span className="block text-xl">StayJi</span>
-            <span className="block text-[11px] font-medium uppercase tracking-[0.22em] text-cyan-300">Find Your Perfect Stay</span>
+          <span className="min-w-0 leading-tight">
+            <span className="block text-lg sm:text-xl">StayJi</span>
+            <span className="block truncate text-[10px] font-medium uppercase tracking-[0.14em] text-cyan-300 sm:text-[11px] sm:tracking-[0.22em]">Find Your Perfect Stay</span>
           </span>
         </Link>
 

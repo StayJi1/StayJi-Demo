@@ -12,6 +12,10 @@ function UserProfilePage() {
     contact: '',
     occupation: '',
     gender: '',
+    dob: '',
+    bio: '',
+    city: '',
+    socialLinks: '',
   })
   const [success, setSuccess] = useState(null)
 
@@ -25,6 +29,10 @@ function UserProfilePage() {
           contact: user.contact || '',
           occupation: user.occupation || '',
           gender: user.gender || '',
+          dob: user.dob || '',
+          bio: user.bio || '',
+          city: user.city || '',
+          socialLinks: Array.isArray(user.socialLinks) ? user.socialLinks.join('\n') : '',
         })
       }, 0)
     }
@@ -41,10 +49,13 @@ function UserProfilePage() {
       await updateProfile({
         userFname: form.firstName,
         userLname: form.lastName,
-        userEmail: form.email,
         contact: form.contact,
         occupation: form.occupation,
         gender: form.gender,
+        dob: form.dob,
+        bio: form.bio,
+        city: form.city,
+        socialLinks: form.socialLinks,
       })
       setSuccess('Profile updated successfully.')
     } catch {
@@ -93,9 +104,10 @@ function UserProfilePage() {
                 type="email"
                 name="email"
                 value={form.email}
-                onChange={handleChange}
-                className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
+                readOnly
+                className="w-full cursor-not-allowed rounded-3xl border border-slate-700 bg-slate-900/70 px-4 py-3 text-sm text-slate-400 outline-none"
               />
+              <span className="mt-2 block text-xs text-slate-500">Email cannot be changed. Contact admin support.</span>
             </label>
             <label className="block text-sm text-slate-200">
               <span className="mb-2 block text-slate-300">Contact</span>
@@ -106,6 +118,17 @@ function UserProfilePage() {
                 onChange={handleChange}
                 className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
               />
+            </label>
+          </div>
+
+          <div className="grid gap-6 sm:grid-cols-2">
+            <label className="block text-sm text-slate-200">
+              <span className="mb-2 block text-slate-300">Date of birth</span>
+              <input type="date" name="dob" value={form.dob} onChange={handleChange} className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20" />
+            </label>
+            <label className="block text-sm text-slate-200">
+              <span className="mb-2 block text-slate-300">City</span>
+              <input type="text" name="city" value={form.city} onChange={handleChange} className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20" />
             </label>
           </div>
 
@@ -135,6 +158,16 @@ function UserProfilePage() {
               </select>
             </label>
           </div>
+
+          <label className="block text-sm text-slate-200">
+            <span className="mb-2 block text-slate-300">Bio / about</span>
+            <textarea name="bio" rows="4" value={form.bio} onChange={handleChange} className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-4 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20" />
+          </label>
+
+          <label className="block text-sm text-slate-200">
+            <span className="mb-2 block text-slate-300">Social links</span>
+            <textarea name="socialLinks" rows="3" value={form.socialLinks} onChange={handleChange} placeholder="One link per line" className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-4 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20" />
+          </label>
 
           {success ? <p className="text-sm text-emerald-300">{success}</p> : null}
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}

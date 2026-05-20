@@ -100,6 +100,7 @@ const dashboardApi = {
   vendorVisits: getVendorVisits,
   vendorInquiries: getVendorInquiries,
   vendorShortlists: getVendorShortlists,
+  moveIns: (params) => axiosClient.get('/client/moveIns', { params }).then((res) => res.data?.data || []),
   markLeadConverted: ({ id, type }) => axiosClient.post('/client/markLeadConverted', { id, type }).then((res) => {
     if (res.data?.result !== 'success') throw new Error(res.data?.msg || 'Unable to convert lead')
     return res.data?.data

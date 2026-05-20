@@ -1,3 +1,4 @@
+require('dotenv').config();
 var mongoose = require('mongoose');
 var express = require('express');
 var mgClient = require('./connection/dbconnect');
@@ -13,8 +14,11 @@ const PORT = process.env.PORT || 3000;
 const session = require('express-session');
 
 var cors = require("cors");
+var helmet = require("helmet");
+var rateLimit = require("express-rate-limit");
 
 app.disable('x-powered-by');
+app.set('trust proxy', 1);
 
 /*
 |--------------------------------------------------------------------------
@@ -45,6 +49,18 @@ app.use(cors({
         }
     },
     credentials: true
+}));
+
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: false
+}));
+
+app.use('/api', rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 600,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false
 }));
 /*
 |--------------------------------------------------------------------------
@@ -81,7 +97,15 @@ app.use(bodyParser.urlencoded({
 |--------------------------------------------------------------------------
 */
 
-app.use('/upload', express.static(path.join(__dirname, 'upload')));
+app.use('/upload', express.static(path.join(__dirname, 'public', 'upload'), {
+    maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,
+    fallthrough: true
+}));
+
+app.use('/upload', express.static(path.join(__dirname, 'upload'), {
+    maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,
+    fallthrough: true
+}));
 
 app.use('/public', express.static(path.join(__dirname, 'public')));
 
@@ -222,32 +246,36 @@ app.use('/api/notifications', (req, res, next) => {
 |--------------------------------------------------------------------------
 */
 
-const server = app.listen(PORT, () => {
+if (require.main === module) {
+    const server = app.listen(PORT, () => {
 
-    console.log("Connected to Port " + PORT);
-});
+        console.log("Connected to Port " + PORT);
+    });
 
-/*
-|--------------------------------------------------------------------------
-| Error Handling
-|--------------------------------------------------------------------------
-*/
+    /*
+    |--------------------------------------------------------------------------
+    | Error Handling
+    |--------------------------------------------------------------------------
+    */
 
-server.on('error', (error) => {
+    server.on('error', (error) => {
 
-    if (error.code === 'EADDRINUSE') {
+        if (error.code === 'EADDRINUSE') {
 
-        console.error(`Port ${PORT} is already in use.`);
+            console.error(`Port ${PORT} is already in use.`);
 
-        return;
-    }
+            return;
+        }
 
-    if (error.code === 'EPERM') {
+        if (error.code === 'EPERM') {
 
-        console.error(`Permission denied while opening port ${PORT}.`);
+            console.error(`Permission denied while opening port ${PORT}.`);
 
-        return;
-    }
+            return;
+        }
 
-    throw error;
-});
+        throw error;
+    });
+}
+
+module.exports = app;

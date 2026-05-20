@@ -14,12 +14,15 @@ function UserDashboard() {
   const [actionError, setActionError] = useState('')
   const [compareCount, setCompareCount] = useState(0)
   const [viewedCount, setViewedCount] = useState(0)
+  const [moveIns, setMoveIns] = useState([])
 
   useEffect(() => {
     const load = async () => {
       try {
         const data = await dashboardService.getUserOverview(user?._id)
         setOverview(data)
+        const moveInRows = user?._id ? await dashboardService.moveIns({ userId: user._id, limit: 20 }) : []
+        setMoveIns(moveInRows)
       } catch {
         setOverview({ shortlist: 0, shortlistItems: [], visits: 0, messages: 0, savedSearches: 0 })
       } finally {
@@ -151,6 +154,21 @@ function UserDashboard() {
           </Card>
         ))}
       </div>
+
+      <Card>
+        <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Verified move-ins</p>
+        <h2 className="mt-3 text-2xl font-semibold text-white">Cashback verification</h2>
+        <div className="mt-6 grid gap-3">
+          {moveIns.map((item) => (
+            <div key={item._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+              <p className="font-semibold text-white">{item.propertyId?.propertyName || 'StayJi property'} · {item.status}</p>
+              <p className="mt-1">Cashback ₹{item.cashbackAmount || 0} after admin verification</p>
+              <p className="mt-1 text-slate-500">Joining: {item.joiningDate || '-'}</p>
+            </div>
+          ))}
+          {!moveIns.length ? <p className="text-slate-300">After joining a property, use “Moved In Successfully” on the property page to submit verification proof.</p> : null}
+        </div>
+      </Card>
     </div>
   )
 }

@@ -6,7 +6,7 @@ const toAssetUrl = (value) => {
   const clean = value.toString().replace(/^\/+/, '')
   if (clean.startsWith('upload/')) return `${baseURL}/${clean}`
   if (clean.startsWith('public/upload/')) return `${baseURL}/${clean.replace(/^public\//, '')}`
-  return `${baseURL}/upload/PropertyImage/${clean}`
+  return `${baseURL}/upload/${clean}`
 }
 
 const toUploadUrl = (value) => {
@@ -70,6 +70,8 @@ const normalizeProperty = (property) => {
     location: normalizedLocation,
     locationLabel: property.address || property.areaName || property.city || '',
     city: property.cityName || property.city || '',
+    area: property.areaName || property.area || '',
+    localitySlug: property.localitySlug || '',
     contact: property.contact || property.userIDFK?.contact || '',
     ownerName: [property.userIDFK?.userFname, property.userIDFK?.userLname].filter(Boolean).join(' '),
     type: inferredCategory,
@@ -153,6 +155,12 @@ const propertyApi = {
   // Book visit uses /addVisit (expects userIDFK, propertyIDFK, visitDate)
   bookVisit: ({ userIDFK, propertyIDFK, visitDate, visitTime, moveInPreference }) => axiosClient.post('/client/addVisit', { userIDFK, propertyIDFK, visitDate, visitTime, moveInPreference }).then((res) => res.data && res.data.data),
   expressInterest: ({ userIDFK, propertyIDFK, subject, description, preferredVisitTime, moveInPreference }) => axiosClient.post('/client/addInterest', { userIDFK, propertyIDFK, subject, description, preferredVisitTime, moveInPreference }).then((res) => res.data && res.data.data),
+  submitMoveIn: (payload) => axiosClient.post('/client/moveIns', payload, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then((res) => {
+    if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Move-in could not be submitted')
+    return res.data?.data
+  }),
 
   create: (payload) => axiosClient.post('/client/addProperty', payload, {
     headers: { 'Content-Type': 'multipart/form-data' },

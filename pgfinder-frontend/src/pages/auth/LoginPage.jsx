@@ -9,7 +9,7 @@ import authService from '../../services/authService'
 function LoginPage() {
   const navigate = useNavigate()
   const { login, status, error, isAuthenticated, role } = useAuth()
-  const [form, setForm] = useState({ email: '', password: '', role: 'user' })
+  const [form, setForm] = useState({ email: '', password: '', role: 'user', acceptPolicy: false })
   const [resetOpen, setResetOpen] = useState(false)
   const [resetForm, setResetForm] = useState({ email: '', otp: '', password: '' })
   const [resetStep, setResetStep] = useState('email')
@@ -22,8 +22,8 @@ function LoginPage() {
   }, [isAuthenticated, navigate, role])
 
   const handleChange = (event) => {
-    const { name, value } = event.target
-    setForm((current) => ({ ...current, [name]: value }))
+    const { name, value, type, checked } = event.target
+    setForm((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }))
   }
 
   const normalizeRole = (value) => {
@@ -35,6 +35,7 @@ function LoginPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (!form.acceptPolicy) return
     try {
       const response = await login(form)
       const rawRole = response.user?.role || response.user?.userType?.toLowerCase() || form.role
@@ -94,6 +95,10 @@ function LoginPage() {
               </select>
             </label>
           </div>
+          <label className="flex items-start gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+            <input type="checkbox" name="acceptPolicy" checked={form.acceptPolicy} onChange={handleChange} required className="mt-1 h-5 w-5 rounded border-slate-700 bg-slate-900 text-accent-400" />
+            <span>I agree to StayJi <Link to="/terms-and-conditions" className="text-accent-300 hover:text-white">Terms & Conditions</Link> and <Link to="/privacy-policy" className="text-accent-300 hover:text-white">Privacy Policy</Link>.</span>
+          </label>
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}
           <Button type="submit" className="w-full">{status === 'loading' ? 'Signing in…' : 'Continue'}</Button>
           <button type="button" onClick={() => setResetOpen((current) => !current)} className="w-full text-center text-sm text-accent-300 hover:text-white">

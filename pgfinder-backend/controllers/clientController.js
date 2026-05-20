@@ -18,6 +18,8 @@ var Visit = require("../models/visitDetails");
 var Payment = require("../models/paymentMaster");
 var AdminMessage = require("../models/adminMessage");
 var Notification = require("../models/notification");
+var LeadEvent = require("../models/leadEvent");
+var MoveInConfirmation = require("../models/moveInConfirmation");
 const { hashPassword, isHashedPassword, verifyPassword } = require('../utils/security');
 const messageSecret = crypto.createHash('sha256').update(process.env.MESSAGE_SECRET || process.env.SESSION_SECRET || 'stayji-local-message-secret').digest()
 
@@ -59,6 +61,18 @@ const toNumberOrUndefined = (value) => {
     const numberValue = Number(value)
     return Number.isFinite(numberValue) ? numberValue : undefined
 }
+
+const slugify = (value = '') => value
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
+
+const suspiciousPhonePattern = /^(\d)\1{7,}$|^(1234567890|9876543210|0000000000)$/
 
 const normalizeAccountType = (value) => {
     const normalized = (value || '').toString().trim().toLowerCase()
@@ -120,6 +134,31 @@ const createNotification = async (payload = {}) => {
         })
     } catch (error) {
         console.error('Notification creation failed:', error.message)
+        return null
+    }
+}
+
+const createLeadEvent = async (payload = {}) => {
+    try {
+        const userId = asObjectId(payload.userId || payload.userIDFK)
+        const propertyId = asObjectId(payload.propertyId || payload.propertyIDFK)
+        let vendorId = asObjectId(payload.vendorId)
+        if (!vendorId && propertyId) {
+            const property = await Property.findOne({ _id: propertyId }).select('userIDFK vendorId')
+            vendorId = asObjectId(property?.vendorId || property?.userIDFK)
+        }
+        if (!userId || !propertyId) return null
+        return LeadEvent.create({
+            userId,
+            vendorId,
+            propertyId,
+            sourceType: payload.sourceType || 'interest',
+            status: payload.status || 'Interested',
+            note: payload.note || '',
+            metadata: payload.metadata || {},
+        })
+    } catch (error) {
+        console.error('Lead event creation failed:', error.message)
         return null
     }
 }
@@ -229,6 +268,18 @@ var upload = multer({
 });
 
 router.post('/addUser', async (req, res) => {
+    if (!toBoolean(req.body.acceptTerms) || !toBoolean(req.body.acceptPrivacy)) {
+        return res.json({ result: "failure", msg: "Accept StayJi Terms & Conditions and Privacy Policy to continue.", data: 0 });
+    }
+
+    if (!strongPasswordPattern.test(req.body.userPassword || '')) {
+        return res.json({ result: "failure", msg: "Password must be at least 8 characters and include uppercase, lowercase, and a number.", data: 0 });
+    }
+
+    if (req.body.contact && suspiciousPhonePattern.test(req.body.contact.toString().replace(/\D/g, ''))) {
+        return res.json({ result: "failure", msg: "Enter a valid phone number for account verification.", data: 0 });
+    }
+
     const roleVariants = accountTypeVariants(req.body.userType || 'User')
     const existingUser = await User.findOne({
         userEmail: new RegExp(`^${req.body.userEmail}$`, 'i'),
@@ -255,6 +306,9 @@ router.post('/addUser', async (req, res) => {
         objUser.occupation = "",
         objUser.userType = req.body.userType || "User",
         objUser.profile = "",
+        objUser.accountStatus = "pending_verification",
+        objUser.termsAcceptedAt = new Date(),
+        objUser.privacyAcceptedAt = new Date(),
         objUser.addedOn = new Date(),
         objUser.isActive = true;
     console.log();
@@ -276,6 +330,9 @@ router.post('/googleAuth', async (req, res) => {
 
     if (!req.body.credential || !req.body.contact) {
         return res.json({ result: "failure", msg: "Google account and phone number are required", data: 0 });
+    }
+    if (!toBoolean(req.body.acceptTerms) || !toBoolean(req.body.acceptPrivacy)) {
+        return res.json({ result: "failure", msg: "Accept StayJi Terms & Conditions and Privacy Policy to continue.", data: 0 });
     }
 
     try {
@@ -304,6 +361,10 @@ router.post('/googleAuth', async (req, res) => {
         objUser.occupation = "";
         objUser.userType = req.body.userType || "User";
         objUser.profile = googleUser.picture || "";
+        objUser.accountStatus = "pending_verification";
+        objUser.emailVerified = true;
+        objUser.termsAcceptedAt = new Date();
+        objUser.privacyAcceptedAt = new Date();
         objUser.addedOn = new Date();
         objUser.isActive = true;
 
@@ -332,6 +393,9 @@ router.post('/loginByUser', async (req, res) => {
     const objUser = await User.findOne({ userEmail: req.body.userEmail, isActive: true });
 
     if (objUser != null && verifyPassword(req.body.userPassword, objUser.userPassword)) {
+        if (['suspended', 'blocked'].includes(objUser.accountStatus)) {
+            return res.json({ result: "fail", msg: "This account is not active. Contact StayJi admin support.", data: null });
+        }
         const actualRole = normalizeAccountType(objUser.userType)
         const requestedRole = normalizeAccountType(req.body.accountType || req.body.role || req.body.userType)
         if (requestedRole && actualRole !== requestedRole) {
@@ -390,7 +454,7 @@ router.post('/authStatus', async (req, res) => {
     }
 
     const objUser = await User.findOne({ _id: req.body.id }).select('-userPassword');
-    if (!objUser || objUser.isActive === false) {
+    if (!objUser || objUser.isActive === false || ['suspended', 'blocked'].includes(objUser.accountStatus)) {
         return res.json({ result: "inactive", msg: "Account is inactive", data: null });
     }
 
@@ -401,10 +465,13 @@ router.post('/updateUser', async (req, res) => {
     const updateFields = {}
     if (req.body.userFname !== undefined) updateFields.userFname = req.body.userFname
     if (req.body.userLname !== undefined) updateFields.userLname = req.body.userLname
-    if (req.body.userEmail !== undefined) updateFields.userEmail = req.body.userEmail
     if (req.body.contact !== undefined) updateFields.contact = req.body.contact
     if (req.body.occupation !== undefined) updateFields.occupation = req.body.occupation
     if (req.body.gender !== undefined) updateFields.gender = req.body.gender
+    if (req.body.dob !== undefined) updateFields.dob = req.body.dob
+    if (req.body.bio !== undefined) updateFields.bio = req.body.bio
+    if (req.body.city !== undefined) updateFields.city = req.body.city
+    if (req.body.socialLinks !== undefined) updateFields.socialLinks = parseStringList(req.body.socialLinks)
 
     const objResult = await User.updateOne({ _id: req.body._id }, { $set: updateFields })
     if (objResult.modifiedCount > 0) {
@@ -422,7 +489,11 @@ router.post('/updateUser', async (req, res) => {
 
 
 router.get('/getPropertyList', async (req, res) => {
-    const objProperty = await Property.find({ $and: [publicPropertyQuery, buildPropertyFilters(req.query)] }).
+    const publicFilters = buildPropertyFilters(req.query)
+    if (!req.query.includeAllCities && !req.query.city && !req.query.cityName) {
+        publicFilters.cityName = /bangalore|bengaluru/i
+    }
+    const objProperty = await Property.find({ $and: [publicPropertyQuery, publicFilters] }).
         populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact']).populate('propertyTypeIDFK', ['typeName']);
     // var data = [];
     // data["propertyCount"]= objProperty.length;
@@ -798,19 +869,19 @@ router.post('/getReviewById', async (req, res) => {
 
 router.post('/updateUser', async (req, res) => {
 
-    const objUser = await User.updateOne({ _id: req.body.id }, {
-        userName: req.body.userName,
-        userFname: req.body.userFname,
-        userLname: req.body.userLname,
-        userEmail: req.body.userEmail,
-        //userPassword : req.body.userPassword,
-        dob: req.body.dob,
-        gender: req.body.gender,
-        contact: req.body.contact,
-        occupation: req.body.occupation,
-        //userType : req.body.userType,
-        // profile : req.file.filename,
-    });
+    const updateFields = {}
+    if (req.body.userName !== undefined) updateFields.userName = req.body.userName
+    if (req.body.userFname !== undefined) updateFields.userFname = req.body.userFname
+    if (req.body.userLname !== undefined) updateFields.userLname = req.body.userLname
+    if (req.body.dob !== undefined) updateFields.dob = req.body.dob
+    if (req.body.gender !== undefined) updateFields.gender = req.body.gender
+    if (req.body.contact !== undefined) updateFields.contact = req.body.contact
+    if (req.body.occupation !== undefined) updateFields.occupation = req.body.occupation
+    if (req.body.bio !== undefined) updateFields.bio = req.body.bio
+    if (req.body.city !== undefined) updateFields.city = req.body.city
+    if (req.body.socialLinks !== undefined) updateFields.socialLinks = parseStringList(req.body.socialLinks)
+
+    const objUser = await User.updateOne({ _id: req.body.id || req.body._id }, { $set: updateFields });
     // res.send(objStudent);
     if (objUser != null) {
         res.json({ result: "success", msg: "User updated Successfully", data: 1 });
@@ -926,6 +997,14 @@ router.post('/addInquiry', async (req, res) => {
     const inserted = await objInquiry.save();
 
     if (inserted != null) {
+        await createLeadEvent({
+            userId: req.body.userIDFK,
+            propertyId: req.body.propertyIDFK,
+            vendorId: property?.vendorId || property?.userIDFK,
+            sourceType: 'callback',
+            status: 'Callback Requested',
+            note: req.body.subject || 'Callback requested',
+        })
         await notifyPropertyOwner(req.body.propertyIDFK, {
             actorId: req.body.userIDFK,
             type: 'callback_request',
@@ -968,6 +1047,15 @@ router.post('/addInterest', async (req, res) => {
     const inserted = await objInquiry.save();
 
     if (inserted != null) {
+        await createLeadEvent({
+            userId: req.body.userIDFK,
+            propertyId: req.body.propertyIDFK,
+            vendorId: property?.vendorId || property?.userIDFK,
+            sourceType: 'interest',
+            status: 'Interested',
+            note: objInquiry.subject,
+            metadata: { preferredVisitTime: objInquiry.preferredVisitTime, moveInPreference: objInquiry.moveInPreference },
+        })
         await notifyPropertyOwner(req.body.propertyIDFK, {
             actorId: req.body.userIDFK,
             type: 'callback_request',
@@ -1022,6 +1110,15 @@ router.post('/addVisit', async (req, res) => {
     const inserted = await objVisit.save();
 
     if (inserted != null) {
+        await createLeadEvent({
+            userId: req.body.userIDFK,
+            propertyId: req.body.propertyIDFK,
+            vendorId: property?.vendorId || property?.userIDFK,
+            sourceType: 'visit',
+            status: 'Visit Requested',
+            note: 'Visit requested',
+            metadata: { visitDate: objVisit.visitDate, visitTime: objVisit.visitTime, moveInPreference: objVisit.moveInPreference },
+        })
         await notifyPropertyOwner(req.body.propertyIDFK, {
             actorId: req.body.userIDFK,
             type: 'visit_request',
@@ -1194,6 +1291,9 @@ router.get('/getPropertyType', async (req, res) => {
 });
 
 router.post('/addProperty', upload.fields([{ name: 'propertyImage', maxCount: 10 }, { name: 'video', maxCount: 1 }]), async (req, res) => {
+    if (!req.body.areaName || !req.body.cityName || !req.body.latitude || !req.body.longitude) {
+        return res.json({ result: "failure", msg: "City, locality, and map coordinates are required for StayJi locality pages.", data: 0 });
+    }
     const imageUrls = parseStringList(req.body.propertyImageUrls)
     const mealsAvailable = parseStringList(req.body.mealsAvailable || req.body.foodOptions)
     const menuPhotoUrls = parseStringList(req.body.menuPhotoUrls)
@@ -1212,6 +1312,7 @@ router.post('/addProperty', upload.fields([{ name: 'propertyImage', maxCount: 10
         objProperty.sharing = req.body.sharing,
         objProperty.genderType = req.body.genderType,
         objProperty.areaName = req.body.areaName,
+        objProperty.localitySlug = req.body.localitySlug || slugify(req.body.areaName),
         objProperty.cityName = req.body.cityName,
         objProperty.latitude = toNumberOrUndefined(req.body.latitude),
         objProperty.longitude = toNumberOrUndefined(req.body.longitude),
@@ -1428,6 +1529,119 @@ router.post('/reviewProperty', async (req, res) => {
     }
 })
 
+router.post('/moveIns', upload.fields([{ name: 'paymentScreenshot', maxCount: 1 }, { name: 'roomImage', maxCount: 1 }]), async (req, res) => {
+    const userId = asObjectId(req.body.userId || req.body.userIDFK)
+    const propertyId = asObjectId(req.body.propertyId || req.body.propertyIDFK)
+    if (!userId || !propertyId || !req.body.ownerName || !req.body.joiningDate) {
+        return res.json({ result: 'failure', msg: 'User, property, owner name, and joining date are required.', data: null })
+    }
+    const property = await Property.findOne({ _id: propertyId }).select('userIDFK vendorId propertyName')
+    if (!property) return res.json({ result: 'failure', msg: 'Property not found.', data: null })
+
+    const duplicate = await MoveInConfirmation.findOne({ userId, propertyId, isActive: true, status: { $in: ['Pending', 'Verified'] } })
+    const leadEvent = await createLeadEvent({
+        userId,
+        propertyId,
+        vendorId: property.vendorId || property.userIDFK,
+        sourceType: 'move_in',
+        status: 'Moved In',
+        note: 'User submitted move-in confirmation',
+    })
+    const moveIn = await MoveInConfirmation.create({
+        userId,
+        vendorId: property.vendorId || property.userIDFK,
+        propertyId,
+        leadEventId: leadEvent?._id,
+        ownerName: req.body.ownerName,
+        joiningDate: req.body.joiningDate,
+        paymentScreenshot: req.files?.paymentScreenshot?.[0]?.filename || req.body.paymentScreenshot || '',
+        roomImage: req.files?.roomImage?.[0]?.filename || req.body.roomImage || '',
+        userNote: req.body.userNote || '',
+        duplicateRisk: Boolean(duplicate),
+        commissionAmount: Math.min(3000, Math.max(1500, Number(req.body.commissionAmount) || 2000)),
+        cashbackAmount: Math.min(300, Math.max(200, Number(req.body.cashbackAmount) || 250)),
+        status: duplicate ? 'Suspicious' : 'Pending',
+    })
+    await notifyAdmins({
+        actorId: userId,
+        propertyId,
+        type: 'move_in',
+        title: duplicate ? 'Suspicious move-in submitted' : 'Move-in verification needed',
+        message: `A user submitted move-in proof for ${property.propertyName || 'a StayJi property'}.`,
+        link: '/dashboard/admin',
+    })
+    await createNotification({
+        recipientId: property.vendorId || property.userIDFK,
+        recipientRole: 'vendor',
+        actorId: userId,
+        propertyId,
+        type: 'move_in',
+        title: 'Move-in proof submitted',
+        message: 'A user submitted move-in proof. Admin verification is pending.',
+        link: '/dashboard/vendor',
+    })
+    res.json({ result: 'success', msg: 'Move-in submitted for admin verification.', data: moveIn })
+})
+
+router.get('/moveIns', async (req, res) => {
+    const filters = { isActive: true }
+    if (req.query.userId && mongoose.Types.ObjectId.isValid(req.query.userId)) filters.userId = new mongoose.Types.ObjectId(req.query.userId)
+    if (req.query.vendorId && mongoose.Types.ObjectId.isValid(req.query.vendorId)) filters.vendorId = new mongoose.Types.ObjectId(req.query.vendorId)
+    if (req.query.status) filters.status = req.query.status
+    const items = await MoveInConfirmation.find(filters)
+        .populate('userId', ['userFname', 'userLname', 'userEmail', 'contact'])
+        .populate('vendorId', ['userFname', 'userLname', 'userEmail', 'contact'])
+        .populate('propertyId', ['propertyName', 'areaName', 'cityName', 'rent'])
+        .sort({ addedOn: -1 })
+        .limit(Math.min(100, Number(req.query.limit || 30)))
+    res.json({ result: 'success', msg: 'Move-ins found', data: items })
+})
+
+router.post('/moveIns/:id/review', async (req, res) => {
+    const adminId = asObjectId(req.body.adminId)
+    const admin = adminId ? await User.findOne({ _id: adminId, userType: { $in: ['Admin', 'admin'] }, isActive: true }).select('_id') : null
+    if (!admin) return res.json({ result: 'failure', msg: 'Only StayJi admin can verify move-ins.', data: null })
+    const status = ['Verified', 'Rejected', 'Suspicious'].includes(req.body.status) ? req.body.status : 'Pending'
+    const moveIn = await MoveInConfirmation.findOneAndUpdate(
+        { _id: req.params.id, isActive: true },
+        { $set: { status, adminNote: req.body.adminNote || '', verifiedOn: status === 'Verified' ? new Date() : undefined } },
+        { new: true }
+    )
+    if (!moveIn) return res.json({ result: 'failure', msg: 'Move-in not found.', data: null })
+    if (status === 'Verified') {
+        await LeadEvent.create({
+            userId: moveIn.userId,
+            vendorId: moveIn.vendorId,
+            propertyId: moveIn.propertyId,
+            sourceType: 'move_in',
+            status: 'Converted',
+            note: `Commission ₹${moveIn.commissionAmount}, cashback ₹${moveIn.cashbackAmount}`,
+            metadata: { moveInId: moveIn._id, commissionAmount: moveIn.commissionAmount, cashbackAmount: moveIn.cashbackAmount },
+        })
+    }
+    await Promise.all([
+        createNotification({
+            recipientId: moveIn.userId,
+            recipientRole: 'user',
+            propertyId: moveIn.propertyId,
+            type: 'move_in',
+            title: `Move-in ${status.toLowerCase()}`,
+            message: status === 'Verified' ? 'Your cashback is now eligible for processing.' : 'StayJi admin reviewed your move-in submission.',
+            link: '/dashboard/user',
+        }),
+        createNotification({
+            recipientId: moveIn.vendorId,
+            recipientRole: 'vendor',
+            propertyId: moveIn.propertyId,
+            type: 'move_in',
+            title: `Move-in ${status.toLowerCase()}`,
+            message: status === 'Verified' ? 'Commission is due for a verified move-in.' : 'StayJi admin reviewed a move-in submission.',
+            link: '/dashboard/vendor',
+        }),
+    ])
+    res.json({ result: 'success', msg: 'Move-in reviewed.', data: moveIn })
+})
+
 router.post('/reactivateProperty', async (req, res) => {
     const objUpdateProperty = await Property.updateOne({ _id: req.body.id }, { isActive: true, approvalStatus: "Pending" })
     if (objUpdateProperty.modifiedCount > 0) {
@@ -1447,6 +1661,7 @@ router.post('/updateProperty', async (req, res) => {
     if (req.body.sharing !== undefined) updateFields.sharing = req.body.sharing
     if (req.body.genderType !== undefined) updateFields.genderType = req.body.genderType
     if (req.body.areaName !== undefined) updateFields.areaName = req.body.areaName
+    if (req.body.areaName !== undefined || req.body.localitySlug !== undefined) updateFields.localitySlug = req.body.localitySlug || slugify(req.body.areaName)
     if (req.body.cityName !== undefined) updateFields.cityName = req.body.cityName
     if (req.body.latitude !== undefined) updateFields.latitude = toNumberOrUndefined(req.body.latitude)
     if (req.body.longitude !== undefined) updateFields.longitude = toNumberOrUndefined(req.body.longitude)
@@ -1474,6 +1689,9 @@ router.post('/updateProperty', async (req, res) => {
     if (req.body.parkingAvailable !== undefined) updateFields.parkingAvailable = toBoolean(req.body.parkingAvailable)
     if (req.body.acAvailable !== undefined) updateFields.acAvailable = toBoolean(req.body.acAvailable)
     if (req.body.rating !== undefined) updateFields.rating = toNumberOrUndefined(req.body.rating) || 4.6
+    if (req.body.isFeatured !== undefined) updateFields.isFeatured = toBoolean(req.body.isFeatured)
+    if (req.body.boostScore !== undefined) updateFields.boostScore = toNumberOrUndefined(req.body.boostScore) || 0
+    if (req.body.localityPriority !== undefined) updateFields.localityPriority = toNumberOrUndefined(req.body.localityPriority) || 0
     if (req.body.propertyCategory !== undefined) updateFields.propertyCategory = req.body.propertyCategory
     if (req.body.propertySegment !== undefined) updateFields.propertyCategory = req.body.propertySegment
     if (req.body.pricingUnit !== undefined) updateFields.pricingUnit = req.body.pricingUnit
@@ -2011,6 +2229,9 @@ router.get('/analytics', async (req, res) => {
             inquiryLeads,
             convertedVisits,
             convertedInquiries,
+            leadEvents,
+            verifiedMoveIns,
+            pendingMoveIns,
             revenue,
             cityHeatmap,
             topProperties,
@@ -2026,6 +2247,9 @@ router.get('/analytics', async (req, res) => {
             Inquiry.countDocuments({ isActive: true }),
             Visit.countDocuments({ isActive: true, isConverted: true }),
             Inquiry.countDocuments({ isActive: true, isConverted: true }),
+            LeadEvent.countDocuments({ isActive: true }),
+            MoveInConfirmation.countDocuments({ isActive: true, status: 'Verified' }),
+            MoveInConfirmation.countDocuments({ isActive: true, status: { $in: ['Pending', 'Suspicious'] } }),
             Payment.aggregate([{ $match: { isActive: true } }, { $group: { _id: null, total: { $sum: { $toDouble: '$amount' } } } }]),
             Property.aggregate([{ $match: { isActive: true, approvalStatus: 'Approved' } }, { $group: { _id: '$cityName', listings: { $sum: 1 }, vacancies: { $sum: { $cond: ['$isAvailable', 1, 0] } } } }, { $sort: { listings: -1 } }, { $limit: 12 }]),
             Inquiry.aggregate([
@@ -2040,8 +2264,8 @@ router.get('/analytics', async (req, res) => {
             ]),
             Inquiry.find({ isActive: true }).select('addedOn isConverted').lean(),
         ])
-        const leads = visitLeads + inquiryLeads
-        const conversions = convertedVisits + convertedInquiries
+        const leads = Math.max(visitLeads + inquiryLeads, leadEvents)
+        const conversions = convertedVisits + convertedInquiries + verifiedMoveIns
         const liveVacancies = cityHeatmap.reduce((sum, row) => sum + (row.vacancies || 0), 0)
         const occupancyRate = activeListings ? Math.round(((activeListings - liveVacancies) / activeListings) * 100) : 0
         const trendMap = new Map()
@@ -2067,6 +2291,11 @@ router.get('/analytics', async (req, res) => {
                     pendingProperties,
                     occupancyRate,
                     leads,
+                    leadEvents,
+                    verifiedMoveIns,
+                    pendingMoveIns,
+                    commissionDue: verifiedMoveIns * 2000,
+                    cashbackDue: verifiedMoveIns * 250,
                     conversionRate: leads ? Math.round((conversions / leads) * 100) : 0,
                     conversions,
                     revenue: revenue[0]?.total || 0,
@@ -2262,12 +2491,24 @@ router.post('/vendors/:id/messages', async (req, res) => {
     if (!req.body.message || !req.body.message.trim()) {
         return res.json({ result: 'failure', msg: 'Message is required.', data: null })
     }
+    const cleanMessage = req.body.message.trim()
+    const abusivePattern = /\b(fuck|shit|bitch|asshole|scam|fraudster)\b/i
+    if (abusivePattern.test(cleanMessage)) {
+        await notifyAdmins({
+            actorId: req.params.id,
+            propertyId: req.body.propertyId,
+            type: 'moderation',
+            title: 'Chat moderation alert',
+            message: 'A private message was flagged for abusive or suspicious language.',
+            link: `/dashboard/admin/vendors/${req.params.id}`,
+        })
+    }
     const message = await AdminMessage.create({
         vendorId: req.params.id,
         adminId: req.body.adminId,
         propertyId: req.body.propertyId || null,
         senderRole: req.body.senderRole || 'admin',
-        message: encryptMessage(req.body.message.trim()),
+        message: encryptMessage(cleanMessage),
     })
     if ((req.body.senderRole || 'admin') === 'vendor') {
         await notifyAdmins({
@@ -2290,14 +2531,20 @@ router.post('/vendors/:id/messages', async (req, res) => {
             link: '/dashboard/vendor',
         })
     }
-    res.json({ result: 'success', msg: 'Message sent.', data: { ...message.toObject(), message: req.body.message.trim() } })
+    res.json({ result: 'success', msg: 'Message sent.', data: { ...message.toObject(), message: cleanMessage } })
 })
 
 router.post('/vendors/:id/messages/:messageId/delete', async (req, res) => {
     const scope = req.body.scope || 'self'
     const viewer = req.body.viewer === 'vendor' ? 'vendor' : 'admin'
     const update = {}
-    if (scope === 'both') update.isActive = false
+    if (scope === 'both') {
+        const admin = req.body.adminId && await User.findOne({ _id: req.body.adminId, userType: { $in: ['Admin', 'admin'] }, isActive: true }).select('_id')
+        if (!admin) {
+            return res.json({ result: 'failure', msg: 'Only StayJi admin can permanently delete messages.', data: null })
+        }
+        update.isActive = false
+    }
     else if (viewer === 'vendor') update.deletedForVendor = true
     else update.deletedForAdmin = true
     const message = await AdminMessage.findOneAndUpdate({ _id: req.params.messageId, vendorId: req.params.id }, { $set: update }, { new: true })

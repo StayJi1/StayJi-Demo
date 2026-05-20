@@ -38,6 +38,8 @@ const adminApi = {
   vendorMessages: (id, params) => axiosClient.get(`/api/admin/vendors/${id}/messages`, { params }).then((res) => unwrap(res, [])),
   sendVendorMessage: (id, payload) => axiosClient.post(`/api/admin/vendors/${id}/messages`, payload).then((res) => unwrap(res, null)),
   deleteVendorMessage: (vendorId, messageId, payload) => axiosClient.post(`/api/admin/vendors/${vendorId}/messages/${messageId}/delete`, payload).then((res) => unwrap(res, null)),
+  moveIns: (params) => axiosClient.get('/api/admin/moveIns', { params: paramsWithDefaults(params) }).then((res) => unwrap(res, [])),
+  reviewMoveIn: (id, payload) => axiosClient.post(`/api/admin/moveIns/${id}/review`, payload).then((res) => unwrap(res, null)),
 }
 
 export default adminApi

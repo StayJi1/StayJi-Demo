@@ -29,6 +29,10 @@ propertySchema = mongoose.Schema({
     areaName:{
         type:String
     },
+    localitySlug:{
+        type:String,
+        index:true
+    },
     cityName:{
         type:String
     },
@@ -128,6 +132,18 @@ propertySchema = mongoose.Schema({
     rating:{
         type:Number,
         default:4.6
+    },
+    isFeatured:{
+        type:Boolean,
+        default:false
+    },
+    boostScore:{
+        type:Number,
+        default:0
+    },
+    localityPriority:{
+        type:Number,
+        default:0
     },
     approvalStatus:{
         type:String,

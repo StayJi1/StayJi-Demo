@@ -12,7 +12,7 @@ function SignupPage() {
   const { signup, googleSignup, status, error, isAuthenticated, role } = useAuth()
   const googleButtonRef = useRef(null)
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-  const [form, setForm] = useState({ name: '', contact: '', email: '', password: '', role: requestedRole || 'user' })
+  const [form, setForm] = useState({ name: '', contact: '', email: '', password: '', role: requestedRole || 'user', acceptTerms: false, acceptPrivacy: false })
   const [localError, setLocalError] = useState('')
 
   useEffect(() => {
@@ -34,8 +34,12 @@ function SignupPage() {
             setLocalError('Enter your phone number before continuing with Google.')
             return
           }
+          if (!form.acceptTerms || !form.acceptPrivacy) {
+            setLocalError('Accept StayJi Terms & Conditions and Privacy Policy before continuing with Google.')
+            return
+          }
           try {
-            const response = await googleSignup({ credential, contact: form.contact, role: form.role })
+            const response = await googleSignup({ credential, contact: form.contact, role: form.role, acceptTerms: form.acceptTerms, acceptPrivacy: form.acceptPrivacy })
             navigate(`/dashboard/${response.user?.role || form.role}`)
           } catch {
             // handled in context
@@ -65,11 +69,11 @@ function SignupPage() {
     return () => {
       script.onload = null
     }
-  }, [googleClientId, googleSignup, form.contact, form.role, navigate])
+  }, [googleClientId, googleSignup, form.contact, form.role, form.acceptTerms, form.acceptPrivacy, navigate])
 
   const handleChange = (event) => {
-    const { name, value } = event.target
-    setForm((current) => ({ ...current, [name]: value }))
+    const { name, value, type, checked } = event.target
+    setForm((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }))
   }
 
   const handleSubmit = async (event) => {
@@ -77,6 +81,14 @@ function SignupPage() {
     setLocalError('')
     if (!form.contact.trim()) {
       setLocalError('Phone number is required to create an account.')
+      return
+    }
+    if (!form.acceptTerms || !form.acceptPrivacy) {
+      setLocalError('Accept StayJi Terms & Conditions and Privacy Policy to continue.')
+      return
+    }
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(form.password)) {
+      setLocalError('Use a stronger password with 8+ characters, uppercase, lowercase, and a number.')
       return
     }
     try {
@@ -120,6 +132,16 @@ function SignupPage() {
                 </select>
               </label>
             )}
+          </div>
+          <div className="grid gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+            <label className="flex items-start gap-3">
+              <input type="checkbox" name="acceptTerms" checked={form.acceptTerms} onChange={handleChange} required className="mt-1 h-5 w-5 rounded border-slate-700 bg-slate-900 text-accent-400" />
+              <span>I agree to StayJi <Link to="/terms-and-conditions" className="text-accent-300 hover:text-white">Terms & Conditions</Link>.</span>
+            </label>
+            <label className="flex items-start gap-3">
+              <input type="checkbox" name="acceptPrivacy" checked={form.acceptPrivacy} onChange={handleChange} required className="mt-1 h-5 w-5 rounded border-slate-700 bg-slate-900 text-accent-400" />
+              <span>I agree to the <Link to="/privacy-policy" className="text-accent-300 hover:text-white">Privacy Policy</Link>.</span>
+            </label>
           </div>
           {localError || error ? <p className="text-sm text-rose-300">{localError || error}</p> : null}
           <Button type="submit" className="w-full">{status === 'loading' ? 'Creating account…' : 'Create account'}</Button>
