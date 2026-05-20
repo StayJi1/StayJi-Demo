@@ -25,8 +25,10 @@ app.disable('x-powered-by');
 const corsOrigins = [
     "http://localhost:5173",
     "http://localhost:3000",
+    "https://pg-finder-alpha.vercel.app",
     "https://stayji-stayji.vercel.app",
-    "https://pg-finder-alpha.vercel.app"
+    "https://stayji.com",
+    "https://www.stayji.com"
 ];
 
 app.use(cors({
