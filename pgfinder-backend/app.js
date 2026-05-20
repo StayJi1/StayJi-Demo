@@ -25,24 +25,13 @@ app.disable('x-powered-by');
 const corsOrigins = [
     "http://localhost:5173",
     "http://localhost:3000",
-    "https://pg-finder-alpha.vercel.app",
-    "https://stayji-stayji.vercel.app"
+    "https://stayji-stayji.vercel.app",
+    "https://pg-finder-alpha.vercel.app"
 ];
-
-// Add environment variable origins if present
-if (process.env.CORS_ORIGINS) {
-
-    const envOrigins = process.env.CORS_ORIGINS
-        .split(',')
-        .map((origin) => origin.trim());
-
-    corsOrigins.push(...envOrigins);
-}
 
 app.use(cors({
     origin: function(origin, callback) {
 
-        // allow tools like Postman/mobile apps
         if (!origin) {
             return callback(null, true);
         }
@@ -55,7 +44,6 @@ app.use(cors({
     },
     credentials: true
 }));
-
 /*
 |--------------------------------------------------------------------------
 | Security Headers
