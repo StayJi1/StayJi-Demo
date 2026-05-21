@@ -1,11 +1,23 @@
 
 var mongoose = require('mongoose');
+var Mixed = mongoose.Schema.Types.Mixed;
 userReviewSchema = mongoose.Schema({
     details:{
         type:String
     },
     rating:{
         type:String
+    },
+    tags:{
+        type:[String],
+        default:[]
+    },
+    sentiment:{
+        type:String
+    },
+    reviewContext:{
+        type:Mixed,
+        default:{}
     },
     userIDFK:{
         type:mongoose.Schema.Types.ObjectId,

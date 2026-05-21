@@ -162,6 +162,42 @@ export const bangaloreLocalities = [
     food: 'PG meals, local restaurants, and delivery options are available across KR Puram and Mahadevapura.',
     price: 'KR Puram can be more affordable than Whitefield while still staying close to the office corridor.',
   },
+  {
+    slug: 'brookefield',
+    name: 'Brookefield',
+    title: 'PG in Brookefield, Bangalore',
+    keywords: ['PG in Brookefield', 'PG near Kundalahalli', 'co-living near ITPL'],
+    overview: 'Brookefield is a practical stay pocket between Whitefield, AECS Layout, Kundalahalli, and ITPL, popular with IT employees who want lower commute time without paying central Bangalore rents.',
+    itParks: ['ITPL access', 'EPIP Zone', 'Brookefield tech offices', 'Kundalahalli offices'],
+    transport: 'Kundalahalli metro access, BMTC routes, ORR links, and Whitefield road connectivity support office movement.',
+    safety: 'Prefer properties near main roads with CCTV, visitor logs, power backup, and verified deposit terms.',
+    food: 'PG meals, cafes, cloud kitchens, and grocery stores are available across AECS Layout and Kundalahalli Gate.',
+    price: 'Brookefield rents are usually moderate to premium depending on distance from ITPL, room sharing, meals, and AC.',
+  },
+  {
+    slug: 'jayanagar',
+    name: 'Jayanagar',
+    title: 'PG in Jayanagar, Bangalore',
+    keywords: ['PG in Jayanagar', 'girls PG near Jayanagar', 'student accommodation south Bangalore'],
+    overview: 'Jayanagar is a well-established south Bangalore locality suited for students, interns, and professionals who want metro access, residential streets, colleges, and reliable daily services.',
+    itParks: ['CBD access', 'JP Nagar offices', 'Bannerghatta Road offices', 'South Bangalore business hubs'],
+    transport: 'Jayanagar metro, BMTC routes, and quick cab access connect renters to JP Nagar, BTM, Lalbagh, and MG Road.',
+    safety: 'Choose verified PGs with secure entry, women-friendly policies, lit streets, and clear visitor rules.',
+    food: 'Jayanagar has PG meal plans, iconic restaurants, student mess options, cafes, and strong delivery coverage.',
+    price: 'Jayanagar offers a wide rent spread, with premium rooms priced higher near metro and 4th Block.',
+  },
+  {
+    slug: 'banashankari',
+    name: 'Banashankari',
+    title: 'PG in Banashankari, Bangalore',
+    keywords: ['PG in Banashankari', 'affordable PG south Bangalore', 'student PG Banashankari'],
+    overview: 'Banashankari is useful for students and early-career professionals looking for affordable south Bangalore stays with metro connectivity and calmer residential pockets.',
+    itParks: ['JP Nagar access', 'Global Village commute', 'Jayanagar access', 'South Bangalore offices'],
+    transport: 'Banashankari metro, BMTC bus stands, Outer Ring Road links, and cab routes make daily travel manageable.',
+    safety: 'Compare exact lane access, late-entry policy, CCTV, owner responsiveness, and deposit documentation before booking.',
+    food: 'Budget mess food, PG meals, local eateries, and delivery options are common around BDA Complex and Kathriguppe.',
+    price: 'Banashankari is often more affordable than central neighborhoods while still offering metro-linked PG options.',
+  },
 ]
 
 export const faqGroups = {
@@ -202,8 +238,18 @@ export function getFaqItems(groupKey = 'general') {
   const generated = bangaloreLocalities.flatMap((locality) => ([
     [`What is the average PG rent in ${locality.name}?`, `${locality.price} Compare verified ${locality.name} PGs on StayJi by sharing type, food, deposit, and availability.`],
     [`Is ${locality.name} good for ${audience}?`, `${locality.overview} It is useful to compare commute, safety, food, and rent before booking a visit.`],
+    [`How do I choose a girls PG in ${locality.name}?`, `For a girls PG in ${locality.name}, check CCTV, secure entry, late-entry rules, visitor policy, road lighting, owner verification, and commute to ${locality.itParks[0]}. Compare reviews for food, cleanliness, safety, and management response before booking a visit.`],
+    [`Which landmarks matter when booking a PG in ${locality.name}?`, `Useful ${locality.name} landmarks include ${locality.itParks.join(', ')} and nearby commute points. Search StayJi with locality filters, rent range, sharing type, food, live vacancy, reviews, and related Bangalore guides.`],
+    [`Can working professionals find co-living in ${locality.name}?`, `Yes. ${locality.name} has PGs and managed co-living options for working professionals. Compare WiFi stability, power backup, desk space, laundry, parking, notice period, deposit refund timeline, and distance from office corridors.`],
   ]))
-  return [...baseQuestions, ...generated].slice(0, 36)
+  const processFaqs = [
+    ['How much security deposit is normal for Bangalore PGs?', 'Many Bangalore PGs ask for one to two months of rent as deposit. Always confirm refund timelines, deductions, notice period, lock-in clauses, and whether electricity or maintenance is separate.'],
+    ['Should I pay before visiting a PG?', 'Avoid paying large amounts before verifying photos, room availability, owner identity, deposit terms, and exact address. Use StayJi visit and inquiry workflows to keep a traceable record.'],
+    ['How do PG food plans usually work?', 'Food plans vary by property. Check breakfast, dinner, weekend meals, North Indian or South Indian options, kitchen hygiene, menu changes, and whether food is included in rent.'],
+    ['What should students check before finalizing accommodation?', 'Students should compare commute to college, study table availability, food, WiFi, curfew, laundry, visitor policy, safety, rent inclusions, and deposit terms.'],
+    ['How does StayJi help vendors manage leads?', 'StayJi structures inquiries, callback requests, visit requests, converted leads, move-ins, notifications, reviews, and vendor analytics so owners can track occupancy and response quality.'],
+  ]
+  return [...baseQuestions, ...generated, ...processFaqs].slice(0, 120)
 }
 
 export const legalPages = {
@@ -229,7 +275,7 @@ export const legalPages = {
   },
 }
 
-export const blogPosts = [
+const featuredBlogPosts = [
   {
     slug: 'best-pg-in-whitefield',
     title: 'Best PG in Whitefield for IT Professionals',
@@ -260,4 +306,125 @@ export const blogPosts = [
     description: 'A Bangalore-first rental guide covering deposits, visits, commute, safety, food, and locality selection.',
     locality: 'Bangalore',
   },
+  {
+    slug: 'best-pg-near-bellandur',
+    title: 'Best PG Near Bellandur',
+    description: 'A Bellandur-first guide to PGs around RMZ Ecospace, Ecoworld, Embassy TechVillage, ORR, Sarjapur Road, food access, safety, and verified visits.',
+    locality: 'Bellandur',
+  },
 ]
+
+const blogTopicTemplates = [
+  ['best-pg', 'Best PG in', 'A practical guide to verified PGs, hostels, food, safety, live vacancies, and commute planning in'],
+  ['affordable-pg', 'Affordable PG near', 'Budget-focused PG search tips covering rent, deposits, sharing rooms, food, and transport near'],
+  ['girls-pg-safety', 'Girls PG safety guide for', 'Safety-first guidance for women comparing verified PGs, CCTV, visitor rules, and commute around'],
+  ['coliving-vs-pg', 'Co-living vs PG in', 'A comparison guide for managed co-living, traditional PGs, shared flats, deposits, and amenities in'],
+]
+
+export const blogPosts = [
+  ...featuredBlogPosts,
+  ...bangaloreLocalities.flatMap((locality) => blogTopicTemplates.map(([key, titlePrefix, descriptionPrefix]) => ({
+    slug: `${key}-${locality.slug}`,
+    title: `${titlePrefix} ${locality.name}`,
+    description: `${descriptionPrefix} ${locality.name}, Bangalore. Includes internal links to listings, FAQs, locality pages, and related StayJi guides.`,
+    locality: locality.name,
+  }))),
+].filter((post, index, all) => all.findIndex((item) => item.slug === post.slug) === index)
+
+export const recommendationPosts = [
+  {
+    slug: 'student-stays-bellandur',
+    title: 'Student Stays in Bellandur',
+    description: 'A recommendation guide for students comparing Bellandur PGs near ORR, RMZ Ecospace, colleges, food streets, and safer commute pockets.',
+    locality: 'Bellandur',
+    audience: 'students',
+  },
+  {
+    slug: 'working-professional-stays-bellandur',
+    title: 'Working Professional Stays in Bellandur',
+    description: 'Recommended Bellandur stay patterns for people working around Ecospace, Ecoworld, Embassy TechVillage, Cessna Business Park, and Sarjapur Road.',
+    locality: 'Bellandur',
+    audience: 'working professionals',
+  },
+  ...bangaloreLocalities.map((locality) => ({
+    slug: `recommended-pg-${locality.slug}`,
+    title: `Recommended PGs in ${locality.name}`,
+    description: `StayJi recommendations for verified PGs, co-living rooms, food, safety, rent, commute, and visit planning in ${locality.name}, Bangalore.`,
+    locality: locality.name,
+    audience: 'Bangalore renters',
+  })),
+].filter((post, index, all) => all.findIndex((item) => item.slug === post.slug) === index)
+
+export const featuredFaqDetails = [
+  {
+    slug: 'bellandur-best-pg-guide',
+    title: 'Best PG Guide for Bellandur, Bangalore',
+    question: 'How do I choose the best PG in Bellandur?',
+    answer: 'Choose a Bellandur PG by comparing exact commute to ORR offices, rent inclusions, food quality, CCTV, late-entry rules, deposit terms, live vacancies, and verified vendor response history.',
+    summary: 'A long-form Bellandur PG guide covering commute, rent, safety, food, landmarks, privacy-first lead flow, and how StayJi helps renters compare verified stays.',
+    locality: 'Bellandur',
+  },
+]
+
+export const slugifyContent = (value = '') => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+
+export function getFaqRecords(groupKey = 'general') {
+  const items = getFaqItems(groupKey).map(([question, answer]) => ({
+    slug: slugifyContent(question),
+    title: question,
+    question,
+    answer,
+    summary: answer,
+    locality: bangaloreLocalities.find((locality) => question.includes(locality.name))?.name || 'Bangalore',
+  }))
+  return groupKey === 'general' ? [...featuredFaqDetails, ...items] : items
+}
+
+export function getRelatedSeoContent(localityName = 'Bangalore', currentSlug = '') {
+  const locality = bangaloreLocalities.find((item) => item.name === localityName) || bangaloreLocalities.find((item) => item.slug === slugifyContent(localityName))
+  const localityLabel = locality?.name || localityName || 'Bangalore'
+  return {
+    locality,
+    blogs: blogPosts.filter((post) => post.slug !== currentSlug && (post.locality === localityLabel || post.locality === 'Bangalore')).slice(0, 4),
+    recommendations: recommendationPosts.filter((post) => post.slug !== currentSlug && post.locality === localityLabel).slice(0, 4),
+    faqs: getFaqRecords('bangalore-rentals').filter((faq) => faq.slug !== currentSlug && (faq.locality === localityLabel || faq.locality === 'Bangalore')).slice(0, 5),
+  }
+}
+
+export function buildSeoArticle(source = {}, type = 'guide') {
+  const locality = bangaloreLocalities.find((item) => item.name === source.locality) || bangaloreLocalities.find((item) => item.slug === slugifyContent(source.locality || '')) || bangaloreLocalities.find((item) => item.slug === 'bellandur')
+  const localityName = locality?.name || source.locality || 'Bangalore'
+  const title = source.title || source.question || `StayJi guide for ${localityName}`
+  const description = source.description || source.summary || source.answer || `StayJi Bangalore accommodation guide for ${localityName}.`
+  const related = getRelatedSeoContent(localityName, source.slug)
+  return {
+    ...source,
+    type,
+    title,
+    description,
+    locality: localityName,
+    related,
+    sections: [
+      {
+        heading: `${localityName} accommodation overview`,
+        body: `${locality?.overview || 'Bangalore has different PG markets by commute, budget, food, and safety expectations.'} StayJi treats locality content as more than a blog surface: it is a structured discovery layer where renters can understand the area before creating a lead. For ${localityName}, users should compare live availability, room sharing, food plans, deposit terms, verified photos, management response, and walking safety around the exact building.`,
+      },
+      {
+        heading: 'Commute, landmarks, and daily life',
+        body: `${localityName} searches should begin with landmarks and peak-hour routes. Important nearby anchors include ${(locality?.itParks || ['Bangalore offices']).join(', ')}. ${locality?.transport || 'Check metro, BMTC, office shuttles, and cab routes before booking.'} A property close to a work gate, college bus stop, supermarket, hospital, pharmacy, and food street can save money even when the listed rent is slightly higher.`,
+      },
+      {
+        heading: 'Rent, deposit, and occupancy checks',
+        body: `${locality?.price || 'Pricing depends on sharing type, meals, deposit, AC, laundry, and distance from major offices.'} Ask whether breakfast, dinner, electricity, WiFi, laundry, parking, maintenance, and AC charges are included. StayJi listings are designed to make occupancy and vacancy correction easier for vendors and admins, so users can avoid chasing rooms that are already full.`,
+      },
+      {
+        heading: 'Safety and privacy-first lead flow',
+        body: `${locality?.safety || 'Prefer verified PGs with CCTV, secure entry, clear rules, and responsive operators.'} StayJi keeps marketplace trust at the center of the workflow. Wishlist activity helps discovery, but it should not expose private phone numbers. A qualified lead should form through callback approval, visit booking, chat engagement, or contact reveal so both user intent and vendor value are traceable.`,
+      },
+      {
+        heading: 'How to shortlist with StayJi',
+        body: `A practical shortlist for ${localityName} includes one budget PG, one commute-first PG, one safety-first option, and one premium managed stay. Read related FAQs, compare properties, open the locality guide, and book visits close together. After move-in, StayJi's verification architecture helps admins validate conversion, vendor commission, user cashback, review quality, and fraud signals from the same operational record.`,
+      },
+    ],
+  }
+}

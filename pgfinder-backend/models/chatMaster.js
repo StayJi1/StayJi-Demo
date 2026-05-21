@@ -1,5 +1,6 @@
 
 var mongoose = require('mongoose');
+var Mixed = mongoose.Schema.Types.Mixed;
 chatSchema = mongoose.Schema({
     text:{
         type:String
@@ -11,6 +12,14 @@ chatSchema = mongoose.Schema({
     toUserIDFK:{
         type:mongoose.Schema.Types.ObjectId,
         ref:'userMaster'
+    },
+    conversationType:{
+        type:String,
+        default:"user_vendor"
+    },
+    metadata:{
+        type:Mixed,
+        default:{}
     },
     addedOn:{
         type:String

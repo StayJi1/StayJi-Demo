@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import SEO from '../components/SEO'
+import SeoContentCard from '../components/seo/SeoContentCard'
 import Loader from '../components/common/Loader'
 import PropertyCard from '../components/property/PropertyCard'
 import PropertyMap from '../components/map/PropertyMap'
 import propertyService from '../services/propertyService'
-import { bangaloreLocalities, getFaqItems, siteConfig } from '../data/seoContent'
+import { bangaloreLocalities, blogPosts, getFaqRecords, recommendationPosts, siteConfig } from '../data/seoContent'
 
 const bangaloreOverview = {
   slug: '',
@@ -82,7 +83,11 @@ export default function LocalityPage() {
   const boysCount = filteredProperties.filter((item) => item.gender === 'Boys').length
   const colivingCount = filteredProperties.filter((item) => item.gender === 'Co-ed' || /co.?living/i.test(`${item.category} ${item.description}`)).length
   const path = locality.slug ? `/bangalore/${locality.slug}` : '/bangalore'
-  const faqs = getFaqItems('bangalore-rentals').slice(0, 8)
+  const faqs = getFaqRecords('bangalore-rentals')
+    .filter((faq) => !locality.slug || faq.locality === locality.name || faq.locality === 'Bangalore')
+    .slice(0, 8)
+  const relatedBlogs = blogPosts.filter((post) => post.locality === locality.name || post.locality === 'Bangalore').slice(0, 4)
+  const relatedRecommendations = recommendationPosts.filter((post) => post.locality === locality.name).slice(0, 4)
   const schema = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
@@ -216,12 +221,15 @@ export default function LocalityPage() {
       <section className="px-4 py-12 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-5xl">
           <h2 className="text-3xl font-semibold text-slate-950">{locality.name} FAQs and recommendations</h2>
-          <div className="mt-6 grid gap-3">
-            {faqs.map(([question, answer]) => (
-              <details key={question} className="rounded-2xl border border-slate-200 bg-white p-4">
-                <summary className="cursor-pointer font-semibold">{question}</summary>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{answer}</p>
-              </details>
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {faqs.map((faq) => (
+              <SeoContentCard key={faq.slug} item={faq} to={`/faq/bangalore-rentals/${faq.slug}`} eyebrow="FAQ" />
+            ))}
+            {relatedBlogs.map((post) => (
+              <SeoContentCard key={post.slug} item={post} to={`/blogs/${post.slug}`} eyebrow="Guide" />
+            ))}
+            {relatedRecommendations.map((post) => (
+              <SeoContentCard key={post.slug} item={post} to={`/recommendations/${post.slug}`} eyebrow="Recommendation" />
             ))}
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { Link, Navigate, useParams } from 'react-router-dom'
 import SEO from '../components/SEO'
-import { faqGroups, getFaqItems, siteConfig } from '../data/seoContent'
+import SeoContentCard from '../components/seo/SeoContentCard'
+import { buildSeoArticle, faqGroups, getFaqItems, getFaqRecords, siteConfig } from '../data/seoContent'
 
 const slugify = (value = '') => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 
@@ -9,14 +10,17 @@ export default function FAQPage() {
   const groupKey = category || 'general'
   const group = faqGroups[groupKey]
   if (!group) {
-    const directItems = getFaqItems('general')
-    const direct = directItems.find(([question]) => slugify(question) === category)
+    const direct = getFaqRecords('general').find((item) => item.slug === category)
     if (!direct) return <Navigate to="/faq" replace />
-    const [question, answer] = direct
+    const article = buildSeoArticle(direct, 'faq')
+    const question = direct.question || direct.title
+    const answer = direct.answer || direct.summary
     const schema = {
       '@context': 'https://schema.org',
-      '@type': 'FAQPage',
-      mainEntity: [{ '@type': 'Question', name: question, acceptedAnswer: { '@type': 'Answer', text: answer } }],
+      '@graph': [
+        { '@type': 'FAQPage', mainEntity: [{ '@type': 'Question', name: question, acceptedAnswer: { '@type': 'Answer', text: answer } }] },
+        { '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: siteConfig.domain }, { '@type': 'ListItem', position: 2, name: 'FAQ', item: `${siteConfig.domain}/faq` }, { '@type': 'ListItem', position: 3, name: question, item: `${siteConfig.domain}/faq/${category}` }] },
+      ],
     }
     return (
       <main className="bg-white px-4 py-12 text-slate-900 sm:px-6 lg:px-8">
@@ -26,16 +30,21 @@ export default function FAQPage() {
           <h1 className="mt-6 text-4xl font-semibold text-slate-950 sm:text-5xl">{question}</h1>
           <p className="mt-5 text-lg leading-8 text-slate-600">{answer}</p>
           <div className="mt-8 grid gap-6 text-base leading-8 text-slate-700">
-            <h2 className="text-2xl font-semibold text-slate-950">Bangalore-focused guidance</h2>
-            <p>When choosing a PG or co-living stay in Bangalore, compare total monthly cost, commute, food quality, safety, deposit rules, visitor policy, and verified availability. StayJi keeps phone numbers private initially so users can message owners, request callbacks, and book visits through a controlled lead flow.</p>
-            <h2 className="text-2xl font-semibold text-slate-950">What StayJi verifies</h2>
-            <p>StayJi is structured around verified listings, visit requests, lead history, admin moderation, fraud detection, and move-in confirmation. After a user joins a property, the “Moved In Successfully” workflow helps verify proof before cashback, vendor commission, or conversion analytics are processed.</p>
-            <h3 className="text-xl font-semibold text-slate-950">Related locality searches</h3>
-            <p>Explore Whitefield, Electronic City, HSR Layout, Marathahalli, Bellandur, Koramangala, Indiranagar, Hebbal, Yelahanka, Sarjapur Road, JP Nagar, BTM Layout, and KR Puram for Bangalore-specific PG options.</p>
+            {article.sections.map((section) => (
+              <section key={section.heading}>
+                <h2 className="text-2xl font-semibold text-slate-950">{section.heading}</h2>
+                <p className="mt-3">{section.body}</p>
+              </section>
+            ))}
+            <h2 className="text-2xl font-semibold text-slate-950">Related StayJi reading</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {article.related.blogs.slice(0, 2).map((post) => <Link key={post.slug} to={`/blogs/${post.slug}`} className="rounded-xl border border-slate-200 p-4 font-semibold text-slate-700 hover:text-blue-700">{post.title}</Link>)}
+              {article.related.recommendations.slice(0, 2).map((post) => <Link key={post.slug} to={`/recommendations/${post.slug}`} className="rounded-xl border border-slate-200 p-4 font-semibold text-slate-700 hover:text-blue-700">{post.title}</Link>)}
+            </div>
           </div>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link to="/bangalore" className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white">Explore Bangalore</Link>
-            <Link to="/blog" className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700">Read guides</Link>
+            <Link to="/blogs" className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700">Read guides</Link>
           </div>
         </article>
       </main>
@@ -43,6 +52,7 @@ export default function FAQPage() {
   }
 
   const items = getFaqItems(groupKey)
+  const records = getFaqRecords(groupKey)
   const path = `/${group.slug}`
   const schema = {
     '@context': 'https://schema.org',
@@ -74,15 +84,10 @@ export default function FAQPage() {
         </header>
 
         <section className="mt-8 grid gap-4 md:grid-cols-2">
-          {items.slice(0, 16).map(([question, answer]) => (
-            <article key={question} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <h2 className="text-base font-semibold text-slate-950">{question}</h2>
-              <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{answer}</p>
-              <Link to={groupKey === 'general' ? `/faq/${slugify(question)}` : `${path}/${slugify(question)}`} className="mt-4 inline-flex rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white">
-                Read More
-              </Link>
-            </article>
+          {items.slice(0, 48).map(([question, answer]) => (
+            <SeoContentCard key={question} item={{ title: question, summary: answer }} to={groupKey === 'general' ? `/faq/${slugify(question)}` : `${path}/${slugify(question)}`} eyebrow="FAQ" />
           ))}
+          {groupKey === 'general' ? records.slice(0, 1).map((item) => <SeoContentCard key={item.slug} item={item} to={`/faq/${item.slug}`} eyebrow="Featured guide" />) : null}
         </section>
 
         <section className="mt-10 rounded-2xl bg-slate-950 p-6 text-white">

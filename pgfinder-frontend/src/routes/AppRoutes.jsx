@@ -18,6 +18,7 @@ const FAQPage = lazy(() => import('../pages/FAQPage'))
 const FAQDetailPage = lazy(() => import('../pages/FAQDetailPage'))
 const LocalityPage = lazy(() => import('../pages/LocalityPage'))
 const BlogPage = lazy(() => import('../pages/BlogPage'))
+const RecommendationPage = lazy(() => import('../pages/RecommendationPage'))
 const LegalPage = lazy(() => import('../pages/LegalPage'))
 const AdminDashboard = lazy(() => import('../pages/dashboard/admin/AdminDashboard'))
 const VendorDashboard = lazy(() => import('../pages/dashboard/vendor/VendorDashboard'))
@@ -55,6 +56,10 @@ function AppRoutes() {
           <Route path="/faq/:category/:faqSlug" element={<FAQDetailPage />} />
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/blog/:slug" element={<BlogPage />} />
+          <Route path="/blogs" element={<BlogPage />} />
+          <Route path="/blogs/:slug" element={<BlogPage />} />
+          <Route path="/recommendations" element={<RecommendationPage />} />
+          <Route path="/recommendations/:slug" element={<RecommendationPage />} />
           <Route path="/terms-and-conditions" element={<LegalPage />} />
           <Route path="/privacy-policy" element={<LegalPage />} />
           <Route path="/refund-policy" element={<LegalPage />} />

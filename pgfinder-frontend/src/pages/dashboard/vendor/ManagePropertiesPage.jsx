@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FiBarChart2, FiEdit2, FiEye, FiTrash2 } from 'react-icons/fi'
 import Card from '../../../components/common/Card'
+import AdvancedDataTable from '../../../components/admin/AdvancedDataTable'
 import dashboardService from '../../../services/dashboardService'
 import propertyService from '../../../services/propertyService'
 import { useAuth } from '../../../context/AuthContext'
@@ -66,6 +67,53 @@ function ManagePropertiesPage() {
       })
   }, [filters, properties])
 
+  const columns = [
+    {
+      key: 'property',
+      label: 'Property',
+      value: (property) => `${property.name || ''} ${property.city || ''} ${property.areaName || ''}`,
+      render: (property) => (
+        <div className="min-w-0">
+          <button type="button" onClick={() => navigate(`/dashboard/vendor/properties/${property.id || property._id}`)} className="font-semibold text-white hover:text-accent-300">{property.name}</button>
+          <p className="mt-1 max-w-[280px] truncate text-xs text-slate-500">{property.description || 'No description available.'}</p>
+        </div>
+      ),
+    },
+    { key: 'city', label: 'Locality', value: (property) => `${property.city || '-'} ${property.areaName || ''}` },
+    { key: 'rent', label: 'Rent', value: (property) => property.rent || 0, sortValue: (property) => Number(property.rent) || 0, render: (property) => `₹${property.rent || '0'}` },
+    { key: 'vacancy', label: 'Vacancy', value: (property) => `${property.vacancyStatus || 'Available'} ${property.availableBeds || 0}` },
+    {
+      key: 'approval',
+      label: 'Approval',
+      value: (property) => property.approvalStatus || 'Pending',
+      render: (property) => (
+        <span className={`rounded-full px-3 py-2 text-xs ${
+          property.approvalStatus === 'Approved'
+            ? 'bg-emerald-500/10 text-emerald-300'
+            : property.approvalStatus === 'Rejected'
+              ? 'bg-rose-500/10 text-rose-300'
+              : 'bg-amber-500/10 text-amber-200'
+        }`}>
+          {property.approvalStatus || 'Pending'}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      sortable: false,
+      value: (property) => property.id || property._id,
+      render: (property) => (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => navigate(`/dashboard/vendor/properties/${property.id || property._id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEye /> View</button>
+          <button type="button" onClick={() => navigate(`/dashboard/vendor/leads?propertyId=${property.id || property._id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiBarChart2 /> Analytics</button>
+          <button type="button" onClick={() => navigate(`/dashboard/vendor/properties/${property.id || property._id}/edit`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEdit2 /> Edit</button>
+          <button type="button" onClick={() => handleDelete(property.id || property._id)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-rose-400"><FiTrash2 /> Delete</button>
+        </div>
+      ),
+    },
+  ]
+
   return (
     <div className="space-y-8">
       <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
@@ -112,69 +160,15 @@ function ManagePropertiesPage() {
       {loading ? (
         <Card className="p-8">Loading properties…</Card>
       ) : filteredProperties.length ? (
-        <div className="space-y-4">
-          {filteredProperties.map((property) => (
-            <Card key={property.id || property._id} className="grid gap-4 rounded-[1.5rem] p-5 sm:grid-cols-[1.3fr_0.7fr] sm:rounded-[2rem] sm:p-6">
-              <div className="min-w-0">
-                <p className="text-sm uppercase tracking-[0.24em] text-accent-400">{property.city || 'Unknown city'}</p>
-                <h2 className="mt-2 truncate text-2xl font-semibold text-white">{property.name}</h2>
-                <p className="mt-3 text-slate-300">{property.description?.substring(0, 100) || 'No description available.'}</p>
-                <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.18em]">
-                  <span className="rounded-full bg-slate-950/80 px-3 py-2 text-slate-300">{property.category || property.type || 'PG'}</span>
-                  <span className={`rounded-full px-3 py-2 ${
-                    property.approvalStatus === 'Approved'
-                      ? 'bg-emerald-500/10 text-emerald-300'
-                      : property.approvalStatus === 'Rejected'
-                        ? 'bg-rose-500/10 text-rose-300'
-                        : 'bg-amber-500/10 text-amber-200'
-                  }`}>
-                    {property.approvalStatus || 'Pending'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex min-w-0 flex-col items-start justify-between gap-4 sm:items-end">
-                <div className="space-y-2 text-sm text-slate-400">
-                  <p>Rent: ₹{property.rent || '8,500'}</p>
-                  <p>Deposit: ₹{property.depositAmount || '0'}</p>
-                  <p>Vacancy: {property.vacancyStatus || 'Available'}{property.availableBeds ? ` • ${property.availableBeds} beds` : ''}</p>
-                  <p>Sharing: {property.sharingAvailability || property.sharing || '-'}</p>
-                  {property.perDayCheckIn ? <p>Day stay: ₹{property.dailyRate || property.rent || '0'}/day</p> : null}
-                  <p>Status: {property.status || 'Available'}</p>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/dashboard/vendor/properties/${property.id || property._id}`)}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-accent-500"
-                  >
-                    <FiEye /> View
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/dashboard/vendor/leads?propertyId=${property.id || property._id}`)}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-accent-500"
-                  >
-                    <FiBarChart2 /> Analytics
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/dashboard/vendor/properties/${property.id}/edit`)}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-accent-500"
-                  >
-                    <FiEdit2 /> Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(property.id)}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-rose-400"
-                  >
-                    <FiTrash2 /> Delete
-                  </button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <AdvancedDataTable
+          title="Vendor properties and occupancy controls"
+          eyebrow="Vendor listing table"
+          rows={filteredProperties}
+          columns={columns}
+          rowId={(property) => property.id || property._id}
+          searchPlaceholder="Search property, locality, status, rent"
+          minWidth="1080px"
+        />
       ) : error ? (
         <Card className="p-8 text-center text-rose-300">{error}</Card>
       ) : (

@@ -1829,16 +1829,31 @@ const vendorName = (user = {}) => [user.userFname, user.userLname].filter(Boolea
 const safeUserDto = (user = {}) => ({
     id: user._id,
     _id: user._id,
+    objectId: user._id,
     name: vendorName(user),
+    firstName: user.userFname,
+    lastName: user.userLname,
     email: user.userEmail,
     phone: user.contact,
     contact: user.contact,
+    gender: user.gender,
+    dob: user.dob,
+    occupation: user.occupation,
+    city: user.city,
+    bio: user.bio,
     role: user.userType,
     userType: user.userType,
     profile: user.profile,
     isActive: user.isActive !== false,
+    accountStatus: user.accountStatus || (user.isActive === false ? 'suspended' : 'active'),
     verificationStatus: user.verificationStatus || (user.isActive === false ? 'Inactive' : 'Verified'),
+    preferences: user.preferences || {},
+    notificationPreferences: user.preferences?.notifications || {},
+    analyticsSummary: user.leadAnalytics || {},
     addedOn: user.addedOn,
+    createdAt: user.createdAt || user.addedOn,
+    updatedAt: user.updatedAt,
+    lastLogin: user.lastLogin || user.updatedAt || user.addedOn,
 })
 
 const propertyDto = (property = {}, analytics = {}) => {
@@ -2145,8 +2160,39 @@ router.get('/getAdminUsers', async (req, res) => {
         ]
     }
 
-    const users = await User.find(filters).select('-userPassword -resetOtp -resetOtpExpiresAt').sort({ addedOn: -1 })
-    res.json({ result: "success", msg: "Admin users found", data: users })
+    const users = await User.find(filters).select('-userPassword -resetOtp -resetOtpExpiresAt').sort({ addedOn: -1 }).lean()
+    const userIds = users.map((user) => user._id)
+    const [wishlistCounts, inquiryCounts, visitCounts, propertyCounts] = await Promise.all([
+        Shortlisted.aggregate([{ $match: { isActive: true, userIDFK: { $in: userIds } } }, { $group: { _id: '$userIDFK', count: { $sum: 1 } } }]),
+        Inquiry.aggregate([{ $match: { isActive: true, userIDFK: { $in: userIds } } }, { $group: { _id: '$userIDFK', count: { $sum: 1 } } }]),
+        Visit.aggregate([{ $match: { isActive: true, userIDFK: { $in: userIds } } }, { $group: { _id: '$userIDFK', count: { $sum: 1 }, converted: { $sum: { $cond: ['$isConverted', 1, 0] } } } }]),
+        Property.aggregate([{ $match: { $or: [{ userIDFK: { $in: userIds } }, { vendorId: { $in: userIds } }] } }, { $group: { _id: '$userIDFK', count: { $sum: 1 } } }]),
+    ])
+    const countMap = (rows, field = 'count') => new Map(rows.map((row) => [row._id?.toString(), row[field] || 0]))
+    const wishlistMap = countMap(wishlistCounts)
+    const inquiryMap = countMap(inquiryCounts)
+    const visitMap = countMap(visitCounts)
+    const convertedMap = countMap(visitCounts, 'converted')
+    const propertyMap = countMap(propertyCounts)
+    res.json({
+        result: "success",
+        msg: "Admin users found",
+        data: users.map((user) => ({
+            ...user,
+            objectId: user._id,
+            wishlistCount: wishlistMap.get(user._id.toString()) || user.wishlistHistory?.length || 0,
+            leadCount: (inquiryMap.get(user._id.toString()) || 0) + (visitMap.get(user._id.toString()) || 0),
+            bookingCount: convertedMap.get(user._id.toString()) || 0,
+            propertyCount: propertyMap.get(user._id.toString()) || 0,
+            analyticsSummary: {
+                wishlists: wishlistMap.get(user._id.toString()) || 0,
+                inquiries: inquiryMap.get(user._id.toString()) || 0,
+                visits: visitMap.get(user._id.toString()) || 0,
+                conversions: convertedMap.get(user._id.toString()) || 0,
+                properties: propertyMap.get(user._id.toString()) || 0,
+            },
+        })),
+    })
 })
 
 router.post('/updateUserStatus', async (req, res) => {
@@ -2179,7 +2225,14 @@ router.post('/users/:id', async (req, res) => {
     if (req.body.userEmail !== undefined) updateFields.userEmail = req.body.userEmail
     if (req.body.contact !== undefined) updateFields.contact = req.body.contact
     if (req.body.gender !== undefined) updateFields.gender = req.body.gender
+    if (req.body.dob !== undefined) updateFields.dob = req.body.dob
     if (req.body.occupation !== undefined) updateFields.occupation = req.body.occupation
+    if (req.body.city !== undefined) updateFields.city = req.body.city
+    if (req.body.bio !== undefined) updateFields.bio = req.body.bio
+    if (req.body.accountStatus !== undefined) {
+        updateFields.accountStatus = req.body.accountStatus
+        updateFields.isActive = req.body.accountStatus === 'active'
+    }
     if (req.body.verificationStatus !== undefined) updateFields.verificationStatus = req.body.verificationStatus
 
     if (req.body.userEmail !== undefined) {

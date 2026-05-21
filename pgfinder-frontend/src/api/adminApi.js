@@ -16,11 +16,23 @@ const paramsWithDefaults = (params = {}) => ({
 const normalizeUser = (user = {}) => ({
   ...user,
   id: user.id || user._id,
+  objectId: user.objectId || user._id || user.id,
+  firstName: user.firstName || user.userFname || '',
+  lastName: user.lastName || user.userLname || '',
   name: user.name || [user.userFname, user.userLname].filter(Boolean).join(' ') || user.userEmail || user.email,
   email: user.email || user.userEmail,
+  phone: user.phone || user.contact,
   contact: user.contact || user.phone,
   role: (user.role || user.userType || 'user').toString().toLowerCase(),
+  userType: user.userType,
+  profile: user.profile,
   isActive: user.isActive !== false,
+  accountStatus: user.accountStatus || (user.isActive === false ? 'suspended' : 'active'),
+  notificationPreferences: user.notificationPreferences || user.preferences?.notifications || {},
+  analyticsSummary: user.analyticsSummary || user.leadAnalytics || {},
+  lastLogin: user.lastLogin || user.lastLoginAt || user.updatedAt || user.addedOn,
+  createdAt: user.createdAt || user.addedOn,
+  updatedAt: user.updatedAt,
 })
 
 const adminApi = {

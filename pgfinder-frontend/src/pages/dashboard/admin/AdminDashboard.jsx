@@ -5,6 +5,7 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, Res
 import { FiBarChart2, FiCheck, FiEye, FiHome, FiRefreshCw, FiSearch, FiUsers } from 'react-icons/fi'
 import Button from '../../../components/common/Button'
 import Card from '../../../components/common/Card'
+import AdvancedDataTable from '../../../components/admin/AdvancedDataTable'
 import adminApi from '../../../api/adminApi'
 import useDebouncedValue from '../../../hooks/useDebouncedValue'
 import { useAuth } from '../../../context/AuthContext'
@@ -24,7 +25,6 @@ function AdminDashboard() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const [filters, setFilters] = useState({ search: '', city: '', propertyType: '', approvalStatus: '', active: '', occupancy: '', sort: 'newest' })
-  const [selected, setSelected] = useState([])
   const debouncedSearch = useDebouncedValue(filters.search)
 
   const propertyParams = useMemo(() => ({ ...filters, search: debouncedSearch, limit: 30 }), [debouncedSearch, filters])
@@ -52,7 +52,6 @@ function AdminDashboard() {
   const bulkMutation = useMutation({
     mutationFn: (payload) => adminApi.bulkProperties(payload),
     onSuccess: () => {
-      setSelected([])
       refreshAdmin()
     },
   })
@@ -61,15 +60,71 @@ function AdminDashboard() {
     onSuccess: refreshAdmin,
   })
 
-  const selectedIds = selected.length ? selected : properties.map((property) => property.id)
-  const handleBulk = (action) => bulkMutation.mutate({ ids: selectedIds, action })
-  const toggleSelected = (id) => setSelected((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]))
-
   const statCards = [
     { label: 'Total users', value: summary.totalUsers, icon: <FiUsers />, onClick: () => navigate('/dashboard/admin/users') },
     { label: 'Vendors', value: summary.vendors, icon: <FiHome />, onClick: () => navigate('/dashboard/admin/users?role=Owner') },
     { label: 'Active listings', value: summary.activeListings, icon: <FiBarChart2 />, onClick: () => { setFilters((current) => ({ ...current, active: 'true' })); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) } },
     { label: 'Leads', value: summary.leads, icon: <FiCheck />, onClick: () => document.getElementById('lead-analytics')?.scrollIntoView({ behavior: 'smooth' }) },
+  ]
+  const propertyColumns = [
+    {
+      key: 'property',
+      label: 'Property',
+      value: (property) => `${property.name || ''} ${property.city || ''} ${property.area || property.areaName || ''} ${property.id || ''}`,
+      render: (property) => (
+        <button type="button" onClick={() => navigate(`/dashboard/admin/properties/${property.id}`)} className="font-semibold text-white hover:text-accent-300">
+          {property.name}
+          <span className="mt-1 block max-w-[260px] truncate text-xs font-normal text-slate-500">{property.city || '-'} · {property.area || property.areaName || '-'} · {property.id}</span>
+        </button>
+      ),
+    },
+    {
+      key: 'vendor',
+      label: 'Vendor',
+      value: (property) => `${property.vendor?.name || property.owner?.name || ''} ${property.vendor?.email || property.owner?.email || ''}`,
+      render: (property) => (
+        <button type="button" onClick={() => navigate(`/dashboard/admin/vendors/${property.vendorId}`)} className="text-accent-200 hover:text-accent-100">
+          {property.vendor?.name || property.owner?.name || '-'}
+          <span className="mt-1 block text-xs text-slate-500">{property.vendor?.email || property.owner?.email || '-'}</span>
+        </button>
+      ),
+    },
+    { key: 'occupancy', label: 'Occupancy', value: (property) => `${property.occupancy || 0}% ${property.vacancyStatus || ''}` },
+    { key: 'leads', label: 'Leads', value: (property) => `${property.totalLeads || 0} leads ${property.totalVisits || 0} visits`, sortValue: (property) => property.totalLeads || 0 },
+    {
+      key: 'status',
+      label: 'Status',
+      value: (property) => `${property.approvalStatus || 'Pending'} ${property.isActive ? 'Active' : 'Inactive'}`,
+      render: (property) => (
+        <div>
+          <span className={`rounded-full border px-3 py-1 text-xs ${statusTone[property.approvalStatus] || statusTone.Pending}`}>{property.approvalStatus || 'Pending'}</span>
+          <p className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs ${
+            property.isActive
+              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+              : 'border-rose-500/40 bg-rose-500/10 text-rose-200'
+          }`}>{property.isActive ? 'Active' : 'Inactive'}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      sortable: false,
+      value: (property) => property.id,
+      render: (property) => (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => navigate(`/dashboard/admin/properties/${property.id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200"><FiEye /> View</button>
+          <button type="button" onClick={() => navigate(`/dashboard/admin/properties/${property.id}/edit`)} className="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200">Edit</button>
+          <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { approvalStatus: 'Approved' } })} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">Verify</button>
+          <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { approvalStatus: 'Rejected' } })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
+          <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { isActive: !property.isActive } })} className={`rounded-full border px-3 py-2 text-xs transition ${
+            property.isActive
+              ? 'border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
+              : 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
+          }`}>{property.isActive ? 'Deactivate' : 'Activate'}</button>
+        </div>
+      ),
+    },
   ]
 
   return (
@@ -206,77 +261,26 @@ function AdminDashboard() {
         ) : null}
       </Card>
 
-      <Card id="admin-properties" className="overflow-hidden p-0">
-        <div className="flex flex-col gap-3 border-b border-slate-800 p-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Property operations</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">MongoDB powered listing control</h2>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => handleBulk('approve')} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Verify all</button>
-            <button type="button" onClick={() => handleBulk('activate')} className="rounded-full border border-cyan-500/60 px-4 py-2 text-sm text-cyan-200">Activate selected</button>
-            <button type="button" onClick={() => handleBulk('reject')} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200">Reject all</button>
-            <button type="button" onClick={() => handleBulk('deactivate')} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Deactivate selected</button>
-          </div>
-        </div>
-        {error ? <p className="p-5 text-sm text-rose-300">{error.message}</p> : null}
-        <div className="overflow-x-auto overscroll-x-contain">
-          <table className="min-w-[980px] divide-y divide-slate-800 text-left text-sm">
-            <thead className="bg-slate-950/70 text-xs uppercase tracking-[0.16em] text-slate-500">
-              <tr>
-                <th className="px-5 py-4">Select</th>
-                <th className="px-5 py-4">Property</th>
-                <th className="px-5 py-4">Vendor</th>
-                <th className="px-5 py-4">Occupancy</th>
-                <th className="px-5 py-4">Leads</th>
-                <th className="px-5 py-4">Status</th>
-                <th className="px-5 py-4">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800 text-slate-300">
-              {properties.map((property) => (
-                <tr key={property.id} className="hover:bg-slate-900/70">
-                  <td className="px-5 py-4"><input type="checkbox" checked={selected.includes(property.id)} onChange={() => toggleSelected(property.id)} /></td>
-                  <td className="px-5 py-4">
-                    <button type="button" onClick={() => navigate(`/dashboard/admin/properties/${property.id}`)} className="font-semibold text-white hover:text-accent-300">{property.name}</button>
-                    <p className="mt-1 text-xs text-slate-500">{property.city || '-'} · {property.area || property.areaName || '-'} · {property.id}</p>
-                  </td>
-                  <td className="px-5 py-4">
-                    <button type="button" onClick={() => navigate(`/dashboard/admin/vendors/${property.vendorId}`)} className="text-accent-200 hover:text-accent-100">{property.vendor?.name || property.owner?.name || '-'}</button>
-                    <p className="mt-1 text-xs text-slate-500">{property.vendor?.email || property.owner?.email || '-'}</p>
-                  </td>
-                  <td className="px-5 py-4">{property.occupancy || 0}% · {property.vacancyStatus || '-'}</td>
-                  <td className="px-5 py-4">{property.totalLeads || 0} leads · {property.totalVisits || 0} visits</td>
-                  <td className="px-5 py-4">
-                    <span className={`rounded-full border px-3 py-1 text-xs ${statusTone[property.approvalStatus] || statusTone.Pending}`}>{property.approvalStatus || 'Pending'}</span>
-                    <p className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs ${
-                      property.isActive
-                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
-                        : 'border-rose-500/40 bg-rose-500/10 text-rose-200'
-                    }`}>{property.isActive ? 'Active' : 'Inactive'}</p>
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => navigate(`/dashboard/admin/properties/${property.id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200"><FiEye /> View</button>
-                      <button type="button" onClick={() => navigate(`/dashboard/admin/properties/${property.id}/edit`)} className="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200">Edit</button>
-                      <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { approvalStatus: 'Approved' } })} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">Verify</button>
-                      <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { approvalStatus: 'Rejected' } })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
-                      <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { isActive: !property.isActive } })} className={`rounded-full border px-3 py-2 text-xs transition ${
-                        property.isActive
-                          ? 'border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
-                          : 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
-                      }`}>{property.isActive ? 'Deactivate' : 'Activate'}</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!properties.length ? (
-                <tr><td className="px-5 py-8 text-center text-slate-400" colSpan="7">{propertiesLoading ? 'Loading live properties...' : 'No properties match these filters.'}</td></tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <div id="admin-properties">
+        {error ? <p className="mb-3 text-sm text-rose-300">{error.message}</p> : null}
+        <AdvancedDataTable
+          title="MongoDB powered listing control"
+          eyebrow="Property operations"
+          rows={properties}
+          columns={propertyColumns}
+          loading={propertiesLoading}
+          searchPlaceholder="Search ObjectId, vendor, property, locality, status"
+          minWidth="1180px"
+          actions={({ selected: tableSelected }) => (
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => bulkMutation.mutate({ ids: tableSelected.length ? tableSelected : properties.map((property) => property.id), action: 'approve' })} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Verify selected</button>
+              <button type="button" onClick={() => bulkMutation.mutate({ ids: tableSelected.length ? tableSelected : properties.map((property) => property.id), action: 'activate' })} className="rounded-full border border-cyan-500/60 px-4 py-2 text-sm text-cyan-200">Activate selected</button>
+              <button type="button" onClick={() => bulkMutation.mutate({ ids: tableSelected.length ? tableSelected : properties.map((property) => property.id), action: 'reject' })} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200">Reject selected</button>
+              <button type="button" onClick={() => bulkMutation.mutate({ ids: tableSelected.length ? tableSelected : properties.map((property) => property.id), action: 'deactivate' })} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Deactivate selected</button>
+            </div>
+          )}
+        />
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.65fr]">
         <Card>

@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiCheckSquare, FiEye, FiMail, FiPhone, FiUser, FiX } from 'react-icons/fi'
+import { FiCheckSquare, FiEye, FiX } from 'react-icons/fi'
 import Card from '../../../components/common/Card'
+import AdvancedDataTable from '../../../components/admin/AdvancedDataTable'
 import adminApi from '../../../api/adminApi'
 import useDebouncedValue from '../../../hooks/useDebouncedValue'
 
@@ -38,6 +39,7 @@ function ManageUsersPage() {
   })
 
   const handleStatus = async (user, isActive) => {
+    if (!user) return
     try {
       statusMutation.mutate({ user, payload: { isActive } })
     } catch (err) {
@@ -52,6 +54,82 @@ function ManageUsersPage() {
       setError(err?.message || 'Unable to verify vendor.')
     }
   }
+
+  const userColumns = [
+    {
+      key: 'name',
+      label: 'Name',
+      value: (user) => user.name || user.email,
+      render: (user) => (
+        <button type="button" onClick={() => (['owner', 'vendor'].includes(user.role) ? navigate(`/dashboard/admin/vendors/${user.id || user._id}`) : setSelectedUser(user))} className="font-semibold text-white hover:text-accent-300">
+          {user.name || user.email}
+          <span className="mt-1 block max-w-[220px] truncate text-xs font-normal text-slate-500">{user.objectId || user._id || user.id}</span>
+        </button>
+      ),
+    },
+    { key: 'email', label: 'Email', value: (user) => user.email || '-' },
+    {
+      key: 'role',
+      label: 'Role',
+      value: (user) => user.role || 'user',
+      render: (user) => (
+        <span className={`rounded-full border px-3 py-1 text-xs ${
+          ['owner', 'vendor'].includes(user.role)
+            ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-200'
+            : user.role === 'admin'
+              ? 'border-violet-500/50 bg-violet-500/10 text-violet-200'
+              : 'border-slate-600 bg-slate-900 text-slate-200'
+        }`}>{user.role?.toUpperCase() || 'USER'}</span>
+      ),
+    },
+    { key: 'phone', label: 'Phone', value: (user) => user.contact || '-' },
+    { key: 'verification', label: 'Verification', value: (user) => user.verificationStatus || 'Pending' },
+    {
+      key: 'status',
+      label: 'Status',
+      value: (user) => user.accountStatus || (user.isActive ? 'active' : 'suspended'),
+      render: (user) => (
+        <span className={`rounded-full border px-3 py-1 text-xs ${
+          user.isActive
+            ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
+            : 'border-rose-500/50 bg-rose-500/10 text-rose-200'
+        }`}>{user.isActive ? 'Active' : 'Inactive'}</span>
+      ),
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      sortable: false,
+      value: (user) => user.id,
+      render: (user) => (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => (['owner', 'vendor'].includes(user.role) ? navigate(`/dashboard/admin/vendors/${user.id || user._id}`) : setSelectedUser(user))} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500">
+            <FiEye /> View
+          </button>
+          <button type="button" onClick={() => setEditUser(user)} className="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-cyan-400 hover:text-cyan-200">
+            Edit
+          </button>
+          {['owner', 'vendor'].includes(user.role) ? (
+            <button type="button" onClick={() => handleVendorVerification(user)} className="inline-flex items-center gap-2 rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">
+              <FiCheckSquare /> Verify
+            </button>
+          ) : null}
+          <button type="button" onClick={() => handleStatus(user, !user.isActive)} className={`rounded-full border px-3 py-2 text-xs transition ${
+            user.isActive
+              ? 'border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
+              : 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
+          }`}>
+            {user.isActive ? 'Suspend' : 'Activate'}
+          </button>
+        </div>
+      ),
+    },
+  ]
+  const selectedAnalytics = selectedUser ? {
+    wishlistCount: selectedUser.wishlistCount || selectedUser.wishlistHistory?.length || 0,
+    leadCount: selectedUser.leadCount || selectedUser.inquiryHistory?.length || selectedUser.analyticsSummary?.leads || 0,
+    bookingCount: selectedUser.bookingCount || selectedUser.analyticsSummary?.bookings || 0,
+  } : {}
 
   return (
     <div className="space-y-8">
@@ -95,75 +173,25 @@ function ManageUsersPage() {
 
       {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
-      {loading ? (
-        <Card className="p-8">Loading users...</Card>
-      ) : users.length ? (
-        <Card className="overflow-hidden p-0">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
-              <thead className="bg-slate-950/70 text-xs uppercase tracking-[0.18em] text-slate-500">
-                <tr>
-                  <th className="px-5 py-4">Name</th>
-                  <th className="px-5 py-4">Email</th>
-                  <th className="px-5 py-4">Role</th>
-                  <th className="px-5 py-4">Phone</th>
-                  <th className="px-5 py-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800 text-slate-300">
-                {users.map((user) => (
-                  <tr key={user.id || user._id} className="hover:bg-slate-900/70">
-                    <td className="px-5 py-4">
-                      <button type="button" onClick={() => (['owner', 'vendor'].includes(user.role) ? navigate(`/dashboard/admin/vendors/${user.id || user._id}`) : setSelectedUser(user))} className="font-semibold text-white hover:text-accent-300">
-                        {user.name || user.email}
-                      </button>
-                    </td>
-                    <td className="px-5 py-4">{user.email || '-'}</td>
-                    <td className="px-5 py-4">
-                      <span className={`rounded-full border px-3 py-1 text-xs ${
-                        ['owner', 'vendor'].includes(user.role)
-                          ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-200'
-                          : user.role === 'admin'
-                            ? 'border-violet-500/50 bg-violet-500/10 text-violet-200'
-                            : 'border-slate-600 bg-slate-900 text-slate-200'
-                      }`}>{user.role?.toUpperCase() || 'USER'}</span>
-                    </td>
-                    <td className="px-5 py-4">{user.contact || '-'}</td>
-                    <td className="px-5 py-4">
-                      <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={() => (['owner', 'vendor'].includes(user.role) ? navigate(`/dashboard/admin/vendors/${user.id || user._id}`) : setSelectedUser(user))} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500">
-                          <FiEye /> View
-                        </button>
-                        <button type="button" onClick={() => setEditUser(user)} className="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-cyan-400 hover:text-cyan-200">
-                          Edit
-                        </button>
-                        {['owner', 'vendor'].includes(user.role) ? (
-                          <button type="button" onClick={() => handleVendorVerification(user)} className="inline-flex items-center gap-2 rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">
-                            <FiCheckSquare /> Verify vendor
-                          </button>
-                        ) : null}
-                        <button type="button" onClick={() => handleStatus(user, !user.isActive)} className={`rounded-full border px-3 py-2 text-xs transition ${
-                          user.isActive
-                            ? 'border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
-                            : 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
-                        }`}>
-                          {user.isActive ? 'Deactivate' : 'Activate'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <AdvancedDataTable
+        title="Users, vendors, admins, and MongoDB identities"
+        eyebrow="Admin database table"
+        rows={users}
+        columns={userColumns}
+        loading={loading}
+        searchPlaceholder="Search ObjectId, name, email, phone, role, status"
+        minWidth="1120px"
+        actions={({ selected }) => (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => selected.forEach((id) => handleStatus(users.find((user) => (user.id || user._id) === id), false))} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200">Suspend selected</button>
+            <button type="button" onClick={() => selected.forEach((id) => handleStatus(users.find((user) => (user.id || user._id) === id), true))} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Activate selected</button>
           </div>
-        </Card>
-      ) : (
-        <Card className="p-8 text-center text-slate-300">No users available yet.</Card>
-      )}
+        )}
+      />
 
       {selectedUser ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
-          <div className="w-full max-w-2xl rounded-[2rem] border border-slate-800 bg-surface-900 p-6 shadow-card">
+          <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-slate-800 bg-surface-900 p-6 shadow-card">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm uppercase tracking-[0.24em] text-accent-400">{selectedUser.role || 'user'}</p>
@@ -173,17 +201,41 @@ function ManageUsersPage() {
                 <FiX />
               </button>
             </div>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <p className="flex items-center gap-2 text-slate-300"><FiMail /> {selectedUser.email || '-'}</p>
-              <p className="flex items-center gap-2 text-slate-300"><FiPhone /> {selectedUser.contact || '-'}</p>
-              <p className="flex items-center gap-2 text-slate-300"><FiUser /> {selectedUser.gender || '-'}</p>
-              <p className="text-slate-300">Occupation: {selectedUser.occupation || '-'}</p>
-              <p className="text-slate-300">Status: <span className={`rounded-full border px-3 py-1 text-xs ${
-                selectedUser.isActive
-                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
-                  : 'border-rose-500/50 bg-rose-500/10 text-rose-200'
-              }`}>{selectedUser.isActive ? 'Active' : 'Inactive'}</span></p>
-              <p className="text-slate-300">Joined: {selectedUser.addedOn ? new Date(selectedUser.addedOn).toLocaleDateString() : '-'}</p>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {[
+                ['MongoDB _id', selectedUser._id || selectedUser.id],
+                ['ObjectId', selectedUser.objectId || selectedUser._id || selectedUser.id],
+                ['First name', selectedUser.firstName || selectedUser.userFname],
+                ['Last name', selectedUser.lastName || selectedUser.userLname],
+                ['Email', selectedUser.email],
+                ['Phone', selectedUser.contact],
+                ['Gender', selectedUser.gender],
+                ['DOB', selectedUser.dob],
+                ['Occupation', selectedUser.occupation],
+                ['City', selectedUser.city],
+                ['Bio', selectedUser.bio],
+                ['User type', selectedUser.userType || selectedUser.role],
+                ['Verification', selectedUser.verificationStatus || 'Pending'],
+                ['Account status', selectedUser.accountStatus || (selectedUser.isActive ? 'active' : 'suspended')],
+                ['Created', selectedUser.createdAt || selectedUser.addedOn],
+                ['Updated', selectedUser.updatedAt || '-'],
+                ['Last login', selectedUser.lastLogin || '-'],
+                ['Wishlist count', selectedAnalytics.wishlistCount],
+                ['Lead count', selectedAnalytics.leadCount],
+                ['Booking count', selectedAnalytics.bookingCount],
+                ['Notifications', Object.keys(selectedUser.notificationPreferences || {}).length ? JSON.stringify(selectedUser.notificationPreferences) : 'Default'],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
+                  <p className="mt-2 break-words text-sm text-slate-200">{value || '-'}</p>
+                </div>
+              ))}
+              {selectedUser.profile ? <img src={selectedUser.profile} alt={selectedUser.name || 'Profile'} className="h-32 w-32 rounded-2xl object-cover" /> : null}
+            </div>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button type="button" onClick={() => setEditUser(selectedUser)} className="rounded-full border border-cyan-500/60 px-4 py-2 text-sm text-cyan-200">Edit profile</button>
+              <button type="button" onClick={() => handleStatus(selectedUser, !selectedUser.isActive)} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200">{selectedUser.isActive ? 'Suspend account' : 'Activate account'}</button>
+              <button type="button" onClick={() => setError('Password reset handoff uses the secure OTP flow from login; direct admin password mutation is intentionally blocked.')} className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200">Reset password</button>
             </div>
           </div>
         </div>
@@ -200,6 +252,10 @@ function ManageUsersPage() {
                 contact: editUser.contact,
                 occupation: editUser.occupation || '',
                 gender: editUser.gender || '',
+                dob: editUser.dob || '',
+                city: editUser.city || '',
+                bio: editUser.bio || '',
+                accountStatus: editUser.accountStatus || '',
                 userType: editUser.userType || editUser.role,
               })
             }}
@@ -217,6 +273,16 @@ function ManageUsersPage() {
               <input type="email" value={editUser.email || ''} onChange={(event) => setEditUser((current) => ({ ...current, email: event.target.value }))} placeholder="Email" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
               <input value={editUser.contact || ''} onChange={(event) => setEditUser((current) => ({ ...current, contact: event.target.value }))} placeholder="Phone" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
               <input value={editUser.occupation || ''} onChange={(event) => setEditUser((current) => ({ ...current, occupation: event.target.value }))} placeholder="Occupation" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+              <input value={editUser.gender || ''} onChange={(event) => setEditUser((current) => ({ ...current, gender: event.target.value }))} placeholder="Gender" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+              <input value={editUser.dob || ''} onChange={(event) => setEditUser((current) => ({ ...current, dob: event.target.value }))} placeholder="DOB" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+              <input value={editUser.city || ''} onChange={(event) => setEditUser((current) => ({ ...current, city: event.target.value }))} placeholder="City/locality" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+              <select value={editUser.accountStatus || (editUser.isActive ? 'active' : 'suspended')} onChange={(event) => setEditUser((current) => ({ ...current, accountStatus: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400">
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+                <option value="blocked">Blocked</option>
+                <option value="pending_verification">Pending verification</option>
+              </select>
+              <textarea value={editUser.bio || ''} onChange={(event) => setEditUser((current) => ({ ...current, bio: event.target.value }))} placeholder="Bio/admin notes" className="sm:col-span-2 min-h-24 rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" onClick={() => setEditUser(null)} className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200">Cancel</button>

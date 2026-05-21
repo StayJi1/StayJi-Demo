@@ -1,5 +1,6 @@
 
 var mongoose = require('mongoose');
+var Mixed = mongoose.Schema.Types.Mixed;
 userSchema = mongoose.Schema({
     userName:{
         type:String
@@ -73,6 +74,48 @@ userSchema = mongoose.Schema({
     },
     profile:{
         type:String
+    },
+    preferences:{
+        type:Mixed,
+        default:{}
+    },
+    wishlistHistory:{
+        type:[Mixed],
+        default:[]
+    },
+    viewedProperties:{
+        type:[Mixed],
+        default:[]
+    },
+    savedSearches:{
+        type:[Mixed],
+        default:[]
+    },
+    inquiryHistory:{
+        type:[Mixed],
+        default:[]
+    },
+    businessName:{
+        type:String
+    },
+    vendorType:{
+        type:String
+    },
+    vendorProfile:{
+        type:Mixed,
+        default:{}
+    },
+    leadAnalytics:{
+        type:Mixed,
+        default:{}
+    },
+    occupancyAnalytics:{
+        type:Mixed,
+        default:{}
+    },
+    propertyHistory:{
+        type:[Mixed],
+        default:[]
     },
     addedOn:{
         type:String

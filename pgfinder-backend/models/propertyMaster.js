@@ -1,4 +1,5 @@
 var mongoose = require('mongoose');
+var Mixed = mongoose.Schema.Types.Mixed;
 propertySchema = mongoose.Schema({
     userIDFK:{
         type:mongoose.Schema.Types.ObjectId,
@@ -128,6 +129,33 @@ propertySchema = mongoose.Schema({
     acAvailable:{
         type:Boolean,
         default:false
+    },
+    securityFeatures:{
+        type:[String],
+        default:[]
+    },
+    nearbyLandmarks:{
+        type:[String],
+        default:[]
+    },
+    distanceFromITParks:{
+        type:Mixed,
+        default:{}
+    },
+    distanceFromMetro:{
+        type:String
+    },
+    reviewSummary:{
+        type:Mixed,
+        default:{}
+    },
+    recommendations:{
+        type:Mixed,
+        default:{}
+    },
+    occupancyDetails:{
+        type:Mixed,
+        default:{}
     },
     rating:{
         type:Number,

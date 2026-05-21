@@ -1,6 +1,6 @@
 import { Link, Navigate, useParams } from 'react-router-dom'
 import SEO from '../components/SEO'
-import { faqGroups, getFaqItems, siteConfig } from '../data/seoContent'
+import { buildSeoArticle, faqGroups, getFaqRecords, siteConfig } from '../data/seoContent'
 
 const slugify = (value = '') => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 
@@ -10,21 +10,21 @@ export default function FAQDetailPage() {
   const group = faqGroups[groupKey]
   if (!group) return <Navigate to="/faq" replace />
 
-  const items = getFaqItems(groupKey)
-  const item = items.find(([question]) => slugify(question) === faqSlug) || items[0]
+  const items = getFaqRecords(groupKey)
+  const item = items.find((record) => slugify(record.question || record.title) === faqSlug || record.slug === faqSlug) || items[0]
   if (!item) return <Navigate to={`/${group.slug}`} replace />
 
-  const [question, answer] = item
+  const question = item.question || item.title
+  const answer = item.answer || item.summary
+  const article = buildSeoArticle(item, 'faq')
   const path = `/${group.slug}/${slugify(question)}`
-  const related = items.filter(([relatedQuestion]) => relatedQuestion !== question).slice(0, 5)
+  const related = items.filter((relatedItem) => (relatedItem.question || relatedItem.title) !== question).slice(0, 5)
   const schema = {
     '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    mainEntity: [{
-      '@type': 'Question',
-      name: question,
-      acceptedAnswer: { '@type': 'Answer', text: answer },
-    }],
+    '@graph': [
+      { '@type': 'FAQPage', mainEntity: [{ '@type': 'Question', name: question, acceptedAnswer: { '@type': 'Answer', text: answer } }] },
+      { '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: siteConfig.domain }, { '@type': 'ListItem', position: 2, name: group.title, item: `${siteConfig.domain}/${group.slug}` }, { '@type': 'ListItem', position: 3, name: question, item: `${siteConfig.domain}${path}` }] },
+    ],
   }
 
   return (
@@ -36,24 +36,26 @@ export default function FAQDetailPage() {
         <p className="mt-5 text-lg leading-8 text-slate-600">{answer}</p>
 
         <section className="mt-8 grid gap-6 text-base leading-8 text-slate-700">
-          <h2 className="text-2xl font-semibold text-slate-950">Short answer for Bangalore renters</h2>
-          <p>{answer} On StayJi, the safest way to make a decision is to compare locality, commute, rent, deposit, sharing type, food, vacancy, photos, reviews, and visit availability before sharing sensitive information or paying anyone.</p>
-          <h2 className="text-2xl font-semibold text-slate-950">What to check before choosing</h2>
-          <p>For Bangalore PG searches, always compare the total monthly cost rather than rent alone. Ask about electricity, food, laundry, WiFi, maintenance, lock-in, notice period, security deposit, refund timeline, guest policy, late entry policy, and whether the listed room is actually available now.</p>
-          <h3 className="text-xl font-semibold text-slate-950">Locality and commute</h3>
-          <p>Whitefield, Electronic City, Bellandur, Marathahalli, HSR Layout, Koramangala, Indiranagar, Hebbal, JP Nagar, BTM Layout, KR Puram, Sarjapur Road, and Yelahanka can feel very different during office hours. Check metro access, BMTC routes, office shuttles, cab availability, and walking safety around the exact building.</p>
-          <h3 className="text-xl font-semibold text-slate-950">Safety and verification</h3>
-          <p>Prefer verified listings with clear photos, address consistency, owner or vendor identity, CCTV, secure entry, fire safety basics, written rules, and transparent deposits. Report suspicious pricing, duplicate photos, abusive messages, pressure to pay outside the platform, or fake availability claims.</p>
-          <h2 className="text-2xl font-semibold text-slate-950">How StayJi helps</h2>
-          <p>StayJi is being built as a Bangalore-focused accommodation discovery and lead-management platform. The platform connects users, vendors, and admins through structured property data, visit requests, inquiries, wishlist activity, reviews, notifications, and moderation workflows so decisions are easier to track and safer to audit.</p>
+          {article.sections.map((section) => (
+            <section key={section.heading}>
+              <h2 className="text-2xl font-semibold text-slate-950">{section.heading}</h2>
+              <p className="mt-3">{section.body}</p>
+            </section>
+          ))}
+          <h2 className="text-2xl font-semibold text-slate-950">Internal links for deeper research</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Link to={`/properties?search=${encodeURIComponent(article.locality)}`} className="rounded-xl border border-slate-200 p-4 font-semibold text-slate-700 hover:text-blue-700">Related properties in {article.locality}</Link>
+            <Link to={`/bangalore/${article.related.locality?.slug || ''}`} className="rounded-xl border border-slate-200 p-4 font-semibold text-slate-700 hover:text-blue-700">Locality guide</Link>
+            {article.related.blogs.slice(0, 2).map((post) => <Link key={post.slug} to={`/blogs/${post.slug}`} className="rounded-xl border border-slate-200 p-4 font-semibold text-slate-700 hover:text-blue-700">{post.title}</Link>)}
+          </div>
         </section>
 
         <aside className="mt-10 rounded-2xl bg-slate-50 p-6">
           <h2 className="text-2xl font-semibold text-slate-950">Related FAQs</h2>
           <div className="mt-4 grid gap-3">
-            {related.map(([relatedQuestion]) => (
-              <Link key={relatedQuestion} to={`/${group.slug}/${slugify(relatedQuestion)}`} className="rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold text-slate-700 hover:text-blue-700">
-                {relatedQuestion}
+            {related.map((relatedItem) => (
+              <Link key={relatedItem.slug} to={`/${group.slug}/${slugify(relatedItem.question || relatedItem.title)}`} className="rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold text-slate-700 hover:text-blue-700">
+                {relatedItem.question || relatedItem.title}
               </Link>
             ))}
           </div>
@@ -63,4 +65,3 @@ export default function FAQDetailPage() {
     </main>
   )
 }
-
