@@ -48,6 +48,15 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
       className="group min-w-0 overflow-hidden rounded-[1.5rem] border border-slate-800/70 bg-slate-950/90 shadow-card sm:rounded-[2rem]"
     >
       <div className="relative overflow-hidden">
+        {property.displayBadges?.length ? (
+          <div className="absolute left-4 top-4 z-20 flex max-w-[70%] flex-wrap gap-2">
+            {property.displayBadges.map((badge) => (
+              <span key={badge} className="rounded-full border border-amber-300/50 bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-100 backdrop-blur-xl">
+                {badge}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <div className="absolute right-4 top-4 z-20 rounded-full bg-slate-950/70 px-3 py-2 text-xs font-semibold text-white backdrop-blur-xl">
           {property.availableBeds ? `${property.availableBeds} beds live` : property.vacancyStatus || property.status || 'Verified'}
         </div>

@@ -6,6 +6,7 @@ import { FiArrowLeft, FiCheck, FiEdit2, FiMapPin, FiMessageSquare, FiPower, FiTr
 import Card from '../../../components/common/Card'
 import Button from '../../../components/common/Button'
 import adminApi from '../../../api/adminApi'
+import { FieldNote, StatusChip, getOperationalStatus } from '../../../utils/operationalStatus.jsx'
 
 function AdminPropertyDetailPage() {
   const { propertyId } = useParams()
@@ -64,6 +65,25 @@ function AdminPropertyDetailPage() {
     { name: 'Complaints', value: data.complaints?.length || 0 },
   ]
   const propertyMessages = messages.filter((item) => !item.propertyId || `${item.propertyId?._id || item.propertyId}` === propertyId)
+  const readiness = property.launchReadiness ?? Math.round(([
+    property.name,
+    property.city,
+    property.area,
+    images.length,
+    property.rent,
+    property.isVerified || ['Approved', 'Verified'].includes(property.approvalStatus),
+  ].filter(Boolean).length / 6) * 100)
+  const operationRows = [
+    ['Property Type', property.category || property.propertyCategory || '-'],
+    ['Demo/Live Status', property.isDummy ? 'DEMO inventory' : 'LIVE inventory'],
+    ['Verification Status', property.isVerified ? 'Verified' : 'Unverified'],
+    ['Approval Status', property.approvalStatus || 'Pending'],
+    ['Public Visibility', property.publicVisibility ? 'Publicly searchable' : 'Hidden from public search'],
+    ['Assigned City', property.city || property.cityName || '-'],
+    ['Assigned Admin', property.assignedAdmin?.name || property.assignedAdmin?.userEmail || 'City admin scope'],
+    ['Dummy Enabled', property.isDummy ? 'Enabled' : 'Disabled'],
+    ['Launch Readiness', `${readiness}%`],
+  ]
 
   return (
     <div className="space-y-8">
@@ -74,6 +94,11 @@ function AdminPropertyDetailPage() {
             <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Property detail</p>
             <h1 className="mt-3 text-4xl font-semibold text-white">{property.name || property.propertyName}</h1>
             <p className="mt-3 text-slate-300">{property.city || property.cityName || '-'} · {property.area || property.areaName || '-'} · {property.id}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <StatusChip status={getOperationalStatus(property)} />
+              <StatusChip status={property.isDummy ? 'DEMO' : 'LIVE'} />
+              <StatusChip status={property.publicVisibility ? 'LIVE' : 'HIDDEN'} title={property.publicVisibility ? 'This listing is publicly searchable.' : 'This listing is hidden from public search.'} />
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => statusMutation.mutate({ approvalStatus: 'Approved' })}><FiCheck /> Verify</Button>
@@ -89,6 +114,20 @@ function AdminPropertyDetailPage() {
         {!images.length ? <Card className="p-8 text-slate-400">No media uploaded.</Card> : null}
       </div>
       {property.videoUrl ? <video src={property.videoUrl} controls className="max-h-[420px] w-full rounded-2xl bg-slate-950" /> : null}
+
+      <Card>
+        <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Operational panel</p>
+        <h2 className="mt-2 text-2xl font-semibold text-white">What is live, visible, and controlled</h2>
+        <FieldNote>Use this panel before changing status so every admin understands the current public and city scope.</FieldNote>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {operationRows.map(([label, value]) => (
+            <div key={label} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
+              <p className="mt-2 font-semibold text-white">{value}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.75fr]">
         <Card>

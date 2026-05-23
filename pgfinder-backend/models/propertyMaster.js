@@ -37,6 +37,9 @@ propertySchema = mongoose.Schema({
     cityName:{
         type:String
     },
+    stateName:{
+        type:String
+    },
     latitude:{
         type:Number
     },
@@ -97,11 +100,42 @@ propertySchema = mongoose.Schema({
         type:[{
             sharingType:String,
             totalRooms:{ type:Number, default:0 },
+            occupiedRooms:{ type:Number, default:0 },
             vacantRooms:{ type:Number, default:0 },
             bedsPerRoom:{ type:Number, default:1 },
             vacantBeds:{ type:Number, default:0 },
+            waitingList:{ type:Number, default:0 },
+            bathroom:{ type:String, enum:["attached","shared",""], default:"" },
+            balcony:{ type:Boolean, default:false },
+            ac:{ type:Boolean, default:false },
+            furnishing:{ type:String, enum:["furnished","semi-furnished","unfurnished",""], default:"" },
+            foodPreference:{ type:String, enum:["veg","non-veg","both","none",""], default:"" },
+            gender:{ type:String, enum:["boys","girls","unisex",""], default:"" },
             monthlyRent:String
         }],
+        default:[]
+    },
+    roomTypes:{
+        type:[{
+            label:String,
+            totalRooms:{ type:Number, default:0 },
+            occupiedRooms:{ type:Number, default:0 },
+            vacantRooms:{ type:Number, default:0 },
+            waitingList:{ type:Number, default:0 },
+            bedsPerRoom:{ type:Number, default:1 },
+            availableBeds:{ type:Number, default:0 },
+            bathroom:{ type:String, enum:["attached","shared",""], default:"" },
+            balcony:{ type:Boolean, default:false },
+            ac:{ type:Boolean, default:false },
+            furnishing:{ type:String, enum:["furnished","semi-furnished","unfurnished",""], default:"" },
+            foodPreference:{ type:String, enum:["veg","non-veg","both","none",""], default:"" },
+            gender:{ type:String, enum:["boys","girls","unisex",""], default:"" },
+            monthlyRent:String
+        }],
+        default:[]
+    },
+    customFeatures:{
+        type:[String],
         default:[]
     },
     verificationChecklist:{
@@ -157,6 +191,27 @@ propertySchema = mongoose.Schema({
         type:Mixed,
         default:{}
     },
+    commissionConfig:{
+        referralCommission:{ type:Number, default:2000 },
+        perLeadCharge:{ type:Number, default:20 },
+        conversionCharge:{ type:Number, default:2000 },
+        cashbackAmount:{ type:Number, default:250 },
+        promotionalPricing:{ type:Boolean, default:false },
+        notes:String,
+        updatedBy:{ type:mongoose.Schema.Types.ObjectId, ref:'userMaster' },
+        updatedOn:Date
+    },
+    assignedAdmin:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:'userMaster'
+    },
+    ownerAgreement:{
+        referralAgreementAccepted:{ type:Boolean, default:false },
+        leadPricingAccepted:{ type:Boolean, default:false },
+        termsAccepted:{ type:Boolean, default:false },
+        acceptedOn:Date,
+        acceptedBy:{ type:mongoose.Schema.Types.ObjectId, ref:'userMaster' }
+    },
     rating:{
         type:Number,
         default:4.6
@@ -175,7 +230,7 @@ propertySchema = mongoose.Schema({
     },
     approvalStatus:{
         type:String,
-        enum:["Pending","Approved","Rejected"],
+        enum:["Pending","Approved","Rejected","Suspended","Verified"],
         default:"Pending"
     },
     isAvailable:{
@@ -183,6 +238,22 @@ propertySchema = mongoose.Schema({
     },
     addedOn:{
         type:String
+    },
+    isDummy:{
+        type:Boolean,
+        default:false,
+        index:true
+    },
+    isVerified:{
+        type:Boolean,
+        default:false,
+        index:true
+    },
+    status:{
+        type:String,
+        enum:["active","archived","demo","suspended"],
+        default:"active",
+        index:true
     },
     isActive:{
         type:Boolean,
@@ -194,4 +265,16 @@ propertySchema.pre('save', function(next) {
     if (!this.userIDFK && this.vendorId) this.userIDFK = this.vendorId;
     next();
 });
+
+propertySchema.index({ cityName: 1 });
+propertySchema.index({ stateName: 1 });
+propertySchema.index({ areaName: 1 });
+propertySchema.index({ localitySlug: 1 });
+propertySchema.index({ cityName: 1, areaName: 1, isActive: 1, approvalStatus: 1 });
+propertySchema.index({ vendorId: 1, isActive: 1 });
+propertySchema.index({ userIDFK: 1, isActive: 1 });
+propertySchema.index({ isDummy: 1 });
+propertySchema.index({ isVerified: 1 });
+propertySchema.index({ status: 1 });
+propertySchema.index({ approvalStatus: 1 });
 module.exports = mongoose.model('propertyMaster',propertySchema);

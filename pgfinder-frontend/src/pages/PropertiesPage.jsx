@@ -91,8 +91,8 @@ function PropertiesPage() {
   } = useCurrentLocation()
 
   useEffect(() => {
-    if (role === 'vendor') {
-      navigate('/dashboard/vendor/properties', { replace: true })
+    if (role === 'owner') {
+      navigate('/dashboard/owner/properties', { replace: true })
       return
     }
 

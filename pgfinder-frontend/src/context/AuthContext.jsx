@@ -35,11 +35,15 @@ const normalizeRole = (rawRole) => {
     personal: 'user',
     student: 'user',
     user: 'user',
-    owner: 'vendor',
-    host: 'vendor',
-    hostel: 'vendor',
-    vendor: 'vendor',
+    owner: 'owner',
+    host: 'owner',
+    hostel: 'owner',
+    vendor: 'owner',
     admin: 'admin',
+    'super admin': 'super-admin',
+    superadmin: 'super-admin',
+    super_admin: 'super-admin',
+    'super-admin': 'super-admin',
   }
   return roleMap[normalized] || normalized
 }
@@ -98,6 +102,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (!user) return undefined
+    lastActivityRef.current = Date.now()
 
     const refreshActivity = () => {
       lastActivityRef.current = Date.now()
@@ -146,10 +151,10 @@ export const AuthProvider = ({ children }) => {
     setError(null)
     try {
       // backend expects { userEmail, userPassword }
-      const payload = { userEmail: email, userPassword: password, accountType: userRole }
+      const payload = { userEmail: email, userPassword: password, accountType: userRole === 'super-admin' ? 'super_admin' : userRole, authPortal: userRole === 'super-admin' ? 'super_admin' : userRole === 'admin' ? 'admin' : 'public' }
       const response = await authService.login(payload)
       const normalizedUser = normalizeUser(response.user)
-      const nextRole = normalizedUser.role || userRole || 'user'
+      const nextRole = normalizeRole(response.role || normalizedUser.role || userRole || 'user')
       const requestedRole = normalizeRole(userRole)
       if (requestedRole && requestedRole !== nextRole) {
         throw new Error('Account type mismatch. Select the correct account type to continue.')
@@ -180,7 +185,11 @@ export const AuthProvider = ({ children }) => {
         contact: payload.contact || '',
         acceptTerms: payload.acceptTerms,
         acceptPrivacy: payload.acceptPrivacy,
-        userType: payload.role ? payload.role.charAt(0).toUpperCase() + payload.role.slice(1) : 'User',
+        city: payload.city || payload.cityName || '',
+        cityName: payload.city || payload.cityName || '',
+        state: payload.state || payload.stateName || '',
+        stateName: payload.state || payload.stateName || '',
+        userType: payload.role === 'owner' ? 'Owner' : 'User',
       }
       const response = await authService.signup(mapped)
       const normalizedUser = normalizeUser(response.user)
@@ -207,7 +216,11 @@ export const AuthProvider = ({ children }) => {
         gender: payload.gender || '',
         acceptTerms: payload.acceptTerms,
         acceptPrivacy: payload.acceptPrivacy,
-        userType: payload.role ? payload.role.charAt(0).toUpperCase() + payload.role.slice(1) : 'User',
+        city: payload.city || payload.cityName || '',
+        cityName: payload.city || payload.cityName || '',
+        state: payload.state || payload.stateName || '',
+        stateName: payload.state || payload.stateName || '',
+        userType: payload.role === 'owner' ? 'Owner' : 'User',
       })
       const normalizedUser = normalizeUser(response.user)
       const nextRole = normalizedUser.role || payload.role || 'user'

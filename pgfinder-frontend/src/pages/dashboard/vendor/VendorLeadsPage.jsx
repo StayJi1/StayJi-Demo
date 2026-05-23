@@ -6,7 +6,7 @@ import Card from '../../../components/common/Card'
 import dashboardService from '../../../services/dashboardService'
 import { useAuth } from '../../../context/AuthContext'
 
-function VendorLeadsPage() {
+function OwnerLeadsPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -32,7 +32,7 @@ function VendorLeadsPage() {
     const loadLeads = async () => {
       try {
         if (!user?._id) return
-        const data = await dashboardService.getVendorLeads(user._id)
+        const data = await dashboardService.getOwnerLeads(user._id)
         if (selectedPropertyId) {
           const matchesProperty = (item) => {
             const propertyId = item.propertyIDFK?._id || item.propertyIDFK || item.property?._id || item.propertyId || item.property?.id
@@ -64,13 +64,13 @@ function VendorLeadsPage() {
       <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Vendor leads</p>
+            <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Owner leads</p>
             <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">Student leads and visit requests</h1>
             <p className="mt-3 max-w-3xl text-slate-400">Review every student who expressed interest or requested a visit for your properties.</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Button variant="secondary" onClick={() => navigate('/dashboard/vendor')}>Back to dashboard</Button>
-            <Button onClick={() => navigate('/dashboard/vendor/properties')}>My properties</Button>
+            <Button variant="secondary" onClick={() => navigate('/dashboard/owner')}>Back to dashboard</Button>
+            <Button onClick={() => navigate('/dashboard/owner/properties')}>My properties</Button>
           </div>
         </div>
       </header>
@@ -214,4 +214,4 @@ function VendorLeadsPage() {
   )
 }
 
-export default VendorLeadsPage
+export default OwnerLeadsPage

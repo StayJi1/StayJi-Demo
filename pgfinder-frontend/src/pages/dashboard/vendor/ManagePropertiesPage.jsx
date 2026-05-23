@@ -19,7 +19,7 @@ function ManagePropertiesPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await dashboardService.getVendorProperties(user?._id)
+        const data = await dashboardService.getOwnerProperties(user?._id)
         setProperties(data || [])
       } catch (err) {
         setError(err?.message || 'Unable to load your properties.')
@@ -74,7 +74,7 @@ function ManagePropertiesPage() {
       value: (property) => `${property.name || ''} ${property.city || ''} ${property.areaName || ''}`,
       render: (property) => (
         <div className="min-w-0">
-          <button type="button" onClick={() => navigate(`/dashboard/vendor/properties/${property.id || property._id}`)} className="font-semibold text-white hover:text-accent-300">{property.name}</button>
+          <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}`)} className="font-semibold text-white hover:text-accent-300">{property.name}</button>
           <p className="mt-1 max-w-[280px] truncate text-xs text-slate-500">{property.description || 'No description available.'}</p>
         </div>
       ),
@@ -105,9 +105,9 @@ function ManagePropertiesPage() {
       value: (property) => property.id || property._id,
       render: (property) => (
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => navigate(`/dashboard/vendor/properties/${property.id || property._id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEye /> View</button>
-          <button type="button" onClick={() => navigate(`/dashboard/vendor/leads?propertyId=${property.id || property._id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiBarChart2 /> Analytics</button>
-          <button type="button" onClick={() => navigate(`/dashboard/vendor/properties/${property.id || property._id}/edit`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEdit2 /> Edit</button>
+          <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEye /> View</button>
+          <button type="button" onClick={() => navigate(`/dashboard/owner/leads?propertyId=${property.id || property._id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiBarChart2 /> Analytics</button>
+          <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}/edit`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEdit2 /> Edit</button>
           <button type="button" onClick={() => handleDelete(property.id || property._id)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-rose-400"><FiTrash2 /> Delete</button>
         </div>
       ),
@@ -161,8 +161,8 @@ function ManagePropertiesPage() {
         <Card className="p-8">Loading properties…</Card>
       ) : filteredProperties.length ? (
         <AdvancedDataTable
-          title="Vendor properties and occupancy controls"
-          eyebrow="Vendor listing table"
+          title="Owner properties and occupancy controls"
+          eyebrow="Owner listing table"
           rows={filteredProperties}
           columns={columns}
           rowId={(property) => property.id || property._id}

@@ -50,14 +50,14 @@ function PropertyDetailPage() {
   }, [activePropertyId])
 
   const { user, role } = useAuth()
-  const isAdmin = role === 'admin'
+  const isAdmin = role === 'admin' || role === 'super-admin'
 
   useEffect(() => {
-    if (!property || role !== 'vendor') return
+    if (!property || role !== 'owner') return
     const ownerId = property.ownerId?.toString()
     const userId = user?._id?.toString()
     if (ownerId && userId && ownerId !== userId) {
-      navigate('/dashboard/vendor/properties', { replace: true })
+      navigate('/dashboard/owner/properties', { replace: true })
     }
   }, [navigate, property, role, user?._id])
 
@@ -131,7 +131,7 @@ function PropertyDetailPage() {
     if (moveInForm.roomImage) payload.append('roomImage', moveInForm.roomImage)
     try {
       await propertyService.submitMoveIn(payload)
-      setMoveInMessage('Move-in submitted. StayJi admin will verify proof, vendor confirmation, and occupancy before cashback or commission is processed.')
+      setMoveInMessage('Move-in submitted. StayJi admin will verify proof, owner confirmation, and occupancy before cashback or commission is processed.')
       setMoveInForm({ ownerName: '', joiningDate: '', userNote: '', paymentScreenshot: null, roomImage: null })
     } catch (err) {
       setMoveInMessage(err?.message || 'Unable to submit move-in proof.')
@@ -324,7 +324,7 @@ function PropertyDetailPage() {
               <p className="text-sm uppercase tracking-[0.28em] text-emerald-300">Verified move-in</p>
               <h2 className="mt-3 text-2xl font-semibold text-white">Moved In Successfully</h2>
               <p className="mt-3 text-sm leading-6 text-slate-400">
-                Submit proof only after joining. StayJi verifies payment proof, vendor confirmation, and occupancy before marking a lead converted, generating vendor commission, or processing user cashback.
+                Submit proof only after joining. StayJi verifies payment proof, owner confirmation, and occupancy before marking a lead converted, generating owner commission, or processing user cashback.
               </p>
               <form onSubmit={handleSubmitMoveIn} className="mt-6 grid gap-4">
                 <div className="grid gap-4 sm:grid-cols-2">

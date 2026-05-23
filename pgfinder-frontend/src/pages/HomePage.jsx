@@ -24,7 +24,7 @@ const cities = [
 const reasons = [
   { title: 'Verified listings', text: 'Photos, pricing, amenities, and availability reviewed before going live.', icon: <FiShield /> },
   { title: 'Fast nearby search', text: 'Find PGs, hostels, flats, and stays around your campus or office.', icon: <FiNavigation /> },
-  { title: 'Smart dashboards', text: 'Purpose-built dashboards for users, vendors, and admins.', icon: <FiSliders /> },
+  { title: 'Smart dashboards', text: 'Purpose-built dashboards for users, owners, and admins.', icon: <FiSliders /> },
   { title: 'Book visits', text: 'Shortlist properties, check live availability, and schedule visits quickly.', icon: <FiCheckCircle /> },
 ]
 
@@ -41,8 +41,8 @@ const testimonials = [
   },
   {
     name: 'Nisha Iyer',
-    role: 'Vendor, Bangalore',
-    quote: 'The vendor dashboard makes approvals, availability, and inquiries much easier to manage.',
+    role: 'Owner, Bangalore',
+    quote: 'The owner dashboard makes approvals, availability, and inquiries much easier to manage.',
   },
 ]
 
@@ -317,7 +317,7 @@ function HomePage() {
             <FiUsers className="text-blue-600" />
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-blue-600">Testimonials</p>
           </div>
-          <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Loved by students, professionals, and vendors</h2>
+          <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Loved by students, professionals, and owners</h2>
           <div className="mt-10 grid gap-6 lg:grid-cols-3">
             {testimonials.map((item) => (
               <motion.article key={item.name} whileHover={{ y: -6 }} className="rounded-[2rem] border border-slate-200 bg-slate-50 p-7 shadow-soft">
@@ -347,7 +347,7 @@ function HomePage() {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link to="/properties"><Button>Explore stays</Button></Link>
-            <Link to="/signup?role=vendor"><Button variant="secondary">List your property</Button></Link>
+            <Link to="/signup?role=owner"><Button variant="secondary">List your property</Button></Link>
           </div>
         </div>
       </section>

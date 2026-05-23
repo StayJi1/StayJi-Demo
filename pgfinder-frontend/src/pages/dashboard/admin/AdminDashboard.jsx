@@ -9,6 +9,7 @@ import AdvancedDataTable from '../../../components/admin/AdvancedDataTable'
 import adminApi from '../../../api/adminApi'
 import useDebouncedValue from '../../../hooks/useDebouncedValue'
 import { useAuth } from '../../../context/AuthContext'
+import { FieldNote, StatusChip, getOperationalStatus } from '../../../utils/operationalStatus.jsx'
 
 const statusTone = {
   Approved: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200',
@@ -24,23 +25,26 @@ function AdminDashboard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { user } = useAuth()
-  const [filters, setFilters] = useState({ search: '', city: '', propertyType: '', approvalStatus: '', active: '', occupancy: '', sort: 'newest' })
+  const emptyFilters = { search: '', city: '', locality: '', owner: '', propertyType: '', propertyStatus: '', verificationStatus: '', demoLive: '', approvalStatus: '', active: '', occupancy: '', dateFrom: '', dateTo: '', sort: 'newest' }
+  const [filters, setFilters] = useState(emptyFilters)
+  const [bulkRequest, setBulkRequest] = useState(null)
+  const [toast, setToast] = useState('')
   const debouncedSearch = useDebouncedValue(filters.search)
 
   const propertyParams = useMemo(() => ({ ...filters, search: debouncedSearch, limit: 30 }), [debouncedSearch, filters])
-  const { data: analytics, isLoading: analyticsLoading } = useQuery({ queryKey: ['admin-analytics'], queryFn: adminApi.analytics, refetchInterval: 30_000 })
+  const { data: analytics, isLoading: analyticsLoading } = useQuery({ queryKey: ['admin-analytics', propertyParams], queryFn: () => adminApi.analytics(propertyParams), refetchInterval: 30_000 })
   const { data: propertiesData, isFetching: propertiesLoading, error } = useQuery({ queryKey: ['admin-properties', propertyParams], queryFn: () => adminApi.properties(propertyParams), refetchInterval: 30_000 })
-  const { data: vendorData } = useQuery({ queryKey: ['admin-vendors', debouncedSearch], queryFn: () => adminApi.vendors({ search: debouncedSearch, limit: 8 }), enabled: Boolean(debouncedSearch) })
+  const { data: ownerData } = useQuery({ queryKey: ['admin-owners', debouncedSearch], queryFn: () => adminApi.owners({ search: debouncedSearch, limit: 8 }), enabled: Boolean(debouncedSearch) })
   const { data: moveIns = [] } = useQuery({ queryKey: ['admin-move-ins'], queryFn: () => adminApi.moveIns({ limit: 12 }), refetchInterval: 30_000 })
 
   const properties = propertiesData?.items || []
   const summary = analytics?.summary || {}
-  const vendorMatches = vendorData?.items || []
+  const ownerMatches = ownerData?.items || []
 
   const refreshAdmin = () => {
     queryClient.invalidateQueries({ queryKey: ['admin-analytics'] })
     queryClient.invalidateQueries({ queryKey: ['admin-properties'] })
-    queryClient.invalidateQueries({ queryKey: ['admin-vendors'] })
+    queryClient.invalidateQueries({ queryKey: ['admin-owners'] })
     queryClient.invalidateQueries({ queryKey: ['admin-move-ins'] })
   }
 
@@ -53,6 +57,8 @@ function AdminDashboard() {
     mutationFn: (payload) => adminApi.bulkProperties(payload),
     onSuccess: () => {
       refreshAdmin()
+      setToast('Bulk action completed. Tables, counts, and charts are refreshing.')
+      setBulkRequest(null)
     },
   })
   const moveInMutation = useMutation({
@@ -62,10 +68,36 @@ function AdminDashboard() {
 
   const statCards = [
     { label: 'Total users', value: summary.totalUsers, icon: <FiUsers />, onClick: () => navigate('/dashboard/admin/users') },
-    { label: 'Vendors', value: summary.vendors, icon: <FiHome />, onClick: () => navigate('/dashboard/admin/users?role=Owner') },
+    { label: 'Owners', value: summary.owners, icon: <FiHome />, onClick: () => navigate('/dashboard/admin/users?role=Owner') },
     { label: 'Active listings', value: summary.activeListings, icon: <FiBarChart2 />, onClick: () => { setFilters((current) => ({ ...current, active: 'true' })); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) } },
     { label: 'Leads', value: summary.leads, icon: <FiCheck />, onClick: () => document.getElementById('lead-analytics')?.scrollIntoView({ behavior: 'smooth' }) },
   ]
+  const operationCards = [
+    { label: 'LIVE properties', value: summary.activeListings, note: 'Public searchable listings', filter: { propertyStatus: 'live', demoLive: 'live', active: 'true' } },
+    { label: 'DEMO properties', value: summary.demoProperties || 0, note: 'Sample inventory', filter: { propertyStatus: 'demo', demoLive: 'demo' } },
+    { label: 'Pending review', value: summary.pendingProperties, note: 'Needs moderation', filter: { propertyStatus: 'pending', approvalStatus: 'Pending' } },
+    { label: 'Hidden listings', value: summary.inactiveListings, note: 'Not publicly visible', filter: { propertyStatus: 'hidden', active: 'false' } },
+  ]
+  const actionDetails = {
+    mark_live: { title: 'Mark selected properties as LIVE?', body: ['make listings public', 'remove demo labels', 'include listings in real analytics'] },
+    mark_demo: { title: 'Mark selected properties as DEMO?', body: ['show listings as sample inventory', 'separate them from real analytics', 'keep them available for pre-launch demos'] },
+    hide_publicly: { title: 'Hide selected properties publicly?', body: ['remove listings from public search', 'keep records available for operations', 'preserve analytics history'] },
+    archive: { title: 'Archive selected properties?', body: ['remove records from active workflows', 'hide them publicly', 'keep audit history'] },
+    verify: { title: 'Verify selected properties?', body: ['mark listings as verified', 'approve them for operational use', 'notify owners'] },
+    suspend: { title: 'Suspend selected properties?', body: ['block public visibility', 'mark listings as suspended', 'notify owners'] },
+  }
+  const openBulkAction = (action, selectedIds) => {
+    const ids = selectedIds
+    if (!ids.length) {
+      setToast('No properties selected. Select checkboxes first, then choose a bulk action.')
+      return
+    }
+    setBulkRequest({ action, ids, ...(actionDetails[action] || {}) })
+  }
+  const confirmBulkAction = () => {
+    if (!bulkRequest) return
+    bulkMutation.mutate({ ids: bulkRequest.ids, action: bulkRequest.action, adminId: user?._id, performerRole: user?.userType || 'Admin' })
+  }
   const propertyColumns = [
     {
       key: 'property',
@@ -79,13 +111,13 @@ function AdminDashboard() {
       ),
     },
     {
-      key: 'vendor',
-      label: 'Vendor',
-      value: (property) => `${property.vendor?.name || property.owner?.name || ''} ${property.vendor?.email || property.owner?.email || ''}`,
+      key: 'owner',
+      label: 'Owner',
+      value: (property) => `${property.owner?.name || property.ownerProfile?.name || ''} ${property.owner?.email || property.ownerProfile?.email || ''}`,
       render: (property) => (
-        <button type="button" onClick={() => navigate(`/dashboard/admin/vendors/${property.vendorId}`)} className="text-accent-200 hover:text-accent-100">
-          {property.vendor?.name || property.owner?.name || '-'}
-          <span className="mt-1 block text-xs text-slate-500">{property.vendor?.email || property.owner?.email || '-'}</span>
+        <button type="button" onClick={() => navigate(`/dashboard/admin/owners/${property.vendorId}`)} className="text-accent-200 hover:text-accent-100">
+          {property.owner?.name || property.ownerProfile?.name || '-'}
+          <span className="mt-1 block text-xs text-slate-500">{property.owner?.email || property.ownerProfile?.email || '-'}</span>
         </button>
       ),
     },
@@ -93,16 +125,18 @@ function AdminDashboard() {
     { key: 'leads', label: 'Leads', value: (property) => `${property.totalLeads || 0} leads ${property.totalVisits || 0} visits`, sortValue: (property) => property.totalLeads || 0 },
     {
       key: 'status',
-      label: 'Status',
-      value: (property) => `${property.approvalStatus || 'Pending'} ${property.isActive ? 'Active' : 'Inactive'}`,
+      label: 'Operational state',
+      value: (property) => `${getOperationalStatus(property)} ${property.approvalStatus || 'Pending'} ${property.isDummy ? 'Demo' : 'Live'} ${property.isActive ? 'Visible' : 'Hidden'}`,
       render: (property) => (
-        <div>
-          <span className={`rounded-full border px-3 py-1 text-xs ${statusTone[property.approvalStatus] || statusTone.Pending}`}>{property.approvalStatus || 'Pending'}</span>
-          <p className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs ${
-            property.isActive
-              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
-              : 'border-rose-500/40 bg-rose-500/10 text-rose-200'
-          }`}>{property.isActive ? 'Active' : 'Inactive'}</p>
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <StatusChip status={getOperationalStatus(property)} />
+            <StatusChip status={property.isDummy ? 'DEMO' : 'LIVE'} title={property.isDummy ? 'Demo listing, separated from real inventory.' : 'Real listing, counted as marketplace supply.'} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className={`rounded-full border px-3 py-1 text-xs ${statusTone[property.approvalStatus] || statusTone.Pending}`}>{property.approvalStatus || 'Pending'}</span>
+            <span className={`rounded-full border px-3 py-1 text-xs ${property.publicVisibility ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-slate-500/40 bg-slate-500/10 text-slate-200'}`}>{property.publicVisibility ? 'Public' : 'Not public'}</span>
+          </div>
         </div>
       ),
     },
@@ -129,11 +163,15 @@ function AdminDashboard() {
 
   return (
     <div className="space-y-8">
+      {toast ? (
+        <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{toast}</div>
+      ) : null}
       <header className="rounded-2xl border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:rounded-[2rem] sm:p-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-accent-400 sm:text-sm sm:tracking-[0.28em]">StayJi command center</p>
             <h1 className="mt-3 text-2xl font-semibold text-white sm:text-4xl">Live platform management</h1>
+            {user?.assignedCity ? <p className="mt-2 text-sm text-slate-400">City scope: {user.assignedCity}. This dashboard automatically applies your assigned-city filter across users, owners, properties, leads, reviews, and analytics.</p> : null}
           </div>
           <Button onClick={refreshAdmin} variant="secondary"><FiRefreshCw /> Refresh live data</Button>
         </div>
@@ -150,6 +188,24 @@ function AdminDashboard() {
                   <p className="mt-2 text-3xl font-semibold text-white">{analyticsLoading ? '...' : formatNumber(item.value)}</p>
                 </div>
               </div>
+            </Card>
+          </button>
+        ))}
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-4">
+        {operationCards.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            onClick={() => { setFilters((current) => ({ ...current, ...item.filter })); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) }}
+            className="text-left"
+            title={`${item.label} filters the property table, cards, and analytics together.`}
+          >
+            <Card className="h-full p-5 transition hover:border-accent-500">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{item.label}</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{analyticsLoading ? '...' : formatNumber(item.value)}</p>
+              <p className="mt-1 text-sm text-slate-400">{item.note}</p>
             </Card>
           </button>
         ))}
@@ -213,24 +269,49 @@ function AdminDashboard() {
       </div>
 
       <Card className="p-4 sm:p-6">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.4fr_0.7fr_0.7fr_0.7fr_0.7fr_0.7fr_auto]">
+        <div className="mb-4">
+          <p className="text-sm font-semibold text-white">Synchronized operations filters</p>
+          <FieldNote>Changing these filters refreshes the table, counts, charts, and clickable cards together.</FieldNote>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <label className="flex items-center gap-3 rounded-3xl border border-slate-700 bg-slate-950/70 px-4 text-slate-300">
             <FiSearch />
             <input
               type="search"
               value={filters.search}
               onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
-              placeholder="Search vendor, property, city, area, ID, email, phone"
+              placeholder="Search owner, property, city, area, ID, email, phone"
               className="w-full bg-transparent py-3 text-sm text-slate-100 outline-none"
             />
           </label>
           <input value={filters.city} onChange={(event) => setFilters((current) => ({ ...current, city: event.target.value }))} placeholder="City" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+          <input value={filters.locality} onChange={(event) => setFilters((current) => ({ ...current, locality: event.target.value }))} placeholder="Locality" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
           <select value={filters.propertyType} onChange={(event) => setFilters((current) => ({ ...current, propertyType: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400">
             <option value="">All types</option>
             <option value="PG">PG</option>
             <option value="Flat">Flat</option>
             <option value="Hotel">Hotel</option>
             <option value="Hostel">Hostel</option>
+          </select>
+          <select value={filters.propertyStatus} onChange={(event) => setFilters((current) => ({ ...current, propertyStatus: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400">
+            <option value="">Property status</option>
+            <option value="live">LIVE</option>
+            <option value="demo">DEMO</option>
+            <option value="hidden">HIDDEN</option>
+            <option value="pending">PENDING</option>
+            <option value="verified">VERIFIED</option>
+            <option value="suspended">SUSPENDED</option>
+            <option value="archived">ARCHIVED</option>
+          </select>
+          <select value={filters.verificationStatus} onChange={(event) => setFilters((current) => ({ ...current, verificationStatus: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400">
+            <option value="">Verification</option>
+            <option value="verified">Verified</option>
+            <option value="unverified">Unverified</option>
+          </select>
+          <select value={filters.demoLive} onChange={(event) => setFilters((current) => ({ ...current, demoLive: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400">
+            <option value="">Demo/Live</option>
+            <option value="live">Live only</option>
+            <option value="demo">Demo only</option>
           </select>
           <select value={filters.approvalStatus} onChange={(event) => setFilters((current) => ({ ...current, approvalStatus: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400">
             <option value="">All approvals</option>
@@ -248,13 +329,16 @@ function AdminDashboard() {
             <option value="true">Active</option>
             <option value="false">Inactive</option>
           </select>
-          <Button variant="secondary" onClick={() => setFilters({ search: '', city: '', propertyType: '', approvalStatus: '', active: '', occupancy: '', sort: 'newest' })}>Clear</Button>
+            <input value={filters.owner} onChange={(event) => setFilters((current) => ({ ...current, owner: event.target.value }))} placeholder="Owner email/name" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+            <input type="date" value={filters.dateFrom} onChange={(event) => setFilters((current) => ({ ...current, dateFrom: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+            <input type="date" value={filters.dateTo} onChange={(event) => setFilters((current) => ({ ...current, dateTo: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+          <Button variant="secondary" onClick={() => setFilters(emptyFilters)}>Clear</Button>
         </div>
-        {vendorMatches.length ? (
+        {ownerMatches.length ? (
           <div className="mt-4 flex flex-wrap gap-2">
-            {vendorMatches.map((vendor) => (
-              <button key={vendor.id} type="button" onClick={() => navigate(`/dashboard/admin/vendors/${vendor.id}`)} className="rounded-full border border-accent-500/50 px-3 py-2 text-xs text-accent-200 hover:bg-accent-500/10">
-                {vendor.name || vendor.email} · {vendor.totalProperties || 0} properties
+            {ownerMatches.map((owner) => (
+              <button key={owner.id} type="button" onClick={() => navigate(`/dashboard/admin/owners/${owner.id}`)} className="rounded-full border border-accent-500/50 px-3 py-2 text-xs text-accent-200 hover:bg-accent-500/10">
+                {owner.name || owner.email} · {owner.totalProperties || 0} properties
               </button>
             ))}
           </div>
@@ -264,23 +348,49 @@ function AdminDashboard() {
       <div id="admin-properties">
         {error ? <p className="mb-3 text-sm text-rose-300">{error.message}</p> : null}
         <AdvancedDataTable
-          title="MongoDB powered listing control"
+          title="Guided listing operations"
           eyebrow="Property operations"
           rows={properties}
           columns={propertyColumns}
           loading={propertiesLoading}
-          searchPlaceholder="Search ObjectId, vendor, property, locality, status"
+          searchPlaceholder="Search ObjectId, owner, property, locality, status"
           minWidth="1180px"
           actions={({ selected: tableSelected }) => (
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => bulkMutation.mutate({ ids: tableSelected.length ? tableSelected : properties.map((property) => property.id), action: 'approve' })} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Verify selected</button>
-              <button type="button" onClick={() => bulkMutation.mutate({ ids: tableSelected.length ? tableSelected : properties.map((property) => property.id), action: 'activate' })} className="rounded-full border border-cyan-500/60 px-4 py-2 text-sm text-cyan-200">Activate selected</button>
-              <button type="button" onClick={() => bulkMutation.mutate({ ids: tableSelected.length ? tableSelected : properties.map((property) => property.id), action: 'reject' })} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200">Reject selected</button>
-              <button type="button" onClick={() => bulkMutation.mutate({ ids: tableSelected.length ? tableSelected : properties.map((property) => property.id), action: 'deactivate' })} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Deactivate selected</button>
+            <div>
+              <p className="mb-3 text-sm text-slate-400">{tableSelected.length} listings selected. Select checkboxes, then choose a workflow to see the confirmation details.</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => openBulkAction('mark_live', tableSelected)} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Mark LIVE</button>
+                <button type="button" onClick={() => openBulkAction('mark_demo', tableSelected)} className="rounded-full border border-amber-500/60 px-4 py-2 text-sm text-amber-200">Mark DEMO</button>
+                <button type="button" onClick={() => openBulkAction('hide_publicly', tableSelected)} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Hide Publicly</button>
+                <button type="button" onClick={() => openBulkAction('archive', tableSelected)} className="rounded-full border border-zinc-500/60 px-4 py-2 text-sm text-zinc-200">Archive</button>
+                <button type="button" onClick={() => openBulkAction('verify', tableSelected)} className="rounded-full border border-cyan-500/60 px-4 py-2 text-sm text-cyan-200">Verify</button>
+                <button type="button" onClick={() => openBulkAction('suspend', tableSelected)} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200">Suspend</button>
+              </div>
             </div>
           )}
+          emptyMessage={filters.propertyStatus === 'live' ? 'No LIVE properties currently launched. You can convert DEMO properties into LIVE listings from bulk actions.' : 'No records match the active operational filters.'}
         />
       </div>
+
+      {bulkRequest ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-surface-800 p-6 shadow-card">
+            <p className="text-xs uppercase tracking-[0.24em] text-accent-400">Confirm bulk workflow</p>
+            <h2 className="mt-3 text-2xl font-semibold text-white">{bulkRequest.title}</h2>
+            <p className="mt-2 text-sm text-slate-400">{bulkRequest.ids.length} selected listings will be updated in {user?.assignedCity || 'your visible scope'}.</p>
+            <div className="mt-4 rounded-2xl border border-slate-700 bg-slate-950/70 p-4">
+              <p className="text-sm font-semibold text-white">This will:</p>
+              <ul className="mt-3 space-y-2 text-sm text-slate-300">
+                {(bulkRequest.body || []).map((item) => <li key={item}>- {item}</li>)}
+              </ul>
+            </div>
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <Button variant="secondary" onClick={() => setBulkRequest(null)}>Cancel</Button>
+              <Button onClick={confirmBulkAction} disabled={bulkMutation.isPending}>Confirm</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.65fr]">
         <Card>
@@ -304,10 +414,19 @@ function AdminDashboard() {
                 <p className="mt-1">User: {[item.userId?.userFname, item.userId?.userLname].filter(Boolean).join(' ') || item.userId?.userEmail || '-'}</p>
                 <p className="mt-1">Commission ₹{item.commissionAmount || 0} · Cashback ₹{item.cashbackAmount || 0}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => moveInMutation.mutate({ id: item._id, status: 'Verified' })} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">Verify</button>
+                  <button
+                    type="button"
+                    onClick={() => moveInMutation.mutate({ id: item._id, status: 'Verified' })}
+                    disabled={!item.ownerConfirmed}
+                    title={!item.ownerConfirmed ? 'Owner must confirm tenant joined before reward approval.' : 'Approve reward'}
+                    className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Approve reward
+                  </button>
                   <button type="button" onClick={() => moveInMutation.mutate({ id: item._id, status: 'Suspicious' })} className="rounded-full border border-amber-500/60 px-3 py-2 text-xs text-amber-200">Flag suspicious</button>
                   <button type="button" onClick={() => moveInMutation.mutate({ id: item._id, status: 'Rejected' })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
                 </div>
+                {!item.ownerConfirmed ? <p className="mt-2 text-xs text-amber-200">Waiting for owner confirmation before reward approval.</p> : null}
               </div>
             ))}
             {!moveIns.length ? <p className="text-sm text-slate-400">No move-in submissions yet.</p> : null}

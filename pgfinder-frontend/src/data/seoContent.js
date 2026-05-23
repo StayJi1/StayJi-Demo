@@ -26,7 +26,7 @@ export const bangaloreLocalities = [
     overview: 'HSR Layout is popular with startup employees, students, and young professionals who want cafes, gyms, co-working spaces, and access to Koramangala, Bellandur, and Electronic City.',
     itParks: ['Startups around HSR', 'RMZ Ecospace access', 'Bellandur tech corridor', 'Electronic City access'],
     transport: 'BMTC connectivity, ORR access, and quick cab routes make HSR a flexible stay location.',
-    safety: 'Look for gated buildings, verified vendors, clear deposit terms, and properties near Sector 1, Sector 2, or Sector 6 main roads.',
+    safety: 'Look for gated buildings, verified owners, clear deposit terms, and properties near Sector 1, Sector 2, or Sector 6 main roads.',
     food: 'HSR has strong food availability, including PG meals, tiffin services, cafes, and late-night delivery.',
     price: 'Shared PG rooms are commonly available in the Rs 8,000 to Rs 16,000 range depending on room type and amenities.',
   },
@@ -209,7 +209,7 @@ export const faqGroups = {
   },
   bangalore: { slug: 'faq/bangalore', title: 'Bangalore PG FAQs', intro: 'Bangalore-focused answers for locality selection, commute, rent, food, deposits, and verified PG discovery.', audience: 'Bangalore renters' },
   students: { slug: 'faq/students', title: 'Student Accommodation FAQs', intro: 'Student-focused answers for PGs, hostels, food, safety, and commute in Bangalore.', audience: 'students' },
-  vendors: { slug: 'faq/vendors', title: 'Vendor FAQs', intro: 'How Bangalore PG owners and operators can manage listings, leads, visits, and reviews on StayJi.', audience: 'vendors' },
+  owners: { slug: 'faq/owners', title: 'Owner FAQs', intro: 'How Bangalore PG owners and operators can manage listings, leads, visits, and reviews on StayJi.', audience: 'owners' },
   'pg-owners': { slug: 'faq/pg-owners', title: 'PG Owner FAQs', intro: 'Operational answers for PG owners listing verified rooms and managing occupancy.', audience: 'PG owners' },
   'girls-pg': { slug: 'faq/girls-pg', title: 'Girls PG FAQs', intro: 'Safety, commute, food, visitor policy, and booking answers for girls PGs in Bangalore.', audience: 'girls PG renters' },
   'boys-pg': { slug: 'faq/boys-pg', title: 'Boys PG FAQs', intro: 'Pricing, sharing, food, rules, and availability answers for boys PGs in Bangalore.', audience: 'boys PG renters' },
@@ -224,9 +224,9 @@ const baseQuestions = [
   ['Can I search for boys PG in Bangalore?', 'Yes. Use gender filters for boys PGs and compare rent, deposit, sharing, food, commute, and available beds.'],
   ['Can I search for girls PG in Bangalore?', 'Yes. StayJi supports girls PG discovery with safety, locality, food, visitor policy, and verified listing details.'],
   ['Which Bangalore localities are supported first?', 'StayJi is focused on Whitefield, HSR Layout, Electronic City, Marathahalli, Bellandur, Koramangala, Indiranagar, Hebbal, Yelahanka, Sarjapur Road, JP Nagar, BTM Layout, and KR Puram.'],
-  ['Can I book a property visit?', 'Yes. Open a property, request a visit slot, and track the visit status from your dashboard once the vendor responds.'],
-  ['Does StayJi support co-living in Bangalore?', 'Yes. You can discover co-living rooms, shared PGs, hostels, flats, and short stays where vendors provide availability.'],
-  ['How are prices shown?', 'Prices are shown from the vendor listing data and may vary by sharing type, meals, AC, deposit, and room availability.'],
+  ['Can I book a property visit?', 'Yes. Open a property, request a visit slot, and track the visit status from your dashboard once the owner responds.'],
+  ['Does StayJi support co-living in Bangalore?', 'Yes. You can discover co-living rooms, shared PGs, hostels, flats, and short stays where owners provide availability.'],
+  ['How are prices shown?', 'Prices are shown from the owner listing data and may vary by sharing type, meals, AC, deposit, and room availability.'],
   ['Are properties verified?', 'StayJi supports admin verification workflows for photos, pricing, owner details, location, safety basics, and availability before featuring listings.'],
   ['Can I compare PGs?', 'Yes. Compare pricing, amenities, occupancy, reviews, locality, and distance to choose the best stay.'],
   ['How do I contact StayJi?', `You can email ${siteConfig.email} for business, support, or listing queries.`],
@@ -247,7 +247,7 @@ export function getFaqItems(groupKey = 'general') {
     ['Should I pay before visiting a PG?', 'Avoid paying large amounts before verifying photos, room availability, owner identity, deposit terms, and exact address. Use StayJi visit and inquiry workflows to keep a traceable record.'],
     ['How do PG food plans usually work?', 'Food plans vary by property. Check breakfast, dinner, weekend meals, North Indian or South Indian options, kitchen hygiene, menu changes, and whether food is included in rent.'],
     ['What should students check before finalizing accommodation?', 'Students should compare commute to college, study table availability, food, WiFi, curfew, laundry, visitor policy, safety, rent inclusions, and deposit terms.'],
-    ['How does StayJi help vendors manage leads?', 'StayJi structures inquiries, callback requests, visit requests, converted leads, move-ins, notifications, reviews, and vendor analytics so owners can track occupancy and response quality.'],
+    ['How does StayJi help owners manage leads?', 'StayJi structures inquiries, callback requests, visit requests, converted leads, move-ins, notifications, reviews, and owner analytics so owners can track occupancy and response quality.'],
   ]
   return [...baseQuestions, ...generated, ...processFaqs].slice(0, 120)
 }
@@ -265,13 +265,13 @@ export const legalPages = {
     title: 'Refund Policy',
     summary: 'StayJi discovery is lead and visit focused. Any paid promotions, boosts, or partner services follow transparent refund review rules.',
   },
-  'vendor-policy': {
-    title: 'Vendor Policy',
-    summary: 'Vendor rules for truthful listings, locality mapping, pricing, availability, image rights, lead handling, and review conduct.',
+  'owner-policy': {
+    title: 'Owner Policy',
+    summary: 'Owner rules for truthful listings, locality mapping, pricing, availability, image rights, lead handling, and review conduct.',
   },
   'community-guidelines': {
     title: 'Community Guidelines',
-    summary: 'Safety, respectful communication, anti-spam, anti-fraud, reporting, and moderation standards for StayJi users and vendors.',
+    summary: 'Safety, respectful communication, anti-spam, anti-fraud, reporting, and moderation standards for StayJi users and owners.',
   },
 }
 
@@ -360,7 +360,7 @@ export const featuredFaqDetails = [
     slug: 'bellandur-best-pg-guide',
     title: 'Best PG Guide for Bellandur, Bangalore',
     question: 'How do I choose the best PG in Bellandur?',
-    answer: 'Choose a Bellandur PG by comparing exact commute to ORR offices, rent inclusions, food quality, CCTV, late-entry rules, deposit terms, live vacancies, and verified vendor response history.',
+    answer: 'Choose a Bellandur PG by comparing exact commute to ORR offices, rent inclusions, food quality, CCTV, late-entry rules, deposit terms, live vacancies, and verified owner response history.',
     summary: 'A long-form Bellandur PG guide covering commute, rent, safety, food, landmarks, privacy-first lead flow, and how StayJi helps renters compare verified stays.',
     locality: 'Bellandur',
   },
@@ -415,15 +415,15 @@ export function buildSeoArticle(source = {}, type = 'guide') {
       },
       {
         heading: 'Rent, deposit, and occupancy checks',
-        body: `${locality?.price || 'Pricing depends on sharing type, meals, deposit, AC, laundry, and distance from major offices.'} Ask whether breakfast, dinner, electricity, WiFi, laundry, parking, maintenance, and AC charges are included. StayJi listings are designed to make occupancy and vacancy correction easier for vendors and admins, so users can avoid chasing rooms that are already full.`,
+        body: `${locality?.price || 'Pricing depends on sharing type, meals, deposit, AC, laundry, and distance from major offices.'} Ask whether breakfast, dinner, electricity, WiFi, laundry, parking, maintenance, and AC charges are included. StayJi listings are designed to make occupancy and vacancy correction easier for owners and admins, so users can avoid chasing rooms that are already full.`,
       },
       {
         heading: 'Safety and privacy-first lead flow',
-        body: `${locality?.safety || 'Prefer verified PGs with CCTV, secure entry, clear rules, and responsive operators.'} StayJi keeps marketplace trust at the center of the workflow. Wishlist activity helps discovery, but it should not expose private phone numbers. A qualified lead should form through callback approval, visit booking, chat engagement, or contact reveal so both user intent and vendor value are traceable.`,
+        body: `${locality?.safety || 'Prefer verified PGs with CCTV, secure entry, clear rules, and responsive operators.'} StayJi keeps marketplace trust at the center of the workflow. Wishlist activity helps discovery, but it should not expose private phone numbers. A qualified lead should form through callback approval, visit booking, chat engagement, or contact reveal so both user intent and owner value are traceable.`,
       },
       {
         heading: 'How to shortlist with StayJi',
-        body: `A practical shortlist for ${localityName} includes one budget PG, one commute-first PG, one safety-first option, and one premium managed stay. Read related FAQs, compare properties, open the locality guide, and book visits close together. After move-in, StayJi's verification architecture helps admins validate conversion, vendor commission, user cashback, review quality, and fraud signals from the same operational record.`,
+        body: `A practical shortlist for ${localityName} includes one budget PG, one commute-first PG, one safety-first option, and one premium managed stay. Read related FAQs, compare properties, open the locality guide, and book visits close together. After move-in, StayJi's verification architecture helps admins validate conversion, owner commission, user cashback, review quality, and fraud signals from the same operational record.`,
       },
     ],
   }

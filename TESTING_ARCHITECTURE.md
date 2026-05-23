@@ -34,6 +34,16 @@ Admin testing verifies operational control: moderation, fraud signals, MongoDB-l
 
 Every admin/vendor table should expose S.No, sorting, local advanced search, filters where applicable, CSV export, row selection, bulk actions, status indicators, pagination, sticky headers, and horizontal overflow protection for mobile/tablet.
 
+## Enterprise Governance QA
+
+Official roles are `User`, `Owner`, `Admin`, and `Super Admin`. Public login must not admit admin accounts; `/admin-login` is restricted to Admin; `/super-admin-login` is restricted to Super Admin and must remain hidden from navbar/sitemap with `noindex,nofollow`.
+
+Owner governance requires signup, pending approval, admin verification, approval/rejection/suspension, agreement acceptance, and property submission unlock. Each property still requires separate approval before public visibility.
+
+Super Admin QA verifies regional admin creation, permission assignment, city/state scope, admin suspension, role conversion, dummy-to-real controls, commission updates, audit log creation, and real/demo/combined analytics separation.
+
+Dummy data must never be hard deleted during transition. Test `isDummy`, `isVerified`, and `status` across users, owners, properties, leads, reviews, analytics, and locality-level visibility controls.
+
 ## SEO Content QA
 
 Every FAQ/blog/recommendation/locality card should provide summary preview, expandable preview, Read More navigation, a dedicated detail page, breadcrumbs, schema markup, related properties, related blogs, related FAQs, recommendations, and internal links.

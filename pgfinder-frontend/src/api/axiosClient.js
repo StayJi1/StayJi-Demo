@@ -10,6 +10,20 @@ const axiosClient = axios.create({
   },
 })
 
+axiosClient.interceptors.request.use((config) => {
+  if (!config.headers?.Authorization && typeof window !== 'undefined') {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('stayji-auth') || localStorage.getItem('stayji-auth') || '{}')
+      if (saved?.token) {
+        config.headers.Authorization = `Bearer ${saved.token}`
+      }
+    } catch {
+      // Keep the request unchanged when auth storage is unavailable.
+    }
+  }
+  return config
+})
+
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {

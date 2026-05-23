@@ -50,6 +50,9 @@ function UserDashboard() {
       setActionError(err?.message || 'Unable to remove this property from wishlist.')
     }
   }
+  const approvedRewards = moveIns.filter((item) => item.status === 'Verified')
+  const pendingRewards = moveIns.filter((item) => ['Pending', 'Suspicious'].includes(item.status))
+  const totalCoins = approvedRewards.reduce((sum, item) => sum + (Number(item.rewardCoins || item.cashbackAmount) || 0), 0)
 
   return (
     <div className="space-y-8">
@@ -134,7 +137,7 @@ function UserDashboard() {
             <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Support</p>
             <h2 className="mt-3 text-2xl font-semibold text-white">Contact support</h2>
           </div>
-          <p className="mt-6 text-slate-300">Need help with a booking or vendor query? Reach the StayJi team at hello.stayji@gmail.com or 1234567899.</p>
+          <p className="mt-6 text-slate-300">Need help with a booking or owner query? Reach the StayJi team at hello.stayji@gmail.com or 1234567899.</p>
         </Card>
       </div>
 
@@ -156,14 +159,28 @@ function UserDashboard() {
       </div>
 
       <Card>
-        <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Verified move-ins</p>
-        <h2 className="mt-3 text-2xl font-semibold text-white">Cashback verification</h2>
+        <p className="text-sm uppercase tracking-[0.24em] text-accent-400">StayJi Coins wallet</p>
+        <h2 className="mt-3 text-2xl font-semibold text-white">Rewards and cashback verification</h2>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total coins</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{totalCoins}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Approved rewards</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{approvedRewards.length}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Pending rewards</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{pendingRewards.length}</p>
+          </div>
+        </div>
         <div className="mt-6 grid gap-3">
           {moveIns.map((item) => (
             <div key={item._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
               <p className="font-semibold text-white">{item.propertyId?.propertyName || 'StayJi property'} · {item.status}</p>
-              <p className="mt-1">Cashback ₹{item.cashbackAmount || 0} after admin verification</p>
-              <p className="mt-1 text-slate-500">Joining: {item.joiningDate || '-'}</p>
+              <p className="mt-1">Coins {item.rewardCoins || item.cashbackAmount || 0} · Cashback ₹{item.cashbackAmount || 0}</p>
+              <p className="mt-1 text-slate-500">Owner confirmation: {item.ownerConfirmed ? 'Done' : 'Pending'} · Joining: {item.joiningDate || '-'}</p>
             </div>
           ))}
           {!moveIns.length ? <p className="text-slate-300">After joining a property, use “Moved In Successfully” on the property page to submit verification proof.</p> : null}

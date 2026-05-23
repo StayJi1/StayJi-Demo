@@ -27,7 +27,33 @@ const defaultAdmin = {
   gender: 'female',
   contact: '123456789',
   occupation: '',
+  city: 'Bangalore',
   userType: 'Admin',
+  assignedCity: 'Bangalore',
+  assignedState: 'Karnataka',
+  permissions: ['manage_users', 'manage_properties', 'manage_moderation', 'manage_seo', 'view_city_analytics'],
+  accountStatus: 'active',
+  approvalStatus: 'Approved',
+  isVerified: true,
+  profile: '',
+  addedOn: new Date().toISOString(),
+  isActive: true,
+};
+const defaultSuperAdmin = {
+  userName: 'Super Admin',
+  userFname: 'Super',
+  userLname: 'Admin',
+  userEmail: process.env.SUPER_ADMIN_EMAIL || 'superadmin@stayji.com',
+  userPassword: hashPassword(process.env.SUPER_ADMIN_PASSWORD || 'StayJi@12345'),
+  dob: '',
+  gender: '',
+  contact: process.env.SUPER_ADMIN_PHONE || '9999999999',
+  occupation: 'Platform governance',
+  userType: 'Super Admin',
+  permissions: ['manage_users', 'manage_properties', 'manage_finance', 'manage_admins', 'manage_dummy_data', 'manage_seo', 'manage_moderation', 'view_global_analytics'],
+  approvalStatus: 'Approved',
+  accountStatus: 'active',
+  isVerified: true,
   profile: '',
   addedOn: new Date().toISOString(),
   isActive: true,
@@ -39,6 +65,11 @@ async function ensureDefaultAdmin() {
     if (!adminExists) {
       await new User(defaultAdmin).save()
       console.log('Default admin user created.')
+    }
+    const superAdminExists = await User.findOne({ userType: { $in: ['Super Admin', 'SuperAdmin', 'super_admin'] } })
+    if (!superAdminExists) {
+      await new User(defaultSuperAdmin).save()
+      console.log('Default super admin user created.')
     }
   } catch (error) {
     console.error('Error ensuring default admin user:', error)

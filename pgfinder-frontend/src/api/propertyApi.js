@@ -23,6 +23,7 @@ const normalizeProperty = (property) => {
   const amenities = property.aminityFeatures
     ? property.aminityFeatures.split(',').map((item) => item.trim()).filter(Boolean)
     : property.amenities || []
+  const customFeatures = Array.isArray(property.customFeatures) ? property.customFeatures : []
   const mealsAvailable = Array.isArray(property.mealsAvailable) ? property.mealsAvailable : []
 
   const cityName = (property.cityName || property.city || '').toString()
@@ -102,6 +103,13 @@ const normalizeProperty = (property) => {
     approvalStatus: property.approvalStatus || 'Approved',
     rating: Number(property.rating) || property.rating || 4.6,
     amenities,
+    customFeatures,
+    displayBadges: [
+      property.isDummy ? 'Demo Property' : '',
+      property.status === 'demo' ? 'Sample Listing' : '',
+      property.isDummy && property.isActive !== false ? 'Coming Soon Area' : '',
+    ].filter(Boolean),
+    isDummy: Boolean(property.isDummy),
   }
 }
 

@@ -17,13 +17,13 @@ const navItems = [
 function Navbar() {
   const [open, setOpen] = useState(false)
   const { isAuthenticated, logout, role } = useAuth()
-  const dashboardRole = ['owner', 'host', 'hostel'].includes(role)
-    ? 'vendor'
+  const dashboardRole = ['owner', 'host', 'hostel', 'vendor'].includes(role)
+    ? 'owner'
     : role || 'user'
   const visibleNavItems = isAuthenticated
     ? navItems
       .filter((item) => !['/login', '/signup'].includes(item.to))
-      .map((item) => (dashboardRole === 'vendor' && item.to === '/properties' ? { ...item, label: 'My stays', to: '/dashboard/vendor/properties' } : item))
+      .map((item) => (dashboardRole === 'owner' && item.to === '/properties' ? { ...item, label: 'My stays', to: '/dashboard/owner/properties' } : item))
     : navItems
 
   return (

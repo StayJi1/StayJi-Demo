@@ -6,7 +6,7 @@ const authService = {
     const res = await authApi.login(credentials)
     // backend responds with { result: "success"|"fail", msg: string, data: <user|null> }
     if (res && (res.result === 'success' || res.result === 'login Successfully')) {
-      return { token: null, user: res.data || res.user }
+      return { token: res.token || null, user: res.data || res.user, role: res.role }
     }
     const message = res?.msg || 'Login failed'
     const err = new Error(message)
@@ -22,10 +22,12 @@ const authService = {
       const loginPayload = {
         userEmail: payload.userEmail,
         userPassword: payload.userPassword,
+        accountType: payload.userType,
+        authPortal: 'public',
       }
       const loginRes = await authApi.login(loginPayload)
       if (loginRes && loginRes.result === 'success') {
-        return { token: null, user: loginRes.data }
+        return { token: loginRes.token || null, user: loginRes.data, role: loginRes.role }
       }
       return { token: null, user: null }
     }
@@ -54,6 +56,11 @@ const authService = {
     const res = await authApi.resetPasswordWithOtp(payload)
     if (res?.result === 'success') return res
     throw new Error(res?.msg || 'Unable to reset password')
+  },
+  changePassword: async (payload) => {
+    const res = await authApi.changePassword(payload)
+    if (res?.result === 'success') return res
+    throw new Error(res?.msg || 'Unable to change password')
   },
 }
 

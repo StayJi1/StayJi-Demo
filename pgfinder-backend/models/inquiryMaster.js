@@ -41,7 +41,17 @@ inquirySchema = mongoose.Schema({
         type:String
     },
     status:{
-        type:Boolean
+        type:mongoose.Schema.Types.Mixed,
+        default:"active"
+    },
+    isDummy:{
+        type:Boolean,
+        default:false,
+        index:true
+    },
+    isVerified:{
+        type:Boolean,
+        default:false
     },
     addedOn:{
         type:String
@@ -56,4 +66,9 @@ inquirySchema.pre('save', function(next) {
     if (!this.propertyIDFK && this.propertyId) this.propertyIDFK = this.propertyId;
     next();
 });
+inquirySchema.index({ propertyIDFK: 1, isActive: 1 });
+inquirySchema.index({ propertyId: 1, isActive: 1 });
+inquirySchema.index({ vendorId: 1, isActive: 1 });
+inquirySchema.index({ userIDFK: 1, isActive: 1 });
+inquirySchema.index({ isDummy: 1 });
 module.exports = mongoose.model('inquiryMaster',inquirySchema);

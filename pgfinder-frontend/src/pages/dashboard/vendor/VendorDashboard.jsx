@@ -8,7 +8,7 @@ import { useAuth } from '../../../context/AuthContext'
 import dashboardService from '../../../services/dashboardService'
 import adminApi from '../../../api/adminApi'
 
-function VendorDashboard() {
+function OwnerDashboard() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const queryClient = useQueryClient()
@@ -16,23 +16,29 @@ function VendorDashboard() {
   const [moveIns, setMoveIns] = useState([])
   const [loading, setLoading] = useState(false)
   const [reply, setReply] = useState('')
-  const vendorId = user?._id || user?.id
+  const ownerId = user?._id || user?.id
   const { data: messages = [] } = useQuery({
-    queryKey: ['vendor-admin-messages', vendorId],
-    queryFn: () => adminApi.vendorMessages(vendorId, { viewer: 'vendor' }),
-    enabled: Boolean(vendorId),
+    queryKey: ['owner-admin-messages', ownerId],
+    queryFn: () => adminApi.ownerMessages(ownerId, { viewer: 'owner' }),
+    enabled: Boolean(ownerId),
     refetchInterval: 15_000,
   })
   const replyMutation = useMutation({
-    mutationFn: () => adminApi.sendVendorMessage(vendorId, { message: reply, senderRole: 'vendor' }),
+    mutationFn: () => adminApi.sendOwnerMessage(ownerId, { message: reply, senderRole: 'owner' }),
     onSuccess: () => {
       setReply('')
-      queryClient.invalidateQueries({ queryKey: ['vendor-admin-messages', vendorId] })
+      queryClient.invalidateQueries({ queryKey: ['owner-admin-messages', ownerId] })
     },
   })
   const deleteMessageMutation = useMutation({
-    mutationFn: ({ messageId, scope }) => adminApi.deleteVendorMessage(vendorId, messageId, { viewer: 'vendor', scope }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['vendor-admin-messages', vendorId] }),
+    mutationFn: ({ messageId, scope }) => adminApi.deleteOwnerMessage(ownerId, messageId, { viewer: 'owner', scope }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['owner-admin-messages', ownerId] }),
+  })
+  const ownerConfirmMutation = useMutation({
+    mutationFn: (moveInId) => adminApi.ownerConfirmMoveIn(moveInId, { ownerId }),
+    onSuccess: (updated) => {
+      setMoveIns((current) => current.map((item) => (item._id === updated?._id ? updated : item)))
+    },
   })
 
   useEffect(() => {
@@ -40,7 +46,7 @@ function VendorDashboard() {
     const load = async () => {
       try {
         setLoading(true)
-        const data = await dashboardService.getVendorOverview(user?._id)
+        const data = await dashboardService.getOwnerOverview(user?._id)
         setOverview(data)
         const moveInRows = await dashboardService.moveIns({ vendorId: user?._id, limit: 20 })
         setMoveIns(moveInRows)
@@ -58,10 +64,10 @@ function VendorDashboard() {
       <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Vendor dashboard</p>
+            <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Owner dashboard</p>
             <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">Manage your stay listings and inquiries</h1>
           </div>
-          <Button onClick={() => navigate('/dashboard/vendor/add-property')}>New property</Button>
+          <Button onClick={() => navigate('/dashboard/owner/add-property')}>New property</Button>
         </div>
       </header>
 
@@ -70,10 +76,10 @@ function VendorDashboard() {
           <Card className="p-8">Loading stats…</Card>
         ) : (
           [
-            { label: 'Properties', value: overview.totalProperties, icon: <FiSliders />, onClick: () => navigate('/dashboard/vendor/properties') },
-            { label: 'Leads', value: overview.leads ?? overview.inquiries + overview.bookings, icon: <FiUsers />, onClick: () => navigate('/dashboard/vendor/leads') },
-            { label: 'Inquiries', value: overview.inquiries, icon: <FiUsers />, onClick: () => document.getElementById('vendor-requests')?.scrollIntoView({ behavior: 'smooth' }) },
-            { label: 'Bookings', value: overview.bookings, icon: <FiPlusCircle />, onClick: () => document.getElementById('vendor-requests')?.scrollIntoView({ behavior: 'smooth' }) },
+            { label: 'Properties', value: overview.totalProperties, icon: <FiSliders />, onClick: () => navigate('/dashboard/owner/properties') },
+            { label: 'Leads', value: overview.leads ?? overview.inquiries + overview.bookings, icon: <FiUsers />, onClick: () => navigate('/dashboard/owner/leads') },
+            { label: 'Inquiries', value: overview.inquiries, icon: <FiUsers />, onClick: () => document.getElementById('owner-requests')?.scrollIntoView({ behavior: 'smooth' }) },
+            { label: 'Bookings', value: overview.bookings, icon: <FiPlusCircle />, onClick: () => document.getElementById('owner-requests')?.scrollIntoView({ behavior: 'smooth' }) },
           ].map((item) => (
             <button key={item.label} type="button" onClick={item.onClick} className="text-left">
               <Card className="h-full p-6 transition hover:border-accent-500">
@@ -105,13 +111,13 @@ function VendorDashboard() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card id="vendor-requests">
+        <Card id="owner-requests">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Active listings</p>
               <h2 className="mt-3 text-2xl font-semibold text-white">Live property performance</h2>
             </div>
-            <Button variant="secondary" onClick={() => navigate('/dashboard/vendor/properties')}>View listings</Button>
+            <Button variant="secondary" onClick={() => navigate('/dashboard/owner/properties')}>View listings</Button>
           </div>
           <p className="mt-6 text-slate-300">Quickly edit rent, update availability, and review active leads in one interface.</p>
         </Card>
@@ -138,7 +144,12 @@ function VendorDashboard() {
             <div key={item._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
               <p className="font-semibold text-white">{item.propertyId?.propertyName || 'StayJi property'} · {item.status}</p>
               <p className="mt-1">Commission ₹{item.commissionAmount || 0} · Cashback ₹{item.cashbackAmount || 0}</p>
-              <p className="mt-1 text-slate-500">Joining: {item.joiningDate || '-'}</p>
+              <p className="mt-1 text-slate-500">Joining: {item.joiningDate || '-'} · Owner confirmation: {item.ownerConfirmed ? 'Done' : 'Pending'}</p>
+              {!item.ownerConfirmed ? (
+                <button type="button" onClick={() => ownerConfirmMutation.mutate(item._id)} className="mt-3 rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">
+                  Tenant joined successfully
+                </button>
+              ) : null}
             </div>
           ))}
           {!moveIns.length ? <p className="text-sm text-slate-400">Verified move-ins will appear here after users submit proof.</p> : null}
@@ -155,8 +166,8 @@ function VendorDashboard() {
         </div>
         <div className="mt-5 max-h-80 space-y-3 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
           {messages.map((item) => (
-            <div key={item._id} className={`rounded-2xl p-3 text-sm ${item.senderRole === 'vendor' ? 'bg-accent-500/10 text-accent-100' : 'bg-slate-900/80 text-slate-300'}`}>
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.senderRole === 'vendor' ? 'You' : 'StayJi admin'} · {item.addedOn ? new Date(item.addedOn).toLocaleString() : ''}</p>
+            <div key={item._id} className={`rounded-2xl p-3 text-sm ${item.senderRole === 'owner' ? 'bg-accent-500/10 text-accent-100' : 'bg-slate-900/80 text-slate-300'}`}>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.senderRole === 'owner' ? 'You' : 'StayJi admin'} · {item.addedOn ? new Date(item.addedOn).toLocaleString() : ''}</p>
               <p className="mt-2">{item.message}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" onClick={() => deleteMessageMutation.mutate({ messageId: item._id, scope: 'self' })} className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-rose-400"><FiTrash2 className="inline" /> Delete for me</button>
@@ -167,11 +178,11 @@ function VendorDashboard() {
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
           <input value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Reply to StayJi admin" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
-          <Button onClick={() => replyMutation.mutate()} disabled={!vendorId || !reply.trim()}>Send</Button>
+          <Button onClick={() => replyMutation.mutate()} disabled={!ownerId || !reply.trim()}>Send</Button>
         </div>
       </Card>
     </div>
   )
 }
 
-export default VendorDashboard
+export default OwnerDashboard

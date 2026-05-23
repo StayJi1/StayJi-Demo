@@ -21,6 +21,7 @@ const BlogPage = lazy(() => import('../pages/BlogPage'))
 const RecommendationPage = lazy(() => import('../pages/RecommendationPage'))
 const LegalPage = lazy(() => import('../pages/LegalPage'))
 const AdminDashboard = lazy(() => import('../pages/dashboard/admin/AdminDashboard'))
+const SuperAdminDashboard = lazy(() => import('../pages/dashboard/admin/SuperAdminDashboard'))
 const VendorDashboard = lazy(() => import('../pages/dashboard/vendor/VendorDashboard'))
 const UserDashboard = lazy(() => import('../pages/dashboard/user/UserDashboard'))
 const UserProfilePage = lazy(() => import('../pages/dashboard/user/UserProfilePage'))
@@ -36,7 +37,8 @@ function DashboardRedirect() {
   if (!role) {
     return <Navigate to="/login" replace />
   }
-  return <Navigate to={`/dashboard/${role || 'user'}`} replace />
+  const dashboardRole = role === 'owner' ? 'owner' : role || 'user'
+  return <Navigate to={`/dashboard/${dashboardRole}`} replace />
 }
 
 function AppRoutes() {
@@ -66,11 +68,14 @@ function AppRoutes() {
           <Route path="/vendor-policy" element={<LegalPage />} />
           <Route path="/community-guidelines" element={<LegalPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/admin-login" element={<LoginPage portal="admin" />} />
+          <Route path="/super-admin-login" element={<LoginPage portal="super-admin" />} />
           <Route path="/signup" element={<SignupPage />} />
         </Route>
 
       <Route path="/admin" element={<Navigate to="/dashboard/admin" replace />} />
-      <Route path="/vendor" element={<Navigate to="/dashboard/vendor" replace />} />
+      <Route path="/vendor" element={<Navigate to="/dashboard/owner" replace />} />
+      <Route path="/owner" element={<Navigate to="/dashboard/owner" replace />} />
 
       <Route
         path="/dashboard"
@@ -84,15 +89,23 @@ function AppRoutes() {
         <Route
           path="admin"
           element={
-            <RoleProtectedRoute role="admin">
+            <RoleProtectedRoute role={['admin', 'super-admin']}>
               <AdminDashboard />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="super-admin"
+          element={
+            <RoleProtectedRoute role="super-admin">
+              <SuperAdminDashboard />
             </RoleProtectedRoute>
           }
         />
         <Route
           path="admin/users"
           element={
-            <RoleProtectedRoute role="admin">
+            <RoleProtectedRoute role={['admin', 'super-admin']}>
               <ManageUsersPage />
             </RoleProtectedRoute>
           }
@@ -100,7 +113,15 @@ function AppRoutes() {
         <Route
           path="admin/vendors/:vendorId"
           element={
-            <RoleProtectedRoute role="admin">
+            <RoleProtectedRoute role={['admin', 'super-admin']}>
+              <AdminVendorDetailPage />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/owners/:ownerId"
+          element={
+            <RoleProtectedRoute role={['admin', 'super-admin']}>
               <AdminVendorDetailPage />
             </RoleProtectedRoute>
           }
@@ -108,7 +129,7 @@ function AppRoutes() {
         <Route
           path="admin/properties/:propertyId"
           element={
-            <RoleProtectedRoute role="admin">
+            <RoleProtectedRoute role={['admin', 'super-admin']}>
               <AdminPropertyDetailPage />
             </RoleProtectedRoute>
           }
@@ -116,55 +137,60 @@ function AppRoutes() {
         <Route
           path="admin/properties/:propertyId/edit"
           element={
-            <RoleProtectedRoute role="admin">
+            <RoleProtectedRoute role={['admin', 'super-admin']}>
               <AddPropertyPage />
             </RoleProtectedRoute>
           }
         />
         <Route
           path="vendor"
+          element={<Navigate to="/dashboard/owner" replace />}
+        />
+        <Route
+          path="owner"
           element={
-            <RoleProtectedRoute role="vendor">
+            <RoleProtectedRoute role="owner">
               <VendorDashboard />
             </RoleProtectedRoute>
           }
         />
+        <Route path="vendor/*" element={<Navigate to="/dashboard/owner" replace />} />
         <Route
-          path="vendor/add-property"
+          path="owner/add-property"
           element={
-            <RoleProtectedRoute role="vendor">
+            <RoleProtectedRoute role="owner">
               <AddPropertyPage />
             </RoleProtectedRoute>
           }
         />
         <Route
-          path="vendor/leads"
+          path="owner/leads"
           element={
-            <RoleProtectedRoute role="vendor">
+            <RoleProtectedRoute role="owner">
               <VendorLeadsPage />
             </RoleProtectedRoute>
           }
         />
         <Route
-          path="vendor/properties"
+          path="owner/properties"
           element={
-            <RoleProtectedRoute role="vendor">
+            <RoleProtectedRoute role="owner">
               <ManagePropertiesPage />
             </RoleProtectedRoute>
           }
         />
         <Route
-          path="vendor/properties/:propertyId"
+          path="owner/properties/:propertyId"
           element={
-            <RoleProtectedRoute role="vendor">
+            <RoleProtectedRoute role="owner">
               <PropertyDetailPage />
             </RoleProtectedRoute>
           }
         />
         <Route
-          path="vendor/properties/:propertyId/edit"
+          path="owner/properties/:propertyId/edit"
           element={
-            <RoleProtectedRoute role="vendor">
+            <RoleProtectedRoute role="owner">
               <AddPropertyPage />
             </RoleProtectedRoute>
           }

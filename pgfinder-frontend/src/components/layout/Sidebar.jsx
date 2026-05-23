@@ -6,8 +6,10 @@ import NotificationBell from '../notifications/NotificationBell'
 function Sidebar() {
   const navigate = useNavigate()
   const { role, user, logout } = useAuth()
-  const normalizedRole = ['owner', 'host', 'hostel'].includes(role)
-    ? 'vendor'
+  const normalizedRole = ['owner', 'host', 'hostel', 'vendor'].includes(role)
+    ? 'owner'
+    : ['super admin', 'super_admin', 'superadmin'].includes(role)
+      ? 'super-admin'
     : role || 'user'
   const dashboardRole = normalizedRole
 
@@ -16,15 +18,19 @@ function Sidebar() {
     { label: 'Browse stays', to: '/properties', icon: <FiLayers /> },
   ]
 
-  if (normalizedRole === 'admin') {
+  if (normalizedRole === 'admin' || normalizedRole === 'super-admin') {
     links.push({ label: 'Manage users', to: '/dashboard/admin/users', icon: <FiUsers /> })
     links.push({ label: 'Manage properties', to: '/dashboard/admin', icon: <FiShield /> })
   }
 
-  if (normalizedRole === 'vendor') {
-    links.push({ label: 'My properties', to: '/dashboard/vendor/properties', icon: <FiLayers /> })
-    links.push({ label: 'My leads', to: '/dashboard/vendor/leads', icon: <FiUsers /> })
-    links.push({ label: 'Add property', to: '/dashboard/vendor/add-property', icon: <FiPlusCircle /> })
+  if (normalizedRole === 'super-admin') {
+    links.push({ label: 'Governance', to: '/dashboard/super-admin', icon: <FiShield /> })
+  }
+
+  if (normalizedRole === 'owner') {
+    links.push({ label: 'My properties', to: '/dashboard/owner/properties', icon: <FiLayers /> })
+    links.push({ label: 'My leads', to: '/dashboard/owner/leads', icon: <FiUsers /> })
+    links.push({ label: 'Add property', to: '/dashboard/owner/add-property', icon: <FiPlusCircle /> })
   }
 
   if (role === 'user') {
@@ -43,7 +49,7 @@ function Sidebar() {
         </div>
         <div className="min-w-0">
           <p className="text-sm text-slate-400">StayJi dashboard</p>
-          <p className="truncate text-lg font-semibold text-white">{user?.name || user?.firstName || user?.userFname || 'Host'}</p>
+          <p className="truncate text-lg font-semibold text-white">{user?.name || user?.firstName || user?.userFname || 'Owner'}</p>
         </div>
         <div className="ml-auto lg:hidden">
           <NotificationBell />

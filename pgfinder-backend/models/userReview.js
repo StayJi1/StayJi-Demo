@@ -15,6 +15,19 @@ userReviewSchema = mongoose.Schema({
     sentiment:{
         type:String
     },
+    ownerReply:{
+        type:String
+    },
+    ownerReplyOn:{
+        type:Date
+    },
+    moderatedBy:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:'userMaster'
+    },
+    moderatedOn:{
+        type:Date
+    },
     reviewContext:{
         type:Mixed,
         default:{}
@@ -35,6 +48,20 @@ userReviewSchema = mongoose.Schema({
         type:mongoose.Schema.Types.ObjectId,
         ref:'propertyMaster'
     },
+    status:{
+        type:String,
+        enum:["active","archived","demo","suspended","flagged"],
+        default:"active"
+    },
+    isDummy:{
+        type:Boolean,
+        default:false,
+        index:true
+    },
+    isVerified:{
+        type:Boolean,
+        default:false
+    },
     addedOn:{
         type:String
     },
@@ -50,4 +77,8 @@ userReviewSchema.pre('save', function(next) {
     if (!this.userIDFK && this.userId) this.userIDFK = this.userId;
     next();
 });
+userReviewSchema.index({ propertyIDFK: 1, isActive: 1 });
+userReviewSchema.index({ propertyId: 1, isActive: 1 });
+userReviewSchema.index({ userIDFK: 1, isActive: 1 });
+userReviewSchema.index({ isDummy: 1 });
 module.exports = mongoose.model('userReview',userReviewSchema);

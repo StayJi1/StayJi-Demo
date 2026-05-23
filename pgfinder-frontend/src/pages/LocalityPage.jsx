@@ -16,7 +16,7 @@ const bangaloreOverview = {
   overview: 'StayJi helps students and working professionals discover verified PGs, hostels, co-living rooms, flats, and short stays across Bangalore localities.',
   itParks: ['Whitefield IT corridor', 'Electronic City', 'Outer Ring Road', 'Manyata Tech Park', 'Bagmane Tech Park'],
   transport: 'Bangalore commute planning should consider metro access, BMTC routes, office shuttles, and peak traffic around IT corridors.',
-  safety: 'Shortlist verified properties with CCTV, transparent deposits, secure entry, and responsive vendors.',
+  safety: 'Shortlist verified properties with CCTV, transparent deposits, secure entry, and responsive owners.',
   food: 'Most PG markets offer meal plans, mess options, cafes, restaurants, and delivery services.',
   price: 'Bangalore PG pricing depends on locality, sharing type, meals, AC, deposit, and proximity to offices or colleges.',
 }
