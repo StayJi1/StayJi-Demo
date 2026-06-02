@@ -10,6 +10,7 @@ import { useAuth } from '../../../context/AuthContext'
 function ManagePropertiesPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const ownerId = user?._id || user?.id
   const [properties, setProperties] = useState([])
   const [filters, setFilters] = useState({ search: '', approvalStatus: '', category: '', sortBy: 'newest' })
   const [selectedProperty, setSelectedProperty] = useState(null)
@@ -21,8 +22,11 @@ function ManagePropertiesPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await dashboardService.getOwnerProperties(user?._id)
-        setProperties(data || [])
+        const data = await dashboardService.getOwnerProperties(ownerId)
+        setProperties((data || []).filter((property) => {
+          const propertyOwnerId = property.ownerId || property.userIDFK?._id || property.userIDFK || property.vendorId?._id || property.vendorId
+          return propertyOwnerId?.toString() === ownerId.toString()
+        }))
       } catch (err) {
         setError(err?.message || 'Unable to load your properties.')
         setProperties([])
@@ -30,14 +34,14 @@ function ManagePropertiesPage() {
         setLoading(false)
       }
     }
-    if (user?._id) load()
+    if (ownerId) load()
     else window.setTimeout(() => setLoading(false), 0)
-  }, [user?._id])
+  }, [ownerId])
 
   const handleDelete = async (propertyId) => {
     if (!window.confirm('Request admin approval to delete/archive this property?')) return
     try {
-      await propertyService.deleteProperty(propertyId, { ownerId: user?._id, userIDFK: user?._id })
+      await propertyService.deleteProperty(propertyId, { ownerId, userIDFK: ownerId })
       setNotice('Delete request sent to admin for approval. The listing remains unchanged until approval.')
     } catch (err) {
       setError(err?.message || 'Unable to delete property.')
@@ -103,15 +107,32 @@ function ManagePropertiesPage() {
       label: 'Property',
       value: (property) => `${property.name || ''} ${property.city || ''} ${property.areaName || ''}`,
       render: (property) => (
-        <div className="min-w-0">
-          <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}`)} className="font-semibold text-white hover:text-accent-300">{property.name}</button>
-          <p className="mt-1 max-w-[280px] truncate text-xs text-slate-500">{property.description || 'No description available.'}</p>
+        <div className="flex min-w-[280px] items-center gap-3">
+          <img src={property.image} alt={property.name || 'Owner property'} className="h-16 w-20 flex-none rounded-2xl object-cover" />
+          <div className="min-w-0">
+            <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}`)} className="font-semibold text-white hover:text-accent-300">{property.name}</button>
+            <p className="mt-1 max-w-[240px] truncate text-xs text-slate-500">{property.description || 'No description available.'}</p>
+          </div>
         </div>
       ),
     },
     { key: 'city', label: 'Locality', value: (property) => `${property.city || '-'} ${property.areaName || ''}` },
     { key: 'rent', label: 'Rent', value: (property) => property.rent || 0, sortValue: (property) => Number(property.rent) || 0, render: (property) => `₹${property.rent || '0'}` },
     { key: 'vacancy', label: 'Vacancy', value: (property) => `${property.vacancyStatus || 'Available'} ${property.availableBeds || 0}` },
+    {
+      key: 'status',
+      label: 'Status',
+      value: (property) => property.status || property.vacancyStatus || 'Available',
+      render: (property) => (
+        <span className={`rounded-full px-3 py-2 text-xs ${
+          property.status === 'Booked' || property.vacancyStatus === 'Fully occupied'
+            ? 'bg-rose-500/10 text-rose-300'
+            : 'bg-emerald-500/10 text-emerald-300'
+        }`}>
+          {property.status || property.vacancyStatus || 'Available'}
+        </span>
+      ),
+    },
     {
       key: 'approval',
       label: 'Approval',
@@ -200,7 +221,7 @@ function ManagePropertiesPage() {
           columns={columns}
           rowId={(property) => property.id || property._id}
           searchPlaceholder="Search property, locality, status, rent"
-          minWidth="1080px"
+          minWidth="1180px"
         />
         </>
       ) : error ? (

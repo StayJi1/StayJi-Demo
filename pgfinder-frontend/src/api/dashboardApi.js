@@ -1,4 +1,5 @@
 import axiosClient from './axiosClient'
+import { normalizeProperty as normalizePublicProperty } from './propertyApi'
 
 const normalizeUser = (user) => ({
   ...user,
@@ -9,10 +10,10 @@ const normalizeUser = (user) => ({
 })
 
 const normalizeProperty = (property) => ({
-  ...property,
+  ...(normalizePublicProperty(property) || {}),
   id: property._id || property.id,
   name: property.propertyName || property.name,
-  ownerId: property.userIDFK?._id || property.userIDFK || '',
+  ownerId: property.vendorId?._id || property.vendorId || property.userIDFK?._id || property.userIDFK || property.ownerId || '',
   city: property.cityName || property.city,
   rent: Number(property.rent) || property.rent,
   depositAmount: Number(property.depositAmount) || property.depositAmount || 0,
@@ -28,7 +29,7 @@ const normalizeProperty = (property) => ({
   parkingAvailable: Boolean(property.parkingAvailable),
   acAvailable: Boolean(property.acAvailable),
   rating: Number(property.rating) || property.rating || 4.6,
-  status: property.isAvailable === false ? 'Booked' : 'Available',
+  status: property.status || (property.isAvailable === false ? 'Booked' : 'Available'),
 })
 
 

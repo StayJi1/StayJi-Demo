@@ -17,7 +17,7 @@ const toUploadUrl = (value) => {
   return `${baseURL}/upload/${clean}`
 }
 
-const normalizeProperty = (property) => {
+export const normalizeProperty = (property) => {
   if (!property) return property
 
   const amenities = property.aminityFeatures
