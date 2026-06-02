@@ -76,7 +76,16 @@ async function ensureDefaultAdmin() {
   }
 }
 
-ensureDefaultAdmin();
+// Ensure default admin users only after MongoDB is connected.
+// This prevents startup crashes/timeouts when DATABASE is temporarily unreachable.
+if (require('mongoose').connection.readyState === 1) {
+  ensureDefaultAdmin();
+} else {
+  console.log('MongoDB not connected yet; skipping ensureDefaultAdmin() at startup');
+  require('mongoose').connection.once('connected', () => {
+    ensureDefaultAdmin();
+  });
+}
 
 var storage = multer.diskStorage({
     destination: function (req, res, cb) {

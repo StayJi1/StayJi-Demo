@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import Button from '../../../components/common/Button'
 import Card from '../../../components/common/Card'
+import authService from '../../../services/authService'
 
 function UserProfilePage() {
-  const { user, updateProfile, status, error } = useAuth()
+  const { user, updateProfile, status, error, logout } = useAuth()
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -18,6 +19,8 @@ function UserProfilePage() {
     socialLinks: '',
   })
   const [success, setSuccess] = useState(null)
+  const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' })
+  const [passwordMessage, setPasswordMessage] = useState('')
 
   useEffect(() => {
     if (user) {
@@ -45,11 +48,16 @@ function UserProfilePage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    const cleanContact = form.contact.replace(/\D/g, '')
+    if (cleanContact && !/^[6-9]\d{9}$/.test(cleanContact)) {
+      setSuccess('Enter a valid 10 digit Indian mobile number.')
+      return
+    }
     try {
       await updateProfile({
         userFname: form.firstName,
         userLname: form.lastName,
-        contact: form.contact,
+        contact: cleanContact,
         occupation: form.occupation,
         gender: form.gender,
         dob: form.dob,
@@ -60,6 +68,23 @@ function UserProfilePage() {
       setSuccess('Profile updated successfully.')
     } catch {
       setSuccess(null)
+    }
+  }
+
+  const handlePasswordChange = async (event) => {
+    event.preventDefault()
+    setPasswordMessage('')
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordMessage('New password and confirm password do not match.')
+      return
+    }
+    try {
+      await authService.changePassword({ oldPassword: passwordForm.oldPassword, newPassword: passwordForm.newPassword })
+      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' })
+      setPasswordMessage('Password changed. Please login again.')
+      window.setTimeout(logout, 800)
+    } catch (err) {
+      setPasswordMessage(err?.message || 'Unable to change password.')
     }
   }
 
@@ -169,11 +194,29 @@ function UserProfilePage() {
             <textarea name="socialLinks" rows="3" value={form.socialLinks} onChange={handleChange} placeholder="One link per line" className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-4 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20" />
           </label>
 
-          {success ? <p className="text-sm text-emerald-300">{success}</p> : null}
+          {success ? <p className={`text-sm ${success.startsWith('Enter') ? 'text-rose-300' : 'text-emerald-300'}`}>{success}</p> : null}
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
           <Button type="submit" className="w-full">
             {status === 'loading' ? 'Saving…' : 'Save changes'}
+          </Button>
+        </form>
+      </Card>
+
+      <Card className="p-8">
+        <form onSubmit={handlePasswordChange} className="space-y-6">
+          <div>
+            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Password</p>
+            <h2 className="mt-3 text-2xl font-semibold text-white">Update login password</h2>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-3">
+            <input type="password" value={passwordForm.oldPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, oldPassword: event.target.value }))} placeholder="Current password" className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+            <input type="password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))} placeholder="New password" className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+            <input type="password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))} placeholder="Confirm new password" className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+          </div>
+          {passwordMessage ? <p className={`text-sm ${passwordMessage.startsWith('Password changed') ? 'text-emerald-300' : 'text-rose-300'}`}>{passwordMessage}</p> : null}
+          <Button type="submit" disabled={!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}>
+            Change password
           </Button>
         </form>
       </Card>

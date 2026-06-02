@@ -8,6 +8,7 @@ import Loader from '../components/common/Loader'
 import PropertyCard from '../components/property/PropertyCard'
 import PropertyMap from '../components/map/PropertyMap'
 import propertyService from '../services/propertyService'
+import dashboardService from '../services/dashboardService'
 import useCurrentLocation from '../hooks/useCurrentLocation'
 import { useAuth } from '../context/AuthContext'
 import { getDistanceKm } from '../utils/distance'
@@ -66,7 +67,8 @@ const isSimilarToken = (token, value) => {
 function PropertiesPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const initialSearch = searchParams.get('search') || ''
+  const initialSearch = searchParams.get('search') || searchParams.get('city') || searchParams.get('area') || ''
+  const initialMapSearch = searchParams.get('area') || ''
   const [properties, setProperties] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState(initialSearch)
@@ -75,12 +77,13 @@ function PropertiesPage() {
   const [sortBy, setSortBy] = useState('recommended')
   const [nearbyMode, setNearbyMode] = useState(false)
   const [searchRadiusKm, setSearchRadiusKm] = useState(defaultNearbyRadiusKm)
-  const [mapSearchQuery, setMapSearchQuery] = useState('')
+  const [mapSearchQuery, setMapSearchQuery] = useState(initialMapSearch)
   const [mapSearchLoading, setMapSearchLoading] = useState(false)
   const [mapSearchError, setMapSearchError] = useState('')
   const [mapSearchMessage, setMapSearchMessage] = useState('')
   const { user, isAuthenticated, role } = useAuth()
   const [savedPropertyIds, setSavedPropertyIds] = useState(new Set())
+  const [saveSearchMessage, setSaveSearchMessage] = useState('')
   const {
     position,
     loading: locationLoading,
@@ -120,7 +123,10 @@ function PropertiesPage() {
   }, [isAuthenticated, navigate, role, user?._id])
 
   useEffect(() => {
-    window.setTimeout(() => setSearchQuery(searchParams.get('search') || ''), 0)
+    window.setTimeout(() => {
+      setSearchQuery(searchParams.get('search') || searchParams.get('city') || searchParams.get('area') || '')
+      setMapSearchQuery(searchParams.get('area') || '')
+    }, 0)
   }, [searchParams])
 
   const handleToggleSave = async (propertyIDFK, shouldSave) => {
@@ -147,10 +153,32 @@ function PropertiesPage() {
     }
   }
 
+  const handleSaveSearch = async () => {
+    if (!isAuthenticated || !user?._id) {
+      navigate('/login', { replace: true })
+      return
+    }
+    setSaveSearchMessage('')
+    try {
+      await dashboardService.saveSearch({
+        userId: user._id,
+        city: searchQuery,
+        locality: mapSearchQuery,
+        budget: [priceRange.min, priceRange.max].filter(Boolean).join(' - '),
+        sharingType: activeFilters.filter((item) => /sharing/i.test(item)).join(', '),
+        nearbyPreferences: activeFilters,
+        filters: { activeFilters, priceRange, sortBy, nearbyMode, searchRadiusKm },
+      })
+      setSaveSearchMessage('Search saved to your dashboard.')
+    } catch (error) {
+      setSaveSearchMessage(error?.message || 'Unable to save this search.')
+    }
+  }
+
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await propertyService.fetchProperties()
+        const data = await propertyService.fetchProperties({ includeAllCities: true, limit: 100, allPages: true })
         setProperties(data || [])
       } catch {
         setProperties([])
@@ -355,7 +383,9 @@ function PropertiesPage() {
                   <FiMapPin /> {locationLoading ? 'Finding nearby...' : hasUserLocation && nearbyMode ? 'Showing nearby' : 'Use my location'}
                 </span>
               </Button>
+              <Button className="w-full sm:w-auto" onClick={handleSaveSearch}>Save search</Button>
             </div>
+            {saveSearchMessage ? <p className={`mt-3 text-sm ${saveSearchMessage.startsWith('Unable') ? 'text-rose-300' : 'text-emerald-300'}`}>{saveSearchMessage}</p> : null}
             {locationError ? <p className="mt-3 text-sm text-rose-300">{locationError}</p> : null}
             <div className="mt-4 grid gap-4 md:grid-cols-[1.8fr_0.9fr]">
               <input

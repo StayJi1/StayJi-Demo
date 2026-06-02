@@ -13,8 +13,10 @@ function ManagePropertiesPage() {
   const [properties, setProperties] = useState([])
   const [filters, setFilters] = useState({ search: '', approvalStatus: '', category: '', sortBy: 'newest' })
   const [selectedProperty, setSelectedProperty] = useState(null)
+  const [quickEdit, setQuickEdit] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     const load = async () => {
@@ -33,12 +35,40 @@ function ManagePropertiesPage() {
   }, [user?._id])
 
   const handleDelete = async (propertyId) => {
-    if (!window.confirm('Delete this property? This action cannot be undone.')) return
+    if (!window.confirm('Request admin approval to delete/archive this property?')) return
     try {
-      await propertyService.deleteProperty(propertyId)
-      setProperties((current) => current.filter((property) => property.id !== propertyId))
+      await propertyService.deleteProperty(propertyId, { ownerId: user?._id, userIDFK: user?._id })
+      setNotice('Delete request sent to admin for approval. The listing remains unchanged until approval.')
     } catch (err) {
       setError(err?.message || 'Unable to delete property.')
+    }
+  }
+
+  const openQuickEdit = (property) => {
+    setQuickEdit({
+      id: property.id || property._id,
+      availableBeds: property.availableBeds || '',
+      vacancyStatus: property.vacancyStatus || 'Available now',
+      availableFrom: property.availableFrom || '',
+      sharingAvailability: property.sharingAvailability || '',
+    })
+  }
+
+  const submitQuickEdit = async (event) => {
+    event.preventDefault()
+    if (!quickEdit?.id) return
+    try {
+      const updated = await propertyService.updateOccupancy(quickEdit.id, {
+        availableBeds: quickEdit.availableBeds,
+        vacancyStatus: quickEdit.vacancyStatus,
+        availableFrom: quickEdit.availableFrom,
+        sharingAvailability: quickEdit.sharingAvailability,
+      })
+      setProperties((current) => current.map((property) => ((property.id || property._id) === quickEdit.id ? { ...property, ...updated } : property)))
+      setQuickEdit(null)
+      setNotice('Quick availability updated without changing protected listing details.')
+    } catch (err) {
+      setError(err?.message || 'Unable to update availability.')
     }
   }
 
@@ -107,6 +137,7 @@ function ManagePropertiesPage() {
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEye /> View</button>
           <button type="button" onClick={() => navigate(`/dashboard/owner/leads?propertyId=${property.id || property._id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiBarChart2 /> Analytics</button>
+          <button type="button" onClick={() => openQuickEdit(property)} className="inline-flex items-center gap-2 rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200 hover:bg-emerald-500/10">Quick edit</button>
           <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}/edit`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEdit2 /> Edit</button>
           <button type="button" onClick={() => handleDelete(property.id || property._id)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-rose-400"><FiTrash2 /> Delete</button>
         </div>
@@ -160,6 +191,8 @@ function ManagePropertiesPage() {
       {loading ? (
         <Card className="p-8">Loading properties…</Card>
       ) : filteredProperties.length ? (
+        <>
+        {notice ? <Card className="border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">{notice}</Card> : null}
         <AdvancedDataTable
           title="Owner properties and occupancy controls"
           eyebrow="Owner listing table"
@@ -169,6 +202,7 @@ function ManagePropertiesPage() {
           searchPlaceholder="Search property, locality, status, rent"
           minWidth="1080px"
         />
+        </>
       ) : error ? (
         <Card className="p-8 text-center text-rose-300">{error}</Card>
       ) : (
@@ -205,6 +239,35 @@ function ManagePropertiesPage() {
               ))}
             </div>
           </div>
+        </div>
+      ) : null}
+      {quickEdit ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4">
+          <form onSubmit={submitQuickEdit} className="w-full max-w-2xl rounded-[2rem] border border-slate-800 bg-surface-900 p-6 shadow-card">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Quick property edit</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Availability and room status</h2>
+              </div>
+              <button type="button" onClick={() => setQuickEdit(null)} className="rounded-full border border-slate-700 px-3 py-2 text-slate-300 hover:border-accent-500">Close</button>
+            </div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <input type="number" value={quickEdit.availableBeds} onChange={(event) => setQuickEdit((current) => ({ ...current, availableBeds: event.target.value }))} placeholder="Beds available" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+              <select value={quickEdit.vacancyStatus} onChange={(event) => setQuickEdit((current) => ({ ...current, vacancyStatus: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400">
+                <option value="Available now">Available now</option>
+                <option value="Few beds left">Few beds left</option>
+                <option value="Fully occupied">Fully occupied</option>
+                <option value="Available from date">Available from date</option>
+              </select>
+              <input type="date" value={quickEdit.availableFrom} onChange={(event) => setQuickEdit((current) => ({ ...current, availableFrom: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+              <input value={quickEdit.sharingAvailability} onChange={(event) => setQuickEdit((current) => ({ ...current, sharingAvailability: event.target.value }))} placeholder="Sharing availability" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+            </div>
+            <p className="mt-4 text-sm text-slate-400">This updates vacancy and room availability immediately. Name, address, coordinates, and image changes still use admin approval.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setQuickEdit(null)} className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200">Cancel</button>
+              <button type="submit" className="rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">Save quick update</button>
+            </div>
+          </form>
         </div>
       ) : null}
     </div>

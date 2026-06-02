@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { FiHeart, FiMapPin, FiStar } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
@@ -13,7 +13,14 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
   const [saving, setSaving] = useState(false)
   const saved = onToggleSave ? Boolean(savedProp) : internalSaved
 
-  const handleShortlist = async () => {
+  const propertyPath = `/properties/${property.id || property._id || 'detail'}`
+
+  const openProperty = () => {
+    navigate(propertyPath)
+  }
+
+  const handleShortlist = async (event) => {
+    event.stopPropagation()
     if (!isAuthenticated || !user?._id) {
       navigate('/login', { replace: true })
       return
@@ -45,7 +52,13 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
       layout
       whileHover={{ y: -6 }}
       transition={{ type: 'spring', stiffness: 220, damping: 20 }}
-      className="group min-w-0 overflow-hidden rounded-[1.5rem] border border-slate-800/70 bg-slate-950/90 shadow-card sm:rounded-[2rem]"
+      role="button"
+      tabIndex={0}
+      onClick={openProperty}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') openProperty()
+      }}
+      className="group min-w-0 cursor-pointer overflow-hidden rounded-[1.5rem] border border-slate-800/70 bg-slate-950/90 shadow-card sm:rounded-[2rem]"
     >
       <div className="relative overflow-hidden">
         {property.displayBadges?.length ? (
@@ -118,12 +131,16 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
             <FiStar className="text-amber-400" />
             {property.rating || 4.8}
           </div>
-          <Link
-            to={`/properties/${property.id || property._id || 'detail'}`}
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              openProperty()
+            }}
             className="rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-brand-400"
           >
             View details
-          </Link>
+          </button>
         </div>
       </div>
     </motion.article>

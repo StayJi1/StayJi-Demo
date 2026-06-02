@@ -6,19 +6,27 @@ import Card from '../../../components/common/Card'
 import AdvancedDataTable from '../../../components/admin/AdvancedDataTable'
 import adminApi from '../../../api/adminApi'
 import useDebouncedValue from '../../../hooks/useDebouncedValue'
+import { useAuth } from '../../../context/AuthContext'
 
 function ManageUsersPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { role: currentRole } = useAuth()
   const initialRole = searchParams.get('role') || 'all'
   const [filters, setFilters] = useState({ search: '', role: initialRole, ownerType: 'all', city: '', status: 'active' })
   const [selectedUser, setSelectedUser] = useState(null)
   const [editUser, setEditUser] = useState(null)
   const [error, setError] = useState('')
   const debouncedSearch = useDebouncedValue(filters.search)
+  const isSuperAdmin = currentRole === 'super-admin'
 
-  const queryFilters = { ...filters, search: debouncedSearch, limit: 80 }
+  const queryFilters = {
+    ...filters,
+    search: debouncedSearch,
+    ownerType: filters.role === 'User' ? 'all' : filters.ownerType,
+    limit: 80,
+  }
   const { data: users = [], isLoading: loading } = useQuery({ queryKey: ['admin-users', queryFilters], queryFn: () => adminApi.users(queryFilters), refetchInterval: 30_000 })
   const statusMutation = useMutation({
     mutationFn: ({ user, payload }) => adminApi.updateUserStatus(user.id || user._id, payload),
@@ -146,22 +154,22 @@ function ManageUsersPage() {
             type="search"
             value={filters.search}
             onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
-            placeholder="Search name, email, phone"
+            placeholder="Search name, email, phone, StayJi ID"
             className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400"
           />
           <select
             value={filters.role}
-            onChange={(event) => setFilters((current) => ({ ...current, role: event.target.value }))}
+            onChange={(event) => setFilters((current) => ({ ...current, role: event.target.value, ownerType: event.target.value === 'User' ? 'all' : current.ownerType }))}
             className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400"
           >
             <option value="all">All roles</option>
             <option value="User">Users</option>
             <option value="Owner">Owners</option>
-            <option value="Admin">Admins</option>
           </select>
           <select
             value={filters.ownerType}
             onChange={(event) => setFilters((current) => ({ ...current, ownerType: event.target.value }))}
+            disabled={filters.role === 'User'}
             className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400"
           >
             <option value="all">All owner types</option>
@@ -190,7 +198,7 @@ function ManageUsersPage() {
       {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
       <AdvancedDataTable
-        title="Users, owners, admins, and MongoDB identities"
+        title="Users, owners, and MongoDB identities"
         eyebrow="Admin database table"
         rows={users}
         columns={userColumns}
@@ -262,7 +270,7 @@ function ManageUsersPage() {
             onSubmit={(event) => {
               event.preventDefault()
               const targetId = editUser.objectId || editUser._id || editUser.id
-              updateUserMutation.mutate({ id: targetId, payload: {
+              const payload = {
                 name: editUser.name || '',
                 userFname: editUser.firstName || editUser.userFname || editUser.name?.split(' ')[0] || '',
                 userLname: editUser.lastName || editUser.userLname || editUser.name?.split(' ').slice(1).join(' ') || '',
@@ -273,8 +281,6 @@ function ManageUsersPage() {
                 dob: editUser.dob || '',
                 city: editUser.city || '',
                 state: editUser.state || '',
-                assignedCity: editUser.assignedCity || '',
-                assignedState: editUser.assignedState || '',
                 bio: editUser.bio || '',
                 accountStatus: editUser.accountStatus || '',
                 verificationStatus: editUser.verificationStatus || '',
@@ -282,8 +288,13 @@ function ManageUsersPage() {
                 isVerified: Boolean(editUser.isVerified),
                 businessName: editUser.businessName || '',
                 vendorType: editUser.vendorType || '',
-                userType: editUser.userType || editUser.role,
-              } })
+              }
+              if (isSuperAdmin) {
+                payload.assignedCity = editUser.assignedCity || ''
+                payload.assignedState = editUser.assignedState || ''
+                payload.userType = editUser.userType || editUser.role
+              }
+              updateUserMutation.mutate({ id: targetId, payload })
             }}
             className="w-full max-w-2xl rounded-[2rem] border border-slate-800 bg-surface-900 p-6 shadow-card"
           >
@@ -303,8 +314,17 @@ function ManageUsersPage() {
               <input value={editUser.dob || ''} onChange={(event) => setEditUser((current) => ({ ...current, dob: event.target.value }))} placeholder="DOB" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
               <input value={editUser.city || ''} onChange={(event) => setEditUser((current) => ({ ...current, city: event.target.value }))} placeholder="City/locality" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
               <input value={editUser.state || ''} onChange={(event) => setEditUser((current) => ({ ...current, state: event.target.value }))} placeholder="State" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
-              <input value={editUser.assignedCity || ''} onChange={(event) => setEditUser((current) => ({ ...current, assignedCity: event.target.value }))} placeholder="Assigned city" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
-              <input value={editUser.assignedState || ''} onChange={(event) => setEditUser((current) => ({ ...current, assignedState: event.target.value }))} placeholder="Assigned state" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+              {isSuperAdmin ? (
+                <>
+                  <input value={editUser.assignedCity || ''} onChange={(event) => setEditUser((current) => ({ ...current, assignedCity: event.target.value }))} placeholder="Assigned city" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+                  <input value={editUser.assignedState || ''} onChange={(event) => setEditUser((current) => ({ ...current, assignedState: event.target.value }))} placeholder="Assigned state" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+                  <select value={editUser.userType || editUser.role || 'User'} onChange={(event) => setEditUser((current) => ({ ...current, userType: event.target.value, role: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400">
+                    <option value="User">User</option>
+                    <option value="Owner">Owner</option>
+                    <option value="Admin">Admin</option>
+                  </select>
+                </>
+              ) : null}
               <select value={editUser.accountStatus || (editUser.isActive ? 'active' : 'suspended')} onChange={(event) => setEditUser((current) => ({ ...current, accountStatus: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400">
                 <option value="active">Active</option>
                 <option value="suspended">Suspended</option>

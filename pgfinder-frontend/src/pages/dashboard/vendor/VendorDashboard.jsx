@@ -66,6 +66,7 @@ function OwnerDashboard() {
           <div>
             <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Owner dashboard</p>
             <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">Manage your stay listings and inquiries</h1>
+            <p className="mt-2 text-xs text-slate-500">Owner ID: {user?._id ? `SJ-${user._id.toString().slice(-6).toUpperCase()}` : '-'}</p>
           </div>
           <Button onClick={() => navigate('/dashboard/owner/add-property')}>New property</Button>
         </div>
@@ -98,15 +99,17 @@ function OwnerDashboard() {
 
       <div className="grid gap-6 xl:grid-cols-3">
         {[
-          { label: 'Conversion rate', value: `${overview?.conversionRate ?? Math.min(42, (overview?.leads || 0) * 3)}%`, icon: <FiTrendingUp /> },
-          { label: 'Commission due', value: `₹${moveIns.filter((item) => item.status === 'Verified').reduce((sum, item) => sum + (Number(item.commissionAmount) || 0), 0).toLocaleString('en-IN')}`, icon: <FiBarChart2 /> },
-          { label: 'Vacancy health', value: overview?.vacancyStatus || 'Live updates ready', icon: <FiEye /> },
+          { label: 'Conversion rate', value: `${overview?.conversionRate ?? Math.min(42, (overview?.leads || 0) * 3)}%`, icon: <FiTrendingUp />, onClick: () => navigate('/dashboard/owner/leads') },
+          { label: 'Commission due', value: `₹${moveIns.filter((item) => item.status === 'Verified').reduce((sum, item) => sum + (Number(item.commissionAmount) || 0), 0).toLocaleString('en-IN')}`, icon: <FiBarChart2 />, onClick: () => document.getElementById('owner-move-ins')?.scrollIntoView({ behavior: 'smooth' }) },
+          { label: 'Vacancy health', value: overview?.vacancyStatus || 'Live updates ready', icon: <FiEye />, onClick: () => navigate('/dashboard/owner/properties') },
         ].map((item) => (
-          <Card key={item.label} className="p-6">
-            <span className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-950 text-accent-400">{item.icon}</span>
-            <p className="mt-5 text-sm uppercase tracking-[0.24em] text-slate-500">{item.label}</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{item.value}</p>
-          </Card>
+          <button key={item.label} type="button" onClick={item.onClick} className="text-left">
+            <Card className="h-full p-6 transition hover:border-accent-500">
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-950 text-accent-400">{item.icon}</span>
+              <p className="mt-5 text-sm uppercase tracking-[0.24em] text-slate-500">{item.label}</p>
+              <p className="mt-2 text-2xl font-semibold text-white">{item.value}</p>
+            </Card>
+          </button>
         ))}
       </div>
 
@@ -128,13 +131,17 @@ function OwnerDashboard() {
             <h2 className="mt-3 text-2xl font-semibold text-white">Recent visitor requests</h2>
           </div>
           <div className="mt-6 space-y-4 text-slate-300">
-            <p>Users are asking for quick tour slots and immediate move-in options.</p>
-            <p>Your dashboard makes it easy to approve visits and update status.</p>
+            <button type="button" onClick={() => navigate('/dashboard/owner/leads')} className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-left hover:border-accent-500">
+              {overview.bookings || 0} visit requests and {overview.inquiries || 0} interest messages are waiting in your lead queue.
+            </button>
+            <button type="button" onClick={() => navigate('/dashboard/owner/properties')} className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-left hover:border-accent-500">
+              Update quick tour slots, beds, and immediate move-in availability from your property controls.
+            </button>
           </div>
         </Card>
       </div>
 
-      <Card>
+      <Card id="owner-move-ins">
         <div className="mb-6">
           <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Move-in conversions</p>
           <h2 className="mt-2 text-2xl font-semibold text-white">Commission and verification queue</h2>

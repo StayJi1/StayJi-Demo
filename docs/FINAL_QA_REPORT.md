@@ -22,6 +22,10 @@
 - User dashboard now shows StayJi Coins, approved rewards, pending rewards, and reward rows.
 - Reviews can be added or edited, trigger rating recalculation, support owner replies, and support admin moderation.
 - Super Admin city table now exposes selected-row dummy/live bulk actions.
+- Visit booking, owner lead, and interest views now collapse repeated same-user/same-property records to the latest active record.
+- Owner protected edits preserve the existing approved listing while protected changes wait for admin approval.
+- Admin/Super Admin workflows now include Unarchive/Unhide visibility recovery and city pause/launch governance notes.
+- User support email and phone are clickable through mailto/tel links.
 
 ## Remaining Risks
 

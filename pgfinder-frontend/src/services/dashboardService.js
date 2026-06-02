@@ -24,6 +24,13 @@ const dashboardService = {
   getVendorProperties: (userIDFK) => dashboardApi.vendorProperties(userIDFK),
   getOwnerProperties: (userIDFK) => dashboardApi.vendorProperties(userIDFK),
   moveIns: (params) => dashboardApi.moveIns(params),
+  saveSearch: (payload) => dashboardApi.saveSearch(payload),
+  deleteSavedSearch: (id, userId) => dashboardApi.deleteSavedSearch(id, userId),
+  chats: (params) => dashboardApi.chats(params),
+  sendChat: (payload) => dashboardApi.sendChat(payload),
+  updateVisit: (id, payload) => dashboardApi.updateVisit(id, payload),
+  walletPayouts: (params) => dashboardApi.walletPayouts(params),
+  requestWalletPayout: (payload) => dashboardApi.requestWalletPayout(payload),
 }
 
 export default dashboardService

@@ -19,9 +19,11 @@ function SuperAdminDashboard() {
   const [dummyForm, setDummyForm] = useState({ city: 'Bangalore', locality: '', scope: 'properties', isDummy: true, visible: true, status: 'demo' })
   const [propertyFilters, setPropertyFilters] = useState({ city: '', locality: '', propertyStatus: '', demoLive: '', verificationStatus: '', approvalStatus: '', occupancy: '' })
   const [bulkRequest, setBulkRequest] = useState(null)
+  const [selectedAudit, setSelectedAudit] = useState(null)
   const [toast, setToast] = useState('')
   const { data: governance = { summary: {}, cityRows: [], auditLogs: [] }, isLoading } = useQuery({ queryKey: ['super-admin-governance'], queryFn: adminApi.governance, refetchInterval: 30_000 })
   const { data: cityStateData = { items: [] } } = useQuery({ queryKey: ['super-admin-city-states'], queryFn: () => adminApi.cityStates({ active: true }) })
+  const { data: adminUsers = [] } = useQuery({ queryKey: ['super-admin-admin-users'], queryFn: () => adminApi.users({ role: 'Admin', status: 'active', limit: 100 }) })
   const propertyParams = useMemo(() => ({ ...propertyFilters, limit: 50 }), [propertyFilters])
   const { data: propertiesData = { items: [] }, isFetching: propertiesLoading } = useQuery({ queryKey: ['super-admin-properties', propertyParams], queryFn: () => adminApi.properties(propertyParams), refetchInterval: 30_000 })
   const properties = propertiesData.items || []
@@ -59,6 +61,15 @@ function SuperAdminDashboard() {
       queryClient.invalidateQueries({ queryKey: ['super-admin-properties'] })
     },
   })
+  const pauseCity = useMutation({
+    mutationFn: (row) => adminApi.saveCityState({ stateName: row.state, cityName: row.city, status: 'paused', isActive: true, dummyVisible: false }),
+    onSuccess: () => {
+      setToast('City paused. Admin operations remain available, but live users will not see that city until Super Admin launches it again.')
+      queryClient.invalidateQueries({ queryKey: ['super-admin-governance'] })
+      queryClient.invalidateQueries({ queryKey: ['super-admin-city-states'] })
+      queryClient.invalidateQueries({ queryKey: ['super-admin-properties'] })
+    },
+  })
 
   const summaryCards = [
     { label: 'LIVE properties', value: governance.summary.liveProperties, icon: <FiEye />, filter: { propertyStatus: 'live', demoLive: 'live' }, note: 'Public and real' },
@@ -79,7 +90,7 @@ function SuperAdminDashboard() {
   ]
 
   const auditColumns = [
-    { key: 'action', label: 'Action', value: (row) => row.action },
+    { key: 'action', label: 'Action', value: (row) => row.action, render: (row) => <button type="button" onClick={() => setSelectedAudit(row)} className="font-semibold text-white hover:text-accent-300">{row.action}</button> },
     { key: 'performer', label: 'Performer', value: (row) => row.performerId?.userEmail || row.performerRole || '-' },
     { key: 'entity', label: 'Entity', value: (row) => `${row.entityType || '-'} ${row.entityId || ''}` },
     { key: 'city', label: 'Scope', value: (row) => [row.city, row.state].filter(Boolean).join(', ') || '-' },
@@ -108,6 +119,7 @@ function SuperAdminDashboard() {
     mark_demo: { title: 'Mark selected properties as DEMO?', body: ['label listings as demo', 'separate them from real analytics', 'keep them useful for pre-launch demos'] },
     hide_publicly: { title: 'Hide selected properties publicly?', body: ['remove listings from public search', 'keep records available in operations', 'preserve audit history'] },
     archive: { title: 'Archive selected properties?', body: ['remove listings from active workflows', 'hide them publicly', 'keep the audit trail'] },
+    unarchive: { title: 'Unarchive selected properties?', body: ['return records to active workflows', 'make approved listings eligible for public visibility', 'preserve audit history'] },
     verify: { title: 'Verify selected properties?', body: ['mark listings verified', 'approve operational readiness', 'notify property owners'] },
     suspend: { title: 'Suspend selected properties?', body: ['block public visibility', 'mark listings suspended', 'notify property owners'] },
     assign_city: { title: 'Assign selected properties to city?', body: ['move listings into the chosen city scope', 'sync dashboard filters', 'make city-admin ownership clearer'] },
@@ -126,11 +138,65 @@ function SuperAdminDashboard() {
     bulkMutation.mutate({ ids: bulkRequest.ids, action: bulkRequest.action, city: bulkRequest.city, state: bulkRequest.state, locality: bulkRequest.locality, assignedAdmin: bulkRequest.assignedAdmin })
   }
   const cityStateByName = new Map((cityStateData.items || []).map((item) => [item.cityName?.toLowerCase(), item]))
-  const availableAdmins = Array.from(new Map((cityStateData.items || []).flatMap((city) => city.assignedAdmins || []).map((admin) => [admin._id, admin])).values())
+  const availableAdmins = Array.from(new Map([
+    ...(cityStateData.items || []).flatMap((city) => city.assignedAdmins || []),
+    ...(adminUsers || []),
+  ].map((admin) => [admin._id || admin.id, admin])).values())
+  const cityRowByName = new Map((governance.cityRows || []).map((row) => [row.city, row]))
+  const scrollToProperties = () => window.setTimeout(() => document.getElementById('super-admin-properties')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0)
+  const applySummaryFilter = (filter, label) => {
+    setPropertyFilters((current) => ({ ...current, ...filter }))
+    setToast(`${label} filter applied. Global listing workflow is showing matching records.`)
+    scrollToProperties()
+  }
+  const runCityTask = async (selected, task) => {
+    if (!selected.length) {
+      setToast('Select at least one city first, then run the task.')
+      return
+    }
+    try {
+      if (task === 'show_demo') {
+        await Promise.all(selected.map((city) => dummyTransition.mutateAsync({ ...dummyForm, city, scope: 'properties', isDummy: true, visible: true, status: 'demo' })))
+        setToast(`Task updated: demo listings are visible for ${selected.length} selected ${selected.length === 1 ? 'city' : 'cities'}.`)
+      }
+      if (task === 'hide_demo') {
+        await Promise.all(selected.map((city) => dummyTransition.mutateAsync({ ...dummyForm, city, scope: 'properties', isDummy: true, visible: false, status: 'archived' })))
+        setToast(`Task updated: demo listings are hidden for ${selected.length} selected ${selected.length === 1 ? 'city' : 'cities'}.`)
+      }
+      if (task === 'launch') {
+        const launchable = selected.map((city) => cityStateByName.get(city?.toLowerCase())).filter((cityState) => cityState?._id)
+        if (!launchable.length) {
+          setToast('No city-state record found for the selected city. Save the city first, then launch it.')
+          return
+        }
+        await Promise.all(launchable.map((cityState) => launchCity.mutateAsync({ id: cityState._id })))
+        setToast(`Task updated: ${launchable.length} selected ${launchable.length === 1 ? 'city' : 'cities'} launched.`)
+      }
+      if (task === 'pause') {
+        const pausable = selected.map((city) => cityRowByName.get(city)).filter((row) => row?.state)
+        if (!pausable.length) {
+          setToast('No selected city has a mapped state yet. Save the city/state record before pausing it.')
+          return
+        }
+        await Promise.all(pausable.map((row) => pauseCity.mutateAsync(row)))
+        setToast(`Task updated: ${pausable.length} selected ${pausable.length === 1 ? 'city' : 'cities'} paused.`)
+      }
+    } catch (error) {
+      setToast(error?.message || 'Task could not be completed. Please retry after refreshing governance data.')
+    }
+  }
 
   return (
     <div className="space-y-8">
-      {toast ? <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{toast}</div> : null}
+      {toast ? (
+        <div className="fixed right-4 top-4 z-50 max-w-md rounded-2xl border border-emerald-500/40 bg-slate-950 px-4 py-3 text-sm text-emerald-100 shadow-card">
+          <div className="flex items-start gap-3">
+            <span className="mt-1 h-2 w-2 rounded-full bg-emerald-400" />
+            <p className="flex-1">{toast}</p>
+            <button type="button" onClick={() => setToast('')} className="text-slate-400 hover:text-white">Close</button>
+          </div>
+        </div>
+      ) : null}
       <header className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
         <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Super Admin governance</p>
         <h1 className="mt-3 text-4xl font-semibold text-white">Enterprise marketplace control</h1>
@@ -140,7 +206,7 @@ function SuperAdminDashboard() {
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-6">
         {summaryCards.map((item) => (
-          <button key={item.label} type="button" onClick={() => setPropertyFilters((current) => ({ ...current, ...item.filter }))} className="text-left">
+          <button key={item.label} type="button" onClick={() => applySummaryFilter(item.filter, item.label)} className="w-full text-left">
           <Card className="h-full p-5 transition hover:border-accent-500">
             <div className="flex items-center justify-between gap-3">
               <span className="text-accent-400">{item.icon}</span>
@@ -208,19 +274,17 @@ function SuperAdminDashboard() {
         minWidth="760px"
         actions={({ selected }) => (
           <div>
-            <p className="mb-3 text-sm text-slate-400">Launch City hides demo listings automatically, prioritizes real listings, and turns the city LIVE.</p>
+            <p className="mb-3 text-sm text-slate-400">Launch City activates public discovery for selected cities. Reject/Pause keeps admin work intact but hides that city from live users.</p>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => selected.forEach((city) => dummyTransition.mutate({ ...dummyForm, city, scope: 'properties', isDummy: true, visible: true, status: 'demo' }))} className="rounded-full border border-amber-500/60 px-4 py-2 text-sm text-amber-200">Show demo in selected</button>
-              <button type="button" onClick={() => selected.forEach((city) => dummyTransition.mutate({ ...dummyForm, city, scope: 'properties', isDummy: true, visible: false, status: 'archived' }))} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Hide demo in selected</button>
-              <button type="button" onClick={() => selected.forEach((city) => {
-                const cityState = cityStateByName.get(city?.toLowerCase())
-                if (cityState?._id) launchCity.mutate({ id: cityState._id })
-              })} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Launch City</button>
+              <button type="button" onClick={() => runCityTask(selected, 'show_demo')} className="rounded-full border border-amber-500/60 px-4 py-2 text-sm text-amber-200">Show demo in selected</button>
+              <button type="button" onClick={() => runCityTask(selected, 'hide_demo')} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Hide demo in selected</button>
+              <button type="button" onClick={() => runCityTask(selected, 'launch')} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Launch City</button>
+              <button type="button" onClick={() => runCityTask(selected, 'pause')} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200">Reject/Pause City</button>
             </div>
           </div>
         )}
       />
-      <Card className="p-4 sm:p-6">
+      <Card id="super-admin-properties" className="p-4 sm:p-6">
         <div className="mb-4">
           <p className="text-sm font-semibold text-white">Global property operations</p>
           <FieldNote>Cards, filters, and bulk actions share the same live/demo state so public visibility is always explicit.</FieldNote>
@@ -280,10 +344,11 @@ function SuperAdminDashboard() {
               <button type="button" onClick={() => openBulkAction('mark_demo', selected)} className="rounded-full border border-amber-500/60 px-4 py-2 text-sm text-amber-200">Mark DEMO</button>
               <button type="button" onClick={() => openBulkAction('hide_publicly', selected)} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Hide Publicly</button>
               <button type="button" onClick={() => openBulkAction('archive', selected)} className="rounded-full border border-zinc-500/60 px-4 py-2 text-sm text-zinc-200">Archive</button>
+              <button type="button" onClick={() => openBulkAction('unarchive', selected)} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Unarchive</button>
               <button type="button" onClick={() => openBulkAction('verify', selected)} className="rounded-full border border-cyan-500/60 px-4 py-2 text-sm text-cyan-200">Verify</button>
               <button type="button" onClick={() => openBulkAction('suspend', selected)} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200">Suspend</button>
               <button type="button" onClick={() => openBulkAction('assign_city', selected, { city: propertyFilters.city || dummyForm.city, locality: propertyFilters.locality || dummyForm.locality })} className="rounded-full border border-accent-500/60 px-4 py-2 text-sm text-accent-200">Assign City</button>
-              <button type="button" onClick={() => openBulkAction('assign_admin', selected, { assignedAdmin: availableAdmins[0]?._id })} className="rounded-full border border-indigo-500/60 px-4 py-2 text-sm text-indigo-200">Assign Admin</button>
+              <button type="button" onClick={() => openBulkAction('assign_admin', selected, { assignedAdmin: availableAdmins[0]?._id || availableAdmins[0]?.id })} className="rounded-full border border-indigo-500/60 px-4 py-2 text-sm text-indigo-200">Assign Admin</button>
             </div>
           </div>
         )}
@@ -303,7 +368,7 @@ function SuperAdminDashboard() {
               {bulkRequest.action === 'assign_admin' ? (
                 <select value={bulkRequest.assignedAdmin || ''} onChange={(event) => setBulkRequest((current) => ({ ...current, assignedAdmin: event.target.value }))} className="mt-3 w-full rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100">
                   <option value="">Choose admin</option>
-                  {availableAdmins.map((admin) => <option key={admin._id} value={admin._id}>{[admin.userFname, admin.userLname].filter(Boolean).join(' ') || admin.userEmail}</option>)}
+                  {availableAdmins.map((admin) => <option key={admin._id || admin.id} value={admin._id || admin.id}>{[admin.userFname, admin.userLname].filter(Boolean).join(' ') || admin.name || admin.userEmail || admin.email}</option>)}
                 </select>
               ) : null}
             </div>
@@ -315,6 +380,29 @@ function SuperAdminDashboard() {
         </div>
       ) : null}
       <AdvancedDataTable title="Operational audit trail" eyebrow="Audit and activity log" rows={governance.auditLogs || []} columns={auditColumns} rowId={(row) => row._id} minWidth="980px" />
+      {selectedAudit ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-700 bg-surface-800 p-6 shadow-card">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-accent-400">Audit detail</p>
+                <h2 className="mt-3 text-2xl font-semibold text-white">{selectedAudit.action}</h2>
+              </div>
+              <button type="button" onClick={() => setSelectedAudit(null)} className="rounded-full border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-accent-500">Close</button>
+            </div>
+            <div className="mt-5 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
+              <p>Performer: {selectedAudit.performerId?.userEmail || selectedAudit.performerRole || '-'}</p>
+              <p>Scope: {[selectedAudit.city, selectedAudit.state].filter(Boolean).join(', ') || '-'}</p>
+              <p>Entity: {selectedAudit.entityType || '-'} {selectedAudit.entityId || ''}</p>
+              <p>Time: {selectedAudit.addedOn ? new Date(selectedAudit.addedOn).toLocaleString() : '-'}</p>
+            </div>
+            <div className="mt-5 grid gap-4">
+              <pre className="max-h-56 overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-300">{JSON.stringify(selectedAudit.previousValue || {}, null, 2)}</pre>
+              <pre className="max-h-56 overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-300">{JSON.stringify(selectedAudit.updatedValue || {}, null, 2)}</pre>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

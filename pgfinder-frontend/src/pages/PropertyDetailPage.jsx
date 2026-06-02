@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { FiArrowLeft, FiClock, FiMessageSquare, FiShield, FiShuffle, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome } from 'react-icons/fi'
+import { FiArrowLeft, FiClock, FiMessageSquare, FiShield, FiShuffle, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome, FiStar } from 'react-icons/fi'
 import Loader from '../components/common/Loader'
 import Button from '../components/common/Button'
 import PropertyMap from '../components/map/PropertyMap'
@@ -21,6 +21,49 @@ const getAmenityIcon = (amenity) => {
   return <FiHome />
 }
 
+const getAmenityEmoji = (amenity) => {
+  const value = amenity.toLowerCase()
+  if (/wifi|internet/.test(value)) return '📶'
+  if (/food|meal|breakfast|lunch|dinner|kitchen/.test(value)) return '🍽️'
+  if (/parking|bike|car/.test(value)) return '🅿️'
+  if (/cctv|security|camera|biometric/.test(value)) return '🛡️'
+  if (/laundry|washing/.test(value)) return '🧺'
+  if (/power|backup|electric/.test(value)) return '🔋'
+  if (/gym|fitness/.test(value)) return '🏋️'
+  if (/study|table|desk/.test(value)) return '📚'
+  if (/fridge|refrigerator/.test(value)) return '🧊'
+  if (/balcony|rooftop|terrace/.test(value)) return '🌇'
+  if (/ac|air conditioning/.test(value)) return '❄️'
+  return '✨'
+}
+
+function StarRating({ value, onChange }) {
+  return (
+    <div className="mt-2 flex items-center gap-2" role="radiogroup" aria-label="Rating">
+      {[1, 2, 3, 4, 5].map((rating) => {
+        const active = Number(value) >= rating
+        return (
+          <button
+            key={rating}
+            type="button"
+            onClick={() => onChange(String(rating))}
+            className={`inline-flex h-12 w-12 items-center justify-center rounded-full border text-xl transition ${
+              active
+                ? 'scale-105 border-amber-300 bg-amber-400/20 text-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.22)]'
+                : 'border-slate-700 bg-slate-950 text-slate-500 hover:border-amber-300 hover:text-amber-200'
+            }`}
+            aria-checked={active}
+            role="radio"
+          >
+            <FiStar className={active ? 'fill-current' : ''} />
+          </button>
+        )
+      })}
+      <span className="text-sm text-slate-400">{value}/5</span>
+    </div>
+  )
+}
+
 function PropertyDetailPage() {
   const { id, propertyId } = useParams()
   const activePropertyId = id || propertyId
@@ -31,6 +74,10 @@ function PropertyDetailPage() {
   const [leadPrefs, setLeadPrefs] = useState({ preferredVisitTime: '', moveInPreference: '' })
   const [moveInForm, setMoveInForm] = useState({ ownerName: '', joiningDate: '', userNote: '', paymentScreenshot: null, roomImage: null })
   const [moveInMessage, setMoveInMessage] = useState('')
+  const [reviews, setReviews] = useState([])
+  const [reviewForm, setReviewForm] = useState({ rating: '5', details: '', tags: '' })
+  const [reviewMessage, setReviewMessage] = useState('')
+  const { user, role } = useAuth()
   const { position, loading: locationLoading, error: locationError, hasUserLocation, requestLocation } = useCurrentLocation()
 
   useEffect(() => {
@@ -40,6 +87,18 @@ function PropertyDetailPage() {
         setProperty(data)
         const viewed = JSON.parse(localStorage.getItem('stayjiViewed') || '[]')
         localStorage.setItem('stayjiViewed', JSON.stringify([activePropertyId, ...viewed.filter((item) => item !== activePropertyId)].slice(0, 20)))
+        if (user?._id) {
+          propertyService.recordViewed?.({
+            userId: user._id,
+            propertyId: activePropertyId,
+            propertyName: data?.name,
+            city: data?.city,
+            locality: data?.area,
+          }).catch(() => {})
+        }
+        propertyService.fetchReviews?.({ propertyId: activePropertyId, limit: 8 })
+          .then(setReviews)
+          .catch(() => setReviews([]))
       } catch {
         setError('Unable to load property details.')
       } finally {
@@ -47,10 +106,11 @@ function PropertyDetailPage() {
       }
     }
     loadProperty()
-  }, [activePropertyId])
+  }, [activePropertyId, user?._id])
 
-  const { user, role } = useAuth()
   const isAdmin = role === 'admin' || role === 'super-admin'
+  const isOwnerView = role === 'owner'
+  const isConsumerView = !isAdmin && !isOwnerView
 
   useEffect(() => {
     if (!property || role !== 'owner') return
@@ -81,6 +141,13 @@ function PropertyDetailPage() {
       return
     }
     try {
+      const ownerId = property.ownerId || property.vendorId?._id || property.vendorId || property.userIDFK?._id || property.userIDFK
+      await propertyService.sendChat({
+        fromUserId: user._id,
+        ownerId,
+        propertyId: property._id,
+        message: 'I am interested in this property and would like to know the next steps.',
+      })
       await propertyService.expressInterest({
         userIDFK: user._id,
         propertyIDFK: property._id,
@@ -93,6 +160,27 @@ function PropertyDetailPage() {
     } catch (err) {
       console.error(err)
       alert('Unable to send your interest.')
+    }
+  }
+
+  const handleRequestCallback = async () => {
+    if (!user || !user._id) {
+      navigate('/login', { replace: true })
+      return
+    }
+    try {
+      await propertyService.expressInterest({
+        userIDFK: user._id,
+        propertyIDFK: property._id,
+        subject: 'Callback requested',
+        description: 'User requested an owner callback from the property page.',
+        preferredVisitTime: leadPrefs.preferredVisitTime,
+        moveInPreference: leadPrefs.moveInPreference,
+      })
+      alert('Callback request sent. The owner and StayJi admin can now track this lead.')
+    } catch (err) {
+      console.error(err)
+      alert('Unable to request callback.')
     }
   }
 
@@ -146,6 +234,30 @@ function PropertyDetailPage() {
     alert('Added to comparison. You can compare up to 3 properties while browsing.')
   }
 
+  const handleSubmitReview = async (event) => {
+    event.preventDefault()
+    if (!user || !user._id) {
+      navigate('/login', { replace: true })
+      return
+    }
+    setReviewMessage('')
+    try {
+      await propertyService.submitReview({
+        userIDFK: user._id,
+        propertyIDFK: property._id,
+        rating: reviewForm.rating,
+        details: reviewForm.details,
+        tags: reviewForm.tags,
+      })
+      const nextReviews = await propertyService.fetchReviews({ propertyId: property._id, limit: 8 })
+      setReviews(nextReviews)
+      setReviewForm({ rating: '5', details: '', tags: '' })
+      setReviewMessage('Review saved. Admins can use it for rating quality and ranking decisions.')
+    } catch (err) {
+      setReviewMessage(err?.message || 'Unable to save review.')
+    }
+  }
+
   const getMapsUrl = (provider = 'google') => {
     const lat = property.location?.lat || property.latitude || 19.07598
     const lng = property.location?.lng || property.longitude || 72.87766
@@ -173,6 +285,17 @@ function PropertyDetailPage() {
     lng: property.location?.lng || 72.87766,
   }
   const distanceKm = hasUserLocation ? getDistanceKm(position, coordinates) : null
+  const positiveReviews = reviews.filter((review) => Number(review.rating) >= 4)
+  const neutralReviews = reviews.filter((review) => Number(review.rating) === 3)
+  const negativeReviews = reviews.filter((review) => Number(review.rating) < 3).slice(0, 2)
+  const displayedReviews = [...positiveReviews, ...neutralReviews, ...negativeReviews].slice(0, 8)
+  const amenityItems = [...new Set([
+    ...(property.amenities || []),
+    ...(property.customFeatures || []),
+    ...(property.parkingAvailable ? ['Parking'] : []),
+    ...(property.acAvailable ? ['AC rooms'] : []),
+    ...(property.mealsAvailable || []),
+  ].filter(Boolean))]
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -281,6 +404,15 @@ function PropertyDetailPage() {
                   ))}
                 </div>
               </div>
+            ) : isOwnerView ? (
+              <div className="mt-6 rounded-3xl border border-accent-500/40 bg-accent-500/10 p-5 text-slate-200">
+                <p className="font-semibold text-white">Owner visit-slot controls</p>
+                <p className="mt-2 text-sm text-slate-400">Users see your live vacancy and availability from the listing. Update beds, vacancy status, and available-from date from your owner property edit or occupancy controls.</p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Button onClick={() => navigate(`/dashboard/owner/properties/${property._id || property.id}/edit`)}>Update listing</Button>
+                  <Button variant="secondary" onClick={() => navigate(`/dashboard/owner/leads?propertyId=${property._id || property.id}`)}>Open leads</Button>
+                </div>
+              </div>
             ) : (
               <>
                 <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -310,7 +442,7 @@ function PropertyDetailPage() {
                 <div className="mt-8 flex flex-wrap gap-4">
                   <Button onClick={handleShortlist} className="w-full sm:w-auto">Shortlist</Button>
                   <Button onClick={handleExpressInterest} variant="secondary" className="w-full sm:w-auto">Message owner</Button>
-                  <Button onClick={handleExpressInterest} className="w-full sm:w-auto">Request callback</Button>
+                  <Button onClick={handleRequestCallback} className="w-full sm:w-auto">Request callback</Button>
                   <Button onClick={handleBookVisit} variant="secondary" className="w-full sm:w-auto">Book visit</Button>
                   <Button onClick={handleCompare} variant="secondary" className="w-full sm:w-auto"><FiShuffle className="mr-2" /> Compare</Button>
                   <a href="/compare" className="inline-flex w-full items-center justify-center rounded-3xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cyan-300/60 hover:bg-white/15 sm:w-auto">Open comparison</a>
@@ -319,7 +451,7 @@ function PropertyDetailPage() {
             )}
           </div>
 
-          {!isAdmin ? (
+          {isConsumerView ? (
             <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
               <p className="text-sm uppercase tracking-[0.28em] text-emerald-300">Verified move-in</p>
               <h2 className="mt-3 text-2xl font-semibold text-white">Moved In Successfully</h2>
@@ -356,6 +488,46 @@ function PropertyDetailPage() {
               </form>
             </div>
           ) : null}
+
+          {isConsumerView ? (
+            <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
+              <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Resident reviews</p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">Rate and review this stay</h2>
+              <form onSubmit={handleSubmitReview} className="mt-6 grid gap-4">
+                <div className="grid gap-4 sm:grid-cols-[0.35fr_1fr]">
+                  <div className="text-sm text-slate-300">
+                    Rating
+                    <StarRating value={reviewForm.rating} onChange={(rating) => setReviewForm((current) => ({ ...current, rating }))} />
+                  </div>
+                  <label className="text-sm text-slate-300">
+                    Tags
+                    <input value={reviewForm.tags} onChange={(event) => setReviewForm((current) => ({ ...current, tags: event.target.value }))} placeholder="food, cleanliness, safety" className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-accent-400" />
+                  </label>
+                </div>
+                <label className="text-sm text-slate-300">
+                  Review
+                  <textarea value={reviewForm.details} onChange={(event) => setReviewForm((current) => ({ ...current, details: event.target.value }))} required rows="3" className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-accent-400" />
+                </label>
+                {reviewMessage ? <p className={`text-sm ${reviewMessage.startsWith('Unable') ? 'text-rose-300' : 'text-emerald-300'}`}>{reviewMessage}</p> : null}
+                <Button type="submit" className="w-full sm:w-auto">Submit review</Button>
+              </form>
+              <div className="mt-6 space-y-3">
+                {displayedReviews.map((review) => (
+                  <div key={review._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+                    <p className="font-semibold text-white">
+                      {Array.from({ length: 5 }).map((_, index) => (
+                        <FiStar key={index} className={`mr-1 inline ${index < Number(review.rating) ? 'fill-amber-300 text-amber-300' : 'text-slate-600'}`} />
+                      ))}
+                      <span className="ml-2">{[review.userIDFK?.userFname, review.userIDFK?.userLname].filter(Boolean).join(' ') || 'StayJi user'}</span>
+                    </p>
+                    <p className="mt-2">{review.details}</p>
+                    {review.ownerReply ? <p className="mt-2 text-accent-200">Owner reply: {review.ownerReply}</p> : null}
+                  </div>
+                ))}
+                {!reviews.length ? <p className="text-sm text-slate-400">No reviews yet. After a visit or move-in, share a helpful rating for future students.</p> : null}
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <aside className="space-y-6">
@@ -375,9 +547,11 @@ function PropertyDetailPage() {
                 </div>
               ) : null}
               <p className="rounded-3xl bg-slate-950/80 p-4 text-sm text-slate-300">Available from: {property.availableFrom || 'Immediately'}</p>
-              <button type="button" onClick={handleExpressInterest} className="rounded-3xl bg-emerald-500 px-5 py-3 text-center text-sm font-semibold text-white">
-                Message owner privately
-              </button>
+              {isConsumerView ? (
+                <button type="button" onClick={handleExpressInterest} className="rounded-3xl bg-emerald-500 px-5 py-3 text-center text-sm font-semibold text-white">
+                  Message owner privately
+                </button>
+              ) : null}
             </div>
           </div>
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
@@ -409,9 +583,10 @@ function PropertyDetailPage() {
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
             <p className="text-sm uppercase tracking-[0.28em] text-accent-500">Amenities</p>
             <ul className="mt-6 grid gap-3 sm:grid-cols-2 text-slate-300">
-              {(property.amenities || ['WiFi', '24/7 Security', 'Kitchen access']).map((item) => (
-                <li key={item} className="flex items-center gap-3 rounded-3xl bg-slate-950/80 p-4">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-accent-500/10 text-accent-300">{getAmenityIcon(item)}</span>
+              {(amenityItems.length ? amenityItems : ['WiFi', '24/7 Security', 'Kitchen access']).map((item) => (
+                <li key={item} className="flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950/80 p-4 transition hover:border-accent-500/60 hover:bg-slate-900">
+                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-accent-500/10 text-xl">{getAmenityEmoji(item)}</span>
+                  <span className="text-accent-300">{getAmenityIcon(item)}</span>
                   <span>{item}</span>
                 </li>
               ))}

@@ -210,7 +210,11 @@ propertySchema = mongoose.Schema({
         leadPricingAccepted:{ type:Boolean, default:false },
         termsAccepted:{ type:Boolean, default:false },
         acceptedOn:Date,
-        acceptedBy:{ type:mongoose.Schema.Types.ObjectId, ref:'userMaster' }
+        acceptedBy:{ type:mongoose.Schema.Types.ObjectId, ref:'userMaster' },
+        acceptedIp:String,
+        acceptedUserAgent:String,
+        consentVersion:String,
+        consentSource:String
     },
     rating:{
         type:Number,

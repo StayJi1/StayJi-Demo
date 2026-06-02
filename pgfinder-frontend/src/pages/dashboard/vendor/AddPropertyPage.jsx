@@ -142,6 +142,7 @@ function AddPropertyPage() {
     setForm((current) => {
       const next = { ...current, [name]: type === 'checkbox' ? checked : value }
       if (name === 'state') next.city = cityOptions[value]?.[0] || ''
+      if (name === 'perDayCheckIn' && !checked) next.dailyRate = ''
       return next
     })
   }
@@ -253,6 +254,11 @@ function AddPropertyPage() {
       setMessage('Accept referral agreement, lead pricing, and StayJi owner terms before submitting.')
       return
     }
+    if (form.perDayCheckIn && !form.dailyRate) {
+      setStatus('error')
+      setMessage('Enter a per-day price after enabling per-day check-in.')
+      return
+    }
 
     const payload = new FormData()
     const roomTypesPayload = form.roomInventory.map((row) => ({
@@ -319,6 +325,8 @@ function AddPropertyPage() {
     try {
       if (isEditMode && propertyId) {
         await propertyService.updateProperty(propertyId, {
+          userIDFK: user._id,
+          ownerId: user._id,
           propertyName: form.name,
           description: form.description,
           address: form.address,
@@ -358,7 +366,7 @@ function AddPropertyPage() {
           leadPricingAccepted: form.leadPricingAccepted,
           ownerTermsAccepted: form.ownerTermsAccepted,
           })
-        setMessage('Property updated successfully. Admin approval is required before it appears live.')
+        setMessage('Property updated. Availability, rent, and room details are live; protected fields such as name, address, coordinates, and images wait for admin approval.')
       } else {
         await propertyService.createProperty(payload)
         setUploadProgress(100)
@@ -616,11 +624,11 @@ function AddPropertyPage() {
             <label className="flex items-start gap-3"><input type="checkbox" name="ownerTermsAccepted" checked={form.ownerTermsAccepted} onChange={handleChange} /> I accept StayJi owner terms and property approval rules.</label>
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
-            <Input label="Per-day price" name="dailyRate" type="number" value={form.dailyRate} onChange={handleChange} placeholder="Required for hotels / day stays" />
             <label className="inline-flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-sm text-slate-200">
               <input type="checkbox" name="perDayCheckIn" checked={form.perDayCheckIn} onChange={handleChange} className="h-5 w-5 rounded border-slate-700 bg-slate-900 text-accent-400" />
               Allows per-day check-in
             </label>
+            <Input label="Per-day price" name="dailyRate" type="number" value={form.dailyRate} onChange={handleChange} placeholder={form.perDayCheckIn ? 'Required for day stays' : 'Enable checkbox first'} disabled={!form.perDayCheckIn} />
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="inline-flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-sm text-slate-200">

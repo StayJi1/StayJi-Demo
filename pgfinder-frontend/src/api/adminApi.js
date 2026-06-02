@@ -73,6 +73,10 @@ const adminApi = {
   moveIns: (params) => axiosClient.get('/api/admin/moveIns', { params: paramsWithDefaults(params) }).then((res) => unwrap(res, [])),
   reviewMoveIn: (id, payload) => axiosClient.post(`/api/admin/moveIns/${id}/review`, payload).then((res) => unwrap(res, null)),
   ownerConfirmMoveIn: (id, payload) => axiosClient.post(`/client/moveIns/${id}/owner-confirm`, payload).then((res) => unwrap(res, null)),
+  walletPayouts: (params) => axiosClient.get('/client/wallet/payouts', { params: paramsWithDefaults(params) }).then((res) => unwrap(res, [])),
+  reviewWalletPayout: (id, payload) => axiosClient.post(`/client/wallet/payouts/${id}/review`, payload).then((res) => unwrap(res, null)),
+  propertyUpdateRequests: (params) => axiosClient.get('/client/property-update-requests', { params: paramsWithDefaults(params) }).then((res) => unwrap(res, [])),
+  reviewPropertyUpdateRequest: (id, payload) => axiosClient.post(`/client/property-update-requests/${id}/review`, payload).then((res) => unwrap(res, null)),
 }
 
 export default adminApi

@@ -74,6 +74,10 @@ const dashboardApi = {
     }
   },
   userOverview: async (userIDFK) => {
+    if (userIDFK) {
+      const res = await axiosClient.get('/client/user/overview', { params: { userId: userIDFK } })
+      if (res.data?.result === 'success') return res.data.data
+    }
     const shortlist = userIDFK ? await getShortlist(userIDFK) : []
     return {
       shortlist: shortlist.length,
@@ -81,9 +85,13 @@ const dashboardApi = {
         id: item._id,
         property: normalizeProperty(item.propertyIDFK || {}),
       })),
-      visits: 0,
-      messages: 0,
-      savedSearches: 0,
+      visits: [],
+      inquiries: [],
+      messages: [],
+      savedSearches: [],
+      viewedProperties: [],
+      notifications: [],
+      wallet: { totalCoins: 0, approvedRewards: 0, pendingRewards: 0 },
     }
   },
   adminUsers: getAdminUsers,
@@ -101,6 +109,24 @@ const dashboardApi = {
   vendorInquiries: getVendorInquiries,
   vendorShortlists: getVendorShortlists,
   moveIns: (params) => axiosClient.get('/client/moveIns', { params }).then((res) => res.data?.data || []),
+  saveSearch: (payload) => axiosClient.post('/client/user/saved-searches', payload).then((res) => res.data?.data || []),
+  deleteSavedSearch: (id, userId) => axiosClient.delete(`/client/user/saved-searches/${id}`, { params: { userId } }).then((res) => res.data?.data || []),
+  chats: (params) => axiosClient.get('/client/chats', { params }).then((res) => res.data?.data || []),
+  sendChat: (payload) => axiosClient.post('/client/chats', payload).then((res) => {
+    if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Message could not be sent')
+    return res.data?.data
+  }),
+  updateVisit: (id, payload) => axiosClient.post(`/client/visits/${id}/status`, payload).then((res) => {
+    if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Visit could not be updated')
+    return res.data?.data
+  }),
+  walletPayouts: (params) => axiosClient.get('/client/wallet/payouts', { params }).then((res) => res.data?.data || []),
+  requestWalletPayout: (payload) => axiosClient.post('/client/wallet/payouts', payload, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then((res) => {
+    if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Payout could not be requested')
+    return res.data?.data
+  }),
   markLeadConverted: ({ id, type }) => axiosClient.post('/client/markLeadConverted', { id, type }).then((res) => {
     if (res.data?.result !== 'success') throw new Error(res.data?.msg || 'Unable to convert lead')
     return res.data?.data

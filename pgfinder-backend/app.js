@@ -35,6 +35,8 @@ const corsOrigins = [
     "https://www.stayji.com"
 ];
 
+const isLocalDevOrigin = (origin) => /^http:\/\/(localhost|127\.0\.0\.1):517\d$/.test(origin);
+
 app.use(cors({
     origin: function(origin, callback) {
 
@@ -42,7 +44,7 @@ app.use(cors({
             return callback(null, true);
         }
 
-        if (corsOrigins.indexOf(origin) !== -1) {
+        if (corsOrigins.indexOf(origin) !== -1 || isLocalDevOrigin(origin)) {
             callback(null, true);
         } else {
             callback(new Error("CORS Not Allowed"));

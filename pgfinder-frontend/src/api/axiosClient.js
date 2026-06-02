@@ -32,6 +32,13 @@ axiosClient.interceptors.response.use(
         message: `Backend is not reachable at ${baseURL}. Start the Node server on port 3000 and check CORS/API URL settings.`,
       })
     }
+    const serverMessage = error.response.data?.msg || error.response.data?.message
+    if (serverMessage) {
+      return Promise.reject({
+        ...error,
+        message: serverMessage,
+      })
+    }
     return Promise.reject(error)
   },
 )

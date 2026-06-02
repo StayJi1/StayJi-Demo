@@ -64,7 +64,7 @@ const normalizeProperty = (property) => {
     id: property._id || property.id,
     name: property.propertyName || property.name,
     description: property.description || property.summary,
-    ownerId: property.userIDFK?._id || property.userIDFK || property.ownerId || '',
+    ownerId: property.vendorId?._id || property.vendorId || property.userIDFK?._id || property.userIDFK || property.ownerId || '',
     address: property.address || '',
     latitude: property.latitude,
     longitude: property.longitude,
@@ -128,9 +128,26 @@ const normalizeShortlistItem = (item) => {
   }
 }
 
+const fetchPropertyPage = (params) => axiosClient.get('/client/getPropertyList', { params }).then((res) => ({
+  items: mapResponse(res.data && res.data.data) || [],
+  meta: res.data?.meta || {},
+}))
+
 const propertyApi = {
   // Return full property list from backend
-  list: (params) => axiosClient.get('/client/getPropertyList', { params }).then((res) => mapResponse(res.data && res.data.data)),
+  list: async (params = {}) => {
+    const { allPages, ...requestParams } = params || {}
+    const firstPage = await fetchPropertyPage({ limit: allPages ? 100 : undefined, ...requestParams, page: requestParams.page || 1 })
+    if (!allPages) return firstPage.items
+
+    const totalPages = Number(firstPage.meta.pages || 1)
+    if (totalPages <= 1) return firstPage.items
+
+    const remainingPages = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, index) => fetchPropertyPage({ ...requestParams, limit: 100, page: index + 2 })),
+    )
+    return [...firstPage.items, ...remainingPages.flatMap((page) => page.items)]
+  },
 
   // Backend expects POST with { id }
   detail: (id, options = {}) => axiosClient.post('/client/getPropertyById', { id, includePrivate: Boolean(options.includePrivate) }).then((res) => mapResponse(res.data && res.data.data)),
@@ -163,10 +180,28 @@ const propertyApi = {
   // Book visit uses /addVisit (expects userIDFK, propertyIDFK, visitDate)
   bookVisit: ({ userIDFK, propertyIDFK, visitDate, visitTime, moveInPreference }) => axiosClient.post('/client/addVisit', { userIDFK, propertyIDFK, visitDate, visitTime, moveInPreference }).then((res) => res.data && res.data.data),
   expressInterest: ({ userIDFK, propertyIDFK, subject, description, preferredVisitTime, moveInPreference }) => axiosClient.post('/client/addInterest', { userIDFK, propertyIDFK, subject, description, preferredVisitTime, moveInPreference }).then((res) => res.data && res.data.data),
+  reviews: (params) => axiosClient.get('/client/reviews', { params }).then((res) => res.data?.data || []),
+  addReview: (payload) => axiosClient.post('/client/addReview', payload).then((res) => {
+    if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Review could not be saved')
+    return res.data?.data
+  }),
   submitMoveIn: (payload) => axiosClient.post('/client/moveIns', payload, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }).then((res) => {
     if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Move-in could not be submitted')
+    return res.data?.data
+  }),
+  sendChat: (payload) => axiosClient.post('/client/chats', payload).then((res) => {
+    if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Message could not be sent')
+    return res.data?.data
+  }),
+  recordViewed: (payload) => axiosClient.post('/client/user/viewed-properties', payload).then((res) => res.data?.data || []),
+  updateOccupancy: (id, payload) => axiosClient.post(`/client/properties/${id}/occupancy`, payload).then((res) => {
+    if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Occupancy could not be updated')
+    return normalizeProperty(res.data?.data)
+  }),
+  requestProtectedUpdate: (id, payload) => axiosClient.post(`/client/properties/${id}/update-request`, payload).then((res) => {
+    if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Update request could not be submitted')
     return res.data?.data
   }),
 
@@ -186,7 +221,7 @@ const propertyApi = {
     return res.data?.data
   }),
 
-  remove: (id) => axiosClient.post('/client/deleteProperty', { id }).then((res) => {
+  remove: (id, payload = {}) => axiosClient.post('/client/deleteProperty', { id, ...payload }).then((res) => {
     if (res.data?.result === 'failure') {
       throw new Error(res.data?.msg || 'Property was not deleted')
     }

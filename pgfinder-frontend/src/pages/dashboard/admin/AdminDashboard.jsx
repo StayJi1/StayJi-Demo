@@ -36,6 +36,8 @@ function AdminDashboard() {
   const { data: propertiesData, isFetching: propertiesLoading, error } = useQuery({ queryKey: ['admin-properties', propertyParams], queryFn: () => adminApi.properties(propertyParams), refetchInterval: 30_000 })
   const { data: ownerData } = useQuery({ queryKey: ['admin-owners', debouncedSearch], queryFn: () => adminApi.owners({ search: debouncedSearch, limit: 8 }), enabled: Boolean(debouncedSearch) })
   const { data: moveIns = [] } = useQuery({ queryKey: ['admin-move-ins'], queryFn: () => adminApi.moveIns({ limit: 12 }), refetchInterval: 30_000 })
+  const { data: payouts = [] } = useQuery({ queryKey: ['admin-wallet-payouts'], queryFn: () => adminApi.walletPayouts({ limit: 12 }), refetchInterval: 30_000 })
+  const { data: updateRequests = [] } = useQuery({ queryKey: ['admin-property-update-requests'], queryFn: () => adminApi.propertyUpdateRequests({ status: 'Pending', limit: 12 }), refetchInterval: 30_000 })
 
   const properties = propertiesData?.items || []
   const summary = analytics?.summary || {}
@@ -46,6 +48,8 @@ function AdminDashboard() {
     queryClient.invalidateQueries({ queryKey: ['admin-properties'] })
     queryClient.invalidateQueries({ queryKey: ['admin-owners'] })
     queryClient.invalidateQueries({ queryKey: ['admin-move-ins'] })
+    queryClient.invalidateQueries({ queryKey: ['admin-wallet-payouts'] })
+    queryClient.invalidateQueries({ queryKey: ['admin-property-update-requests'] })
   }
 
   const statusMutation = useMutation({
@@ -63,6 +67,14 @@ function AdminDashboard() {
   })
   const moveInMutation = useMutation({
     mutationFn: ({ id, status }) => adminApi.reviewMoveIn(id, { status, adminId: user?._id }),
+    onSuccess: refreshAdmin,
+  })
+  const payoutMutation = useMutation({
+    mutationFn: ({ id, status }) => adminApi.reviewWalletPayout(id, { status, adminId: user?._id }),
+    onSuccess: refreshAdmin,
+  })
+  const updateRequestMutation = useMutation({
+    mutationFn: ({ id, status }) => adminApi.reviewPropertyUpdateRequest(id, { status, adminId: user?._id, performerRole: user?.userType || 'Admin' }),
     onSuccess: refreshAdmin,
   })
 
@@ -83,6 +95,7 @@ function AdminDashboard() {
     mark_demo: { title: 'Mark selected properties as DEMO?', body: ['show listings as sample inventory', 'separate them from real analytics', 'keep them available for pre-launch demos'] },
     hide_publicly: { title: 'Hide selected properties publicly?', body: ['remove listings from public search', 'keep records available for operations', 'preserve analytics history'] },
     archive: { title: 'Archive selected properties?', body: ['remove records from active workflows', 'hide them publicly', 'keep audit history'] },
+    unarchive: { title: 'Unarchive selected properties?', body: ['return records to active workflows', 'make eligible approved listings visible again', 'keep audit history'] },
     verify: { title: 'Verify selected properties?', body: ['mark listings as verified', 'approve them for operational use', 'notify owners'] },
     suspend: { title: 'Suspend selected properties?', body: ['block public visibility', 'mark listings as suspended', 'notify owners'] },
   }
@@ -151,11 +164,11 @@ function AdminDashboard() {
           <button type="button" onClick={() => navigate(`/dashboard/admin/properties/${property.id}/edit`)} className="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200">Edit</button>
           <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { approvalStatus: 'Approved' } })} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">Verify</button>
           <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { approvalStatus: 'Rejected' } })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
-          <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { isActive: !property.isActive } })} className={`rounded-full border px-3 py-2 text-xs transition ${
+          <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: property.isActive && property.status !== 'archived' ? { isActive: false } : { isActive: true, status: 'active' } })} className={`rounded-full border px-3 py-2 text-xs transition ${
             property.isActive
               ? 'border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
               : 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
-          }`}>{property.isActive ? 'Deactivate' : 'Activate'}</button>
+          }`}>{property.isActive && property.status !== 'archived' ? 'Hide' : property.status === 'archived' ? 'Unarchive' : 'Unhide'}</button>
         </div>
       ),
     },
@@ -171,7 +184,8 @@ function AdminDashboard() {
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-accent-400 sm:text-sm sm:tracking-[0.28em]">StayJi command center</p>
             <h1 className="mt-3 text-2xl font-semibold text-white sm:text-4xl">Live platform management</h1>
-            {user?.assignedCity ? <p className="mt-2 text-sm text-slate-400">City scope: {user.assignedCity}. This dashboard automatically applies your assigned-city filter across users, owners, properties, leads, reviews, and analytics.</p> : null}
+            {user?.assignedCity ? <p className="mt-2 text-sm text-slate-400">City scope: {[user.assignedCity, user.assignedState].filter(Boolean).join(', ')}. This dashboard automatically applies your assigned-city filter across users, owners, properties, leads, reviews, and analytics.</p> : null}
+            <p className="mt-1 text-xs text-slate-500">Admin ID: {user?._id ? `SJ-${user._id.toString().slice(-6).toUpperCase()}` : user?.id || '-'}</p>
           </div>
           <Button onClick={refreshAdmin} variant="secondary"><FiRefreshCw /> Refresh live data</Button>
         </div>
@@ -179,7 +193,7 @@ function AdminDashboard() {
 
       <div className="grid gap-5 xl:grid-cols-4">
         {statCards.map((item) => (
-          <button key={item.label} type="button" onClick={item.onClick} className="text-left">
+          <button key={item.label} type="button" onClick={item.onClick} className="w-full text-left">
             <Card className="h-full p-5 transition hover:border-accent-500">
               <div className="flex items-center justify-between gap-4">
                 <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-accent-400">{item.icon}</span>
@@ -199,7 +213,7 @@ function AdminDashboard() {
             key={item.label}
             type="button"
             onClick={() => { setFilters((current) => ({ ...current, ...item.filter })); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) }}
-            className="text-left"
+            className="w-full text-left"
             title={`${item.label} filters the property table, cards, and analytics together.`}
           >
             <Card className="h-full p-5 transition hover:border-accent-500">
@@ -363,6 +377,7 @@ function AdminDashboard() {
                 <button type="button" onClick={() => openBulkAction('mark_demo', tableSelected)} className="rounded-full border border-amber-500/60 px-4 py-2 text-sm text-amber-200">Mark DEMO</button>
                 <button type="button" onClick={() => openBulkAction('hide_publicly', tableSelected)} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Hide Publicly</button>
                 <button type="button" onClick={() => openBulkAction('archive', tableSelected)} className="rounded-full border border-zinc-500/60 px-4 py-2 text-sm text-zinc-200">Archive</button>
+                <button type="button" onClick={() => openBulkAction('unarchive', tableSelected)} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Unarchive</button>
                 <button type="button" onClick={() => openBulkAction('verify', tableSelected)} className="rounded-full border border-cyan-500/60 px-4 py-2 text-sm text-cyan-200">Verify</button>
                 <button type="button" onClick={() => openBulkAction('suspend', tableSelected)} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200">Suspend</button>
               </div>
@@ -434,9 +449,49 @@ function AdminDashboard() {
         </Card>
       </div>
 
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card>
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Finance panel</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">User payouts and owner commission</h2>
+          <div className="mt-5 space-y-3">
+            {payouts.slice(0, 6).map((item) => (
+              <div key={item._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+                <p className="font-semibold text-white">{item.userId?.userFname || item.userId?.userEmail || 'User'} · {item.status}</p>
+                <p className="mt-1">UPI {item.upiId || '-'} · Coins {item.coins || 0} · Amount ₹{item.amount || 0}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => payoutMutation.mutate({ id: item._id, status: 'Approved' })} className="rounded-full border border-cyan-500/60 px-3 py-2 text-xs text-cyan-200">Approve</button>
+                  <button type="button" onClick={() => payoutMutation.mutate({ id: item._id, status: 'Paid' })} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">Mark paid</button>
+                  <button type="button" onClick={() => payoutMutation.mutate({ id: item._id, status: 'Rejected' })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
+                </div>
+              </div>
+            ))}
+            {!payouts.length ? <p className="text-sm text-slate-400">No payout requests yet.</p> : null}
+          </div>
+        </Card>
+
+        <Card>
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Property update approval</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">Protected owner edits</h2>
+          <div className="mt-5 space-y-3">
+            {updateRequests.slice(0, 6).map((item) => (
+              <div key={item._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+                <p className="font-semibold text-white">{item.propertyId?.propertyName || 'Property'} · {item.status}</p>
+                <p className="mt-1 text-slate-400">Fields: {Object.keys(item.requestedChanges || {}).join(', ') || '-'}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => updateRequestMutation.mutate({ id: item._id, status: 'Approved' })} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">Approve</button>
+                  <button type="button" onClick={() => updateRequestMutation.mutate({ id: item._id, status: 'Rejected' })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
+                </div>
+              </div>
+            ))}
+            {!updateRequests.length ? <p className="text-sm text-slate-400">No protected edits pending.</p> : null}
+          </div>
+        </Card>
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-[1fr_0.65fr]">
         <Card>
           <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Approval mix</p>
+          <FieldNote>Approval mix shows how many listings are pending admin review, live/public, or inactive/hidden so you can balance moderation workload and supply health.</FieldNote>
           <div className="mt-6 h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>

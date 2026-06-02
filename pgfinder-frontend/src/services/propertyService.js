@@ -12,12 +12,18 @@ const propertyService = {
   fetchShortlist: (userIDFK) => propertyApi.shortlistByUser(userIDFK),
   bookVisit: ({ userIDFK, propertyIDFK, visitDate, visitTime, moveInPreference }) => propertyApi.bookVisit({ userIDFK, propertyIDFK, visitDate, visitTime, moveInPreference }),
   expressInterest: ({ userIDFK, propertyIDFK, subject, description, preferredVisitTime, moveInPreference }) => propertyApi.expressInterest({ userIDFK, propertyIDFK, subject, description, preferredVisitTime, moveInPreference }),
+  fetchReviews: (params) => propertyApi.reviews(params),
+  submitReview: (payload) => propertyApi.addReview(payload),
+  sendChat: (payload) => propertyApi.sendChat(payload),
+  recordViewed: (payload) => propertyApi.recordViewed(payload),
   submitMoveIn: (payload) => propertyApi.submitMoveIn(payload),
   createProperty: (payload) => propertyApi.create(payload),
   updateProperty: (id, payload) => propertyApi.update(id, payload),
   reviewProperty: (id, approvalStatus) => propertyApi.review({ id, approvalStatus }),
-  deleteProperty: (id) => propertyApi.remove(id),
+  deleteProperty: (id, payload) => propertyApi.remove(id, payload),
   reactivateProperty: (id) => propertyApi.reactivate(id),
+  updateOccupancy: (id, payload) => propertyApi.updateOccupancy(id, payload),
+  requestProtectedUpdate: (id, payload) => propertyApi.requestProtectedUpdate(id, payload),
 }
 
 export default propertyService

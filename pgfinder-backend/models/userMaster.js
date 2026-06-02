@@ -94,6 +94,18 @@ userSchema = mongoose.Schema({
     privacyAcceptedAt:{
         type:Date
     },
+    termsConsent:{
+        type:Mixed,
+        default:{}
+    },
+    privacyConsent:{
+        type:Mixed,
+        default:{}
+    },
+    consentHistory:{
+        type:[Mixed],
+        default:[]
+    },
     userType:{
         type:String
     },
