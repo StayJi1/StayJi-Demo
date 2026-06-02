@@ -111,7 +111,7 @@ const dashboardApi = {
   moveIns: (params) => axiosClient.get('/client/moveIns', { params }).then((res) => res.data?.data || []),
   saveSearch: (payload) => axiosClient.post('/client/user/saved-searches', payload).then((res) => res.data?.data || []),
   deleteSavedSearch: (id, userId) => axiosClient.delete(`/client/user/saved-searches/${id}`, { params: { userId } }).then((res) => res.data?.data || []),
-  chats: (params) => axiosClient.get('/client/chats', { params }).then((res) => res.data?.data || []),
+  chats: (params) => axiosClient.get('/client/chats', { params }).then((res) => res.data?.data || { conversations: [], messages: [], unreadTotal: 0 }),
   sendChat: (payload) => axiosClient.post('/client/chats', payload).then((res) => {
     if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Message could not be sent')
     return res.data?.data

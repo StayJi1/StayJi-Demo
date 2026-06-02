@@ -349,6 +349,44 @@ const asObjectId = (value) => {
     return new mongoose.Types.ObjectId(value)
 }
 
+const MESSAGE_MAX_LENGTH = 1000
+
+const messagingPermissionForRole = (role = '') => {
+    if (role === 'user') return 'browse_properties'
+    if (role === 'owner') return 'view_own_leads'
+    return ''
+}
+
+const assertMessagingAccess = (req, res) => {
+    const role = req.auth?.role
+    const permission = messagingPermissionForRole(role)
+    if (!['user', 'owner'].includes(role) || (permission && !req.auth.permissions.includes(permission))) {
+        res.status(403).json({ result: 'failure', msg: 'You do not have permission to use user-owner messaging.', data: null })
+        return false
+    }
+    return true
+}
+
+const cleanMessageText = (value = '') => normalizeText(value)
+
+const messageDto = (message = {}) => {
+    const row = typeof message.toObject === 'function' ? message.toObject() : message
+    return {
+        ...row,
+        id: row._id,
+        text: decryptMessage(row.text) || row.text,
+    }
+}
+
+const conversationDto = (conversation = {}) => {
+    const row = typeof conversation.toObject === 'function' ? conversation.toObject() : conversation
+    return {
+        ...row,
+        id: row._id,
+        lastMessagePreview: decryptMessage(row.lastMessagePreview) || row.lastMessagePreview || '',
+    }
+}
+
 const createNotification = async (payload = {}) => {
     try {
         const recipientId = asObjectId(payload.recipientId)
@@ -2693,7 +2731,7 @@ router.get('/user/overview', async (req, res) => {
         inquiries,
         moveIns,
         notifications,
-        chats,
+        conversations,
         leadEvents,
         reviews,
         payouts,
@@ -2703,7 +2741,7 @@ router.get('/user/overview', async (req, res) => {
         Inquiry.find({ userIDFK: userId, isActive: true }).populate('propertyIDFK').sort({ addedOn: -1 }).limit(50),
         MoveInConfirmation.find({ userId, isActive: true }).populate('propertyId').sort({ addedOn: -1 }).limit(30),
         Notification.find({ isActive: true, $or: [{ recipientId: userId }, { recipientRole: 'user' }, { recipientRole: 'all' }] }).sort({ addedOn: -1 }).limit(30),
-        Chat.find({ isActive: true, $or: [{ fromUserIDFK: userId }, { toUserIDFK: userId }] }).populate('fromUserIDFK toUserIDFK', ['userFname', 'userLname', 'userEmail', 'contact', 'userType']).sort({ addedOn: -1 }).limit(60),
+        Conversation.find({ userId, isActive: true }).populate('ownerId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType']).populate('propertyId', ['propertyName cityName areaName']).sort({ lastMessageAt: -1 }).limit(60),
         LeadEvent.find({ userId, isActive: true }).populate('propertyId').sort({ addedOn: -1 }).limit(60),
         UserReview.find({ userIDFK: userId, isActive: true }).populate('propertyIDFK').sort({ addedOn: -1 }).limit(20),
         WalletPayout.find({ userId, isActive: true }).sort({ addedOn: -1 }).limit(20),
@@ -2724,7 +2762,8 @@ router.get('/user/overview', async (req, res) => {
             inquiries: latestInquiries.map(normalizeInquiryDto),
             moveIns,
             notifications,
-            chats: chats.map((item) => ({ ...item.toObject(), text: decryptMessage(item.text) || item.text })),
+            chats: conversations.map(conversationDto),
+            unreadMessages: conversations.reduce((sum, item) => sum + (Number(item.unreadByUser) || 0), 0),
             leadEvents,
             reviews,
             payouts,
@@ -2787,57 +2826,137 @@ router.delete('/user/saved-searches/:id', async (req, res) => {
     res.json({ result: 'success', msg: 'Saved search deleted.', data: user?.savedSearches || [] })
 })
 
-router.get('/chats', async (req, res) => {
-    const userId = asObjectId(req.query.userId)
-    const ownerId = asObjectId(req.query.ownerId || req.query.vendorId)
-    const propertyId = asObjectId(req.query.propertyId)
+router.get('/chats', attachAuthenticatedUser, async (req, res) => {
+    if (!assertMessagingAccess(req, res)) return
+    const viewerId = req.auth.user._id
+    const viewerRole = req.auth.role
+    const conversationId = asObjectId(req.query.conversationId)
     const filters = { isActive: true, conversationType: 'user_owner' }
-    if (propertyId) filters['metadata.propertyId'] = propertyId.toString()
-    if (userId && ownerId) filters.$or = [
-        { fromUserIDFK: userId, toUserIDFK: ownerId },
-        { fromUserIDFK: ownerId, toUserIDFK: userId },
-    ]
-    else if (userId) filters.$or = [{ fromUserIDFK: userId }, { toUserIDFK: userId }]
-    else if (ownerId) filters.$or = [{ fromUserIDFK: ownerId }, { toUserIDFK: ownerId }]
-    const chats = await Chat.find(filters).populate('fromUserIDFK toUserIDFK', ['userFname', 'userLname', 'userEmail', 'contact', 'userType']).sort({ addedOn: 1 }).limit(200)
-    res.json({ result: 'success', msg: 'Chats found.', data: chats.map((item) => ({ ...item.toObject(), text: decryptMessage(item.text) || item.text })) })
+    if (viewerRole === 'user') filters.userId = viewerId
+    if (viewerRole === 'owner') filters.ownerId = viewerId
+
+    const conversations = await Conversation.find(filters)
+        .populate('userId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType'])
+        .populate('ownerId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType'])
+        .populate('propertyId', ['propertyName cityName areaName'])
+        .sort({ lastMessageAt: -1, updatedOn: -1 })
+        .limit(Math.min(100, Math.max(1, Number(req.query.limit || 50))))
+
+    let messages = []
+    let activeConversation = null
+    if (conversationId) {
+        activeConversation = await Conversation.findOne({ _id: conversationId, ...filters })
+            .populate('userId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType'])
+            .populate('ownerId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType'])
+            .populate('propertyId', ['propertyName cityName areaName'])
+        if (!activeConversation) return res.status(404).json({ result: 'failure', msg: 'Conversation not found.', data: null })
+        messages = await Message.find({ conversationId, isActive: true }).sort({ addedOn: 1 }).limit(Math.min(200, Math.max(1, Number(req.query.messageLimit || 100))))
+        if (viewerRole === 'user') {
+            await Promise.all([
+                Conversation.updateOne({ _id: conversationId }, { $set: { unreadByUser: 0, updatedOn: new Date() } }),
+                Message.updateMany({ conversationId, toUserIDFK: viewerId, readAt: { $exists: false } }, { $set: { readAt: new Date() } }),
+            ])
+            activeConversation.unreadByUser = 0
+        }
+        if (viewerRole === 'owner') {
+            await Promise.all([
+                Conversation.updateOne({ _id: conversationId }, { $set: { unreadByOwner: 0, updatedOn: new Date() } }),
+                Message.updateMany({ conversationId, toUserIDFK: viewerId, readAt: { $exists: false } }, { $set: { readAt: new Date() } }),
+            ])
+            activeConversation.unreadByOwner = 0
+        }
+    }
+
+    const unreadTotal = conversations.reduce((sum, item) => sum + (Number(viewerRole === 'user' ? item.unreadByUser : item.unreadByOwner) || 0), 0)
+    res.json({
+        result: 'success',
+        msg: 'Conversations found.',
+        data: {
+            conversations: conversations.map(conversationDto),
+            conversation: activeConversation ? conversationDto(activeConversation) : null,
+            messages: messages.map(messageDto),
+            unreadTotal,
+        },
+    })
 })
 
-router.post('/chats', async (req, res) => {
-    const fromUserId = asObjectId(req.body.fromUserId || req.body.fromUserIDFK || req.body.userId)
-    let toUserId = asObjectId(req.body.toUserId || req.body.toUserIDFK || req.body.ownerId || req.body.vendorId)
-    const propertyId = asObjectId(req.body.propertyId || req.body.propertyIDFK)
-    const cleanMessage = (req.body.text || req.body.message || '').trim()
-    if (!fromUserId || !cleanMessage) return res.json({ result: 'failure', msg: 'Sender and message are required.', data: null })
-    const property = propertyId ? await Property.findOne({ _id: propertyId }).select('userIDFK vendorId propertyName cityName') : null
-    if (!toUserId && property) toUserId = asObjectId(property.vendorId || property.userIDFK)
-    if (!toUserId) return res.json({ result: 'failure', msg: 'Receiver could not be determined.', data: null })
-    const leadGenerated = phoneInTextPattern.test(cleanMessage) || callbackIntentPattern.test(cleanMessage)
-    const chat = await Chat.create({
-        text: encryptMessage(cleanMessage),
-        fromUserIDFK: fromUserId,
-        toUserIDFK: toUserId,
-        conversationType: 'user_owner',
-        metadata: { propertyId: propertyId?.toString(), leadGenerated, detection: leadGenerated ? 'contact_or_callback_intent' : 'message' },
-        addedOn: new Date(),
-        isActive: true,
-    })
-    if (propertyId) {
-        await createLeadEvent({
-            userId: req.body.userId || fromUserId,
-            vendorId: toUserId,
-            propertyId,
-            sourceType: leadGenerated ? 'chat_detection' : 'inquiry',
-            status: leadGenerated ? 'Contact Shared' : 'Inquiry Started',
-            note: leadGenerated ? 'Lead generated from chat/contact intent.' : 'User-owner chat started.',
-            metadata: { chatId: chat._id, detection: chat.metadata.detection },
-        })
+router.post('/chats', attachAuthenticatedUser, async (req, res) => {
+    if (!assertMessagingAccess(req, res)) return
+    const viewerId = req.auth.user._id
+    const viewerRole = req.auth.role
+    const cleanMessage = cleanMessageText(req.body.text || req.body.message || '')
+    if (!cleanMessage) return res.json({ result: 'failure', msg: 'Message is required.', data: null })
+    if (cleanMessage.length > MESSAGE_MAX_LENGTH) return res.json({ result: 'failure', msg: `Message must be ${MESSAGE_MAX_LENGTH} characters or fewer.`, data: null })
+
+    let conversation = null
+    let propertyId = asObjectId(req.body.propertyId || req.body.propertyIDFK)
+    let recipientId = null
+    let senderRole = viewerRole
+
+    if (viewerRole === 'user') {
+        if (!propertyId) return res.json({ result: 'failure', msg: 'Property is required to message an owner.', data: null })
+        const property = await Property.findOne({ _id: propertyId, isActive: true }).select('userIDFK vendorId propertyName cityName')
+        if (!property) return res.json({ result: 'failure', msg: 'Property not found.', data: null })
+        recipientId = asObjectId(property.vendorId || property.userIDFK)
+        if (!recipientId || recipientId.toString() === viewerId.toString()) return res.json({ result: 'failure', msg: 'Property owner could not be determined.', data: null })
+        const owner = await User.findOne({ _id: recipientId, userType: { $in: accountTypeVariants('Owner') }, isActive: true }).select('_id')
+        if (!owner) return res.json({ result: 'failure', msg: 'Owner account is not available for messaging.', data: null })
+        conversation = await Conversation.findOneAndUpdate(
+            { userId: viewerId, ownerId: recipientId, propertyId, conversationType: 'user_owner', isActive: true },
+            {
+                $setOnInsert: { userId: viewerId, ownerId: recipientId, propertyId, participants: [viewerId, recipientId], conversationType: 'user_owner', status: 'active', isActive: true, addedOn: new Date() },
+                $set: { lastMessagePreview: encryptMessage(cleanMessage.slice(0, 140)), lastMessageAt: new Date(), updatedOn: new Date() },
+                $inc: { unreadByOwner: 1 },
+            },
+            { new: true, upsert: true }
+        )
+    } else if (viewerRole === 'owner') {
+        const conversationId = asObjectId(req.body.conversationId)
+        if (!conversationId) return res.json({ result: 'failure', msg: 'Conversation is required to reply.', data: null })
+        conversation = await Conversation.findOne({ _id: conversationId, ownerId: viewerId, conversationType: 'user_owner', isActive: true })
+        if (!conversation) return res.status(403).json({ result: 'failure', msg: 'You can only reply to your own conversations.', data: null })
+        recipientId = conversation.userId
+        propertyId = conversation.propertyId
+        await Conversation.updateOne(
+            { _id: conversation._id },
+            { $set: { lastMessagePreview: encryptMessage(cleanMessage.slice(0, 140)), lastMessageAt: new Date(), updatedOn: new Date() }, $inc: { unreadByUser: 1 } }
+        )
     }
-    await Promise.all([
-        createNotification({ recipientId: toUserId, recipientRole: 'vendor', actorId: fromUserId, propertyId, type: 'message', title: 'New user message', message: cleanMessage.slice(0, 120), link: `/dashboard/owner/leads${propertyId ? `?propertyId=${propertyId}` : ''}` }),
-        notifyAdmins({ actorId: fromUserId, propertyId, type: leadGenerated ? 'lead_update' : 'message', title: leadGenerated ? 'Lead generated in chat' : 'User-owner chat activity', message: leadGenerated ? 'A chat shared contact/callback intent.' : 'A user-owner message was sent.', link: propertyId ? `/dashboard/admin/properties/${propertyId}` : '/dashboard/admin' }),
-    ])
-    res.json({ result: 'success', msg: 'Message saved.', data: { ...chat.toObject(), text: cleanMessage } })
+
+    const message = await Message.create({
+        conversationId: conversation._id,
+        propertyId,
+        fromUserIDFK: viewerId,
+        toUserIDFK: recipientId,
+        senderRole,
+        text: encryptMessage(cleanMessage),
+        metadata: { source: 'dashboard_chat' },
+    })
+
+    if (viewerRole === 'user') {
+        const leadGenerated = phoneInTextPattern.test(cleanMessage) || callbackIntentPattern.test(cleanMessage)
+        await Promise.all([
+            createLeadEvent({
+                userId: viewerId,
+                vendorId: recipientId,
+                propertyId,
+                sourceType: leadGenerated ? 'chat_detection' : 'inquiry',
+                status: leadGenerated ? 'Contact Shared' : 'Inquiry Started',
+                note: leadGenerated ? 'Lead generated from chat/contact intent.' : 'User-owner message started.',
+                metadata: { conversationId: conversation._id, messageId: message._id, detection: leadGenerated ? 'contact_or_callback_intent' : 'message' },
+            }),
+            createNotification({ recipientId, recipientRole: 'vendor', actorId: viewerId, propertyId, type: 'message', title: 'New user message', message: cleanMessage.slice(0, 120), link: '/dashboard/owner/messages' }),
+            notifyAdmins({ actorId: viewerId, propertyId, type: leadGenerated ? 'lead_update' : 'message', title: leadGenerated ? 'Lead generated in chat' : 'User-owner chat activity', message: leadGenerated ? 'A chat shared contact/callback intent.' : 'A user-owner message was sent.', link: propertyId ? `/dashboard/admin/properties/${propertyId}` : '/dashboard/admin' }),
+        ])
+    } else {
+        await createNotification({ recipientId, recipientRole: 'user', actorId: viewerId, propertyId, type: 'message', title: 'Owner replied', message: cleanMessage.slice(0, 120), link: '/dashboard/user/messages' })
+    }
+
+    const populatedConversation = await Conversation.findOne({ _id: conversation._id })
+        .populate('userId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType'])
+        .populate('ownerId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType'])
+        .populate('propertyId', ['propertyName cityName areaName'])
+    res.json({ result: 'success', msg: 'Message sent.', data: { conversation: conversationDto(populatedConversation), message: messageDto(message) } })
 })
 
 router.post('/visits/:id/status', async (req, res) => {
