@@ -50,6 +50,57 @@ const normalizeSearchToken = (token) => {
   return singularMap[token] || token
 }
 
+const safeParseSavedSearchState = (value) => {
+  if (!value) return null
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+const getSavedSearchStateFromParams = (searchParams) => {
+  const savedState = safeParseSavedSearchState(searchParams.get('state'))
+  const filterState = safeParseSavedSearchState(searchParams.get('filters'))
+  const activeFilters = savedState?.activeFilters || filterState?.activeFilters || searchParams.getAll('filter')
+
+  return {
+    searchQuery: savedState?.searchQuery ?? searchParams.get('search') ?? searchParams.get('city') ?? searchParams.get('area') ?? '',
+    city: savedState?.city ?? searchParams.get('city') ?? '',
+    mapSearchQuery: savedState?.mapSearchQuery ?? searchParams.get('area') ?? searchParams.get('locality') ?? '',
+    activeFilters: Array.isArray(activeFilters) ? activeFilters : [],
+    priceRange: {
+      min: savedState?.priceRange?.min ?? filterState?.priceRange?.min ?? searchParams.get('minPrice') ?? '',
+      max: savedState?.priceRange?.max ?? filterState?.priceRange?.max ?? searchParams.get('maxPrice') ?? '',
+    },
+    sortBy: savedState?.sortBy ?? filterState?.sortBy ?? searchParams.get('sort') ?? 'recommended',
+    nearbyMode: Boolean(savedState?.nearbyMode ?? filterState?.nearbyMode ?? (searchParams.get('nearby') === 'true')),
+    searchRadiusKm: Number(savedState?.searchRadiusKm ?? filterState?.searchRadiusKm ?? searchParams.get('radius')) || defaultNearbyRadiusKm,
+    pagination: savedState?.pagination || {
+      page: searchParams.get('page') || '1',
+      pageSize: searchParams.get('pageSize') || '',
+    },
+  }
+}
+
+const buildSavedSearchQueryString = (state) => {
+  const params = new URLSearchParams()
+  if (state.searchQuery) params.set('search', state.searchQuery)
+  if (state.city) params.set('city', state.city)
+  if (state.mapSearchQuery) params.set('area', state.mapSearchQuery)
+  state.activeFilters.forEach((filter) => params.append('filter', filter))
+  if (state.priceRange.min) params.set('minPrice', state.priceRange.min)
+  if (state.priceRange.max) params.set('maxPrice', state.priceRange.max)
+  if (state.sortBy) params.set('sort', state.sortBy)
+  params.set('nearby', String(Boolean(state.nearbyMode)))
+  params.set('radius', String(state.searchRadiusKm || defaultNearbyRadiusKm))
+  if (state.pagination?.page) params.set('page', state.pagination.page)
+  if (state.pagination?.pageSize) params.set('pageSize', state.pagination.pageSize)
+  params.set('state', JSON.stringify(state))
+  return params.toString()
+}
+
 const isSimilarToken = (token, value) => {
   if (!token || !value) return false
   if (value.includes(token) || token.includes(value)) return true
@@ -67,17 +118,16 @@ const isSimilarToken = (token, value) => {
 function PropertiesPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const initialSearch = searchParams.get('search') || searchParams.get('city') || searchParams.get('area') || ''
-  const initialMapSearch = searchParams.get('area') || ''
+  const initialSavedSearchState = getSavedSearchStateFromParams(searchParams)
   const [properties, setProperties] = useState([])
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState(initialSearch)
-  const [activeFilters, setActiveFilters] = useState([])
-  const [priceRange, setPriceRange] = useState({ min: '', max: '' })
-  const [sortBy, setSortBy] = useState('recommended')
-  const [nearbyMode, setNearbyMode] = useState(false)
-  const [searchRadiusKm, setSearchRadiusKm] = useState(defaultNearbyRadiusKm)
-  const [mapSearchQuery, setMapSearchQuery] = useState(initialMapSearch)
+  const [searchQuery, setSearchQuery] = useState(initialSavedSearchState.searchQuery)
+  const [activeFilters, setActiveFilters] = useState(initialSavedSearchState.activeFilters)
+  const [priceRange, setPriceRange] = useState(initialSavedSearchState.priceRange)
+  const [sortBy, setSortBy] = useState(initialSavedSearchState.sortBy)
+  const [nearbyMode, setNearbyMode] = useState(initialSavedSearchState.nearbyMode)
+  const [searchRadiusKm, setSearchRadiusKm] = useState(initialSavedSearchState.searchRadiusKm)
+  const [mapSearchQuery, setMapSearchQuery] = useState(initialSavedSearchState.mapSearchQuery)
   const [mapSearchLoading, setMapSearchLoading] = useState(false)
   const [mapSearchError, setMapSearchError] = useState('')
   const [mapSearchMessage, setMapSearchMessage] = useState('')
@@ -124,8 +174,14 @@ function PropertiesPage() {
 
   useEffect(() => {
     window.setTimeout(() => {
-      setSearchQuery(searchParams.get('search') || searchParams.get('city') || searchParams.get('area') || '')
-      setMapSearchQuery(searchParams.get('area') || '')
+      const nextState = getSavedSearchStateFromParams(searchParams)
+      setSearchQuery(nextState.searchQuery)
+      setActiveFilters(nextState.activeFilters)
+      setPriceRange(nextState.priceRange)
+      setSortBy(nextState.sortBy)
+      setNearbyMode(nextState.nearbyMode)
+      setSearchRadiusKm(nextState.searchRadiusKm)
+      setMapSearchQuery(nextState.mapSearchQuery)
     }, 0)
   }, [searchParams])
 
@@ -160,14 +216,29 @@ function PropertiesPage() {
     }
     setSaveSearchMessage('')
     try {
+      const savedSearchState = {
+        searchQuery,
+        city: searchParams.get('city') || searchQuery,
+        mapSearchQuery,
+        activeFilters,
+        priceRange,
+        sortBy,
+        nearbyMode,
+        searchRadiusKm,
+        pagination: {
+          page: searchParams.get('page') || '1',
+          pageSize: searchParams.get('pageSize') || '',
+        },
+      }
       await dashboardService.saveSearch({
         userId: user._id,
-        city: searchQuery,
+        city: savedSearchState.city,
         locality: mapSearchQuery,
         budget: [priceRange.min, priceRange.max].filter(Boolean).join(' - '),
         sharingType: activeFilters.filter((item) => /sharing/i.test(item)).join(', '),
         nearbyPreferences: activeFilters,
-        filters: { activeFilters, priceRange, sortBy, nearbyMode, searchRadiusKm },
+        filters: savedSearchState,
+        queryString: buildSavedSearchQueryString(savedSearchState),
       })
       setSaveSearchMessage('Search saved to your dashboard.')
     } catch (error) {
@@ -256,6 +327,7 @@ function PropertiesPage() {
         item.description,
         item.address,
         item.city,
+        item.area,
         item.locationLabel,
         item.type,
         item.category,
@@ -265,7 +337,7 @@ function PropertiesPage() {
 
       if (searchTokens.length && !searchTokens.every((token) => {
         if (haystack.includes(token)) return true
-        return [item.name, item.city, item.locationLabel, item.category, item.type]
+        return [item.name, item.city, item.area, item.locationLabel, item.category, item.type]
           .filter(Boolean)
           .join(' ')
           .toLowerCase()

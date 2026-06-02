@@ -7,6 +7,31 @@ import dashboardService from '../../../services/dashboardService'
 import propertyService from '../../../services/propertyService'
 import { useAuth } from '../../../context/AuthContext'
 
+const getSavedSearchHref = (item = {}) => {
+  if (item.queryString) return `/properties?${item.queryString}`
+
+  const filters = item.filters && typeof item.filters === 'object' ? item.filters : {}
+  const params = new URLSearchParams()
+  const searchQuery = filters.searchQuery || item.city || ''
+  const city = filters.city || item.city || ''
+  const locality = filters.mapSearchQuery || item.locality || ''
+  const activeFilters = Array.isArray(filters.activeFilters) ? filters.activeFilters : []
+
+  if (searchQuery) params.set('search', searchQuery)
+  if (city) params.set('city', city)
+  if (locality) params.set('area', locality)
+  activeFilters.forEach((filter) => params.append('filter', filter))
+  if (filters.priceRange?.min) params.set('minPrice', filters.priceRange.min)
+  if (filters.priceRange?.max) params.set('maxPrice', filters.priceRange.max)
+  if (filters.sortBy) params.set('sort', filters.sortBy)
+  if (filters.nearbyMode !== undefined) params.set('nearby', String(Boolean(filters.nearbyMode)))
+  if (filters.searchRadiusKm) params.set('radius', String(filters.searchRadiusKm))
+  if (filters.pagination?.page) params.set('page', filters.pagination.page)
+  if (filters.pagination?.pageSize) params.set('pageSize', filters.pagination.pageSize)
+
+  return `/properties?${params.toString()}`
+}
+
 function UserDashboard() {
   const { user } = useAuth()
   const [overview, setOverview] = useState(null)
@@ -290,7 +315,7 @@ function UserDashboard() {
                 <p className="font-semibold text-white">{item.city || 'Any city'} · {item.locality || 'All localities'}</p>
                 <p className="mt-1">Budget {item.budget || '-'} · Sharing {item.sharingType || '-'}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Link to={`/properties?city=${encodeURIComponent(item.city || '')}&area=${encodeURIComponent(item.locality || '')}`} className="rounded-full border border-accent-500/60 px-3 py-2 text-xs text-accent-200">Rerun</Link>
+                  <Link to={getSavedSearchHref(item)} className="rounded-full border border-accent-500/60 px-3 py-2 text-xs text-accent-200">Rerun</Link>
                   <button
                     type="button"
                     onClick={async () => {

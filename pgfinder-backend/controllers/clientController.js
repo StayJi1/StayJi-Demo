@@ -108,6 +108,8 @@ const toBoolean = (value) => value === true || value === 'true' || value === 'on
 const normalizeRating = (value) => Math.max(1, Math.min(5, Number(value) || 0))
 
 const escapeRegex = (value = '') => value.toString().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const normalizedRegexSource = (value = '') => escapeRegex(normalizeText(value)).replace(/\s+/g, '\\s+')
+const normalizedRegex = (value = '', flags = 'i') => new RegExp(normalizedRegexSource(value), flags)
 
 const newestTimestamp = (item = {}) => {
     const value = item.updatedOn || item.addedOn || item.visitDate || item.createdAt || 0
@@ -490,27 +492,31 @@ const buildPropertyFilters = (source = {}, includeInactive = false) => {
     if (!includeInactive) filters.isActive = true
     if (source.status === 'inactive') filters.isActive = false
     if (source.approvalStatus) filters.approvalStatus = source.approvalStatus
-    if (source.cityName || source.city) filters.cityName = new RegExp(escapeRegex(canonicalLocationName(source.cityName || source.city)), 'i')
-    if (source.areaName || source.area || source.locality) filters.areaName = new RegExp(escapeRegex(normalizeText(source.areaName || source.area || source.locality)), 'i')
-    if (source.category) filters.propertyCategory = new RegExp(`^${escapeRegex(normalizeText(source.category))}$`, 'i')
+    if (source.cityName || source.city) filters.cityName = new RegExp(`^${normalizedRegexSource(canonicalLocationName(source.cityName || source.city))}$`, 'i')
+    if (source.areaName || source.area || source.locality) filters.areaName = new RegExp(`^${normalizedRegexSource(source.areaName || source.area || source.locality)}$`, 'i')
+    if (source.category) filters.propertyCategory = new RegExp(`^${normalizedRegexSource(source.category)}$`, 'i')
     if (source.userIDFK || source.vendorId || source.ownerId) {
         const ownerId = source.userIDFK || source.vendorId || source.ownerId
         andFilters.push({ $or: [{ userIDFK: ownerId }, { vendorId: ownerId }] })
     }
 
-    const search = normalizeText(source.q || source.search || source.name || '')
+    const search = normalizeText(source.q || source.search || source.name || source.propertyName || '')
     if (search) {
-        const regex = new RegExp(escapeRegex(search), 'i')
+        const normalizedSearch = canonicalLocationName(search)
+        const regexes = [...new Set([search, normalizedSearch])]
+            .map((value) => normalizedRegex(value))
         andFilters.push({ $or: [
             ...(mongoose.Types.ObjectId.isValid(search) ? [{ _id: new mongoose.Types.ObjectId(search) }] : []),
             ...(stayjiIdSearchExpr(search) ? [stayjiIdSearchExpr(search)] : []),
-            { propertyName: regex },
-            { description: regex },
-            { address: regex },
-            { cityName: regex },
-            { areaName: regex },
-            { propertyCategory: regex },
-            { aminityFeatures: regex },
+            ...regexes.flatMap((regex) => [
+                { propertyName: regex },
+                { description: regex },
+                { address: regex },
+                { cityName: regex },
+                { areaName: regex },
+                { propertyCategory: regex },
+                { aminityFeatures: regex },
+            ]),
         ] })
     }
     if (andFilters.length) filters.$and = [...(filters.$and || []), ...andFilters]
@@ -930,7 +936,8 @@ router.get('/getPropertyList', async (req, res) => {
 });
 
 router.post('/getAreaListByCity', async (req, res) => {
-    const objArea = await Area.find({ cityName: req.body.cityName, isActive: true });
+    const cityName = canonicalLocationName(req.body.cityName || req.body.city || '')
+    const objArea = await Area.find({ cityName: new RegExp(`^${normalizedRegexSource(cityName)}$`, 'i'), isActive: true });
     if (objArea != null) {
         res.json({ result: "success", msg: "Area List Found", data: objArea });
 
@@ -942,8 +949,8 @@ router.post('/getAreaListByCity', async (req, res) => {
 
 router.post('/getPropertyByCity', async (req, res) => {
     const cityGate = await publicCityGate()
-    const objProperty = await Property.find({ $and: [{ cityName: req.body.cityName, ...publicPropertyQuery }, ...(cityGate ? [cityGate] : [])] });
-    console.log(objProperty)
+    const publicFilters = buildPropertyFilters({ ...req.body, cityName: req.body.cityName || req.body.city })
+    const objProperty = await Property.find({ $and: [publicPropertyQuery, publicFilters, ...(cityGate ? [cityGate] : [])] });
     if (objProperty != null) {
         res.json({ result: "success", msg: "PropertyByCity List Found", data: objProperty });
 
@@ -955,8 +962,8 @@ router.post('/getPropertyByCity', async (req, res) => {
 
 router.post('/getPropertyByArea', async (req, res) => {
     const cityGate = await publicCityGate()
-    const objProperty = await Property.find({ $and: [{ areaName: req.body.areaName, ...publicPropertyQuery }, ...(cityGate ? [cityGate] : [])] });
-    console.log(objProperty)
+    const publicFilters = buildPropertyFilters({ ...req.body, areaName: req.body.areaName || req.body.area || req.body.locality })
+    const objProperty = await Property.find({ $and: [publicPropertyQuery, publicFilters, ...(cityGate ? [cityGate] : [])] });
     if (objProperty != null) {
         res.json({ result: "success", msg: "PropertyByArea List Found", data: objProperty });
 
@@ -2593,9 +2600,9 @@ const buildAdminPropertyQuery = (query = {}) => {
     if (query.status === 'inactive' || query.active === 'false') filters.isActive = false
     else if (query.status === 'active' || query.active === 'true') filters.isActive = true
     if (query.approvalStatus && query.approvalStatus !== 'all') filters.approvalStatus = query.approvalStatus
-    if (query.city) filters.cityName = new RegExp(escapeRegex(canonicalLocationName(query.city)), 'i')
-    if (query.area || query.locality) filters.areaName = new RegExp(escapeRegex(normalizeText(query.area || query.locality)), 'i')
-    if (query.propertyType && query.propertyType !== 'all') filters.propertyCategory = new RegExp(`^${escapeRegex(normalizeText(query.propertyType))}$`, 'i')
+    if (query.city) filters.cityName = new RegExp(`^${normalizedRegexSource(canonicalLocationName(query.city))}$`, 'i')
+    if (query.area || query.locality) filters.areaName = new RegExp(`^${normalizedRegexSource(query.area || query.locality)}$`, 'i')
+    if (query.propertyType && query.propertyType !== 'all') filters.propertyCategory = new RegExp(`^${normalizedRegexSource(query.propertyType)}$`, 'i')
     if (query.vendorId && mongoose.Types.ObjectId.isValid(query.vendorId)) {
         const vendorObjId = new mongoose.Types.ObjectId(query.vendorId)
         filters.$or = [{ userIDFK: vendorObjId }, { vendorId: vendorObjId }]
@@ -2626,15 +2633,18 @@ const buildAdminPropertyQuery = (query = {}) => {
 
     const search = (query.q || query.search || '').trim()
     if (search) {
-        const regex = new RegExp(search, 'i')
+        const normalizedSearch = canonicalLocationName(search)
+        const regexes = [...new Set([search, normalizedSearch])].map((value) => normalizedRegex(value))
         const propertySearch = [
             ...(mongoose.Types.ObjectId.isValid(search) ? [{ _id: new mongoose.Types.ObjectId(search) }] : []),
-            { propertyName: regex },
-            { description: regex },
-            { address: regex },
-            { cityName: regex },
-            { areaName: regex },
-            { propertyCategory: regex },
+            ...regexes.flatMap((regex) => [
+                { propertyName: regex },
+                { description: regex },
+                { address: regex },
+                { cityName: regex },
+                { areaName: regex },
+                { propertyCategory: regex },
+            ]),
         ]
         filters.$and = [...(filters.$and || []), { $or: [...(filters.$or || []), ...propertySearch] }]
         delete filters.$or
@@ -2754,6 +2764,8 @@ router.post('/user/saved-searches', async (req, res) => {
         sharingType: req.body.sharingType || req.body.sharing || '',
         nearbyPreferences: parseStringList(req.body.nearbyPreferences),
         filters: req.body.filters || {},
+        queryString: req.body.queryString || '',
+        pagination: req.body.pagination || req.body.filters?.pagination || {},
         addedOn: new Date(),
     }
     await User.updateOne({ _id: userId }, { $pull: { savedSearches: { id: searchId } } })
@@ -2958,12 +2970,13 @@ router.post('/admin/searchProperty', async (req, res) => {
     }
 
     try {
-        const regex = new RegExp(q, 'i')
+        const normalizedSearch = canonicalLocationName(q)
+        const regexes = [...new Set([q, normalizedSearch])].map((value) => normalizedRegex(value))
 
         const propertyMatches = await Property.find({
             ...publicPropertyQuery,
             isActive: true,
-            $or: [
+            $or: regexes.flatMap((regex) => [
                 { propertyName: regex },
                 { description: regex },
                 { address: regex },
@@ -2971,7 +2984,7 @@ router.post('/admin/searchProperty', async (req, res) => {
                 { areaName: regex },
                 { propertyCategory: regex },
                 { aminityFeatures: regex },
-            ],
+            ]),
         })
             .limit(limit)
             .select('_id userIDFK vendorId propertyName description address rent sharing genderType areaName cityName propertyTypeIDFK aminityFeatures propertyImage propertyImageUrls videoUrl propertyCategory approvalStatus isActive isAvailable roomInventory verificationChecklist')
