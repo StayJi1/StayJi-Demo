@@ -133,19 +133,34 @@ const fetchPropertyPage = (params) => axiosClient.get('/client/getPropertyList',
   meta: res.data?.meta || {},
 }))
 
+const fetchRemainingPropertyPages = async (requestParams, totalPages) => {
+  const pages = []
+  const batchSize = 4
+  for (let page = 2; page <= totalPages; page += batchSize) {
+    const batch = Array.from(
+      { length: Math.min(batchSize, totalPages - page + 1) },
+      (_, index) => fetchPropertyPage({ ...requestParams, limit: 100, page: page + index }),
+    )
+    pages.push(...await Promise.all(batch))
+  }
+  return pages
+}
+
 const propertyApi = {
   // Return full property list from backend
   list: async (params = {}) => {
     const { allPages, ...requestParams } = params || {}
-    const firstPage = await fetchPropertyPage({ limit: allPages ? 100 : undefined, ...requestParams, page: requestParams.page || 1 })
+    const firstPage = await fetchPropertyPage({
+      ...requestParams,
+      ...(allPages ? { limit: 100 } : {}),
+      page: requestParams.page || 1,
+    })
     if (!allPages) return firstPage.items
 
     const totalPages = Number(firstPage.meta.pages || 1)
     if (totalPages <= 1) return firstPage.items
 
-    const remainingPages = await Promise.all(
-      Array.from({ length: totalPages - 1 }, (_, index) => fetchPropertyPage({ ...requestParams, limit: 100, page: index + 2 })),
-    )
+    const remainingPages = await fetchRemainingPropertyPages(requestParams, totalPages)
     return [...firstPage.items, ...remainingPages.flatMap((page) => page.items)]
   },
 

@@ -524,13 +524,20 @@ const buildPropertyFilters = (source = {}, includeInactive = false) => {
     return filters
 }
 
-const publicPropertyQuery = {
-    isActive: true,
-    status: { $nin: ['archived', 'suspended'] },
+const publicApprovalQuery = {
     $or: [
         { approvalStatus: "Approved" },
         { approvalStatus: "Verified" },
         { approvalStatus: { $exists: false } }
+    ]
+}
+
+const publicPropertyQuery = {
+    isActive: true,
+    status: { $nin: ['archived', 'suspended'] },
+    $or: [
+        { isDummy: true },
+        { isDummy: { $ne: true }, ...publicApprovalQuery }
     ]
 }
 

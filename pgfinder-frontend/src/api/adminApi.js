@@ -9,7 +9,6 @@ const unwrap = (response, fallback) => {
 
 const paramsWithDefaults = (params = {}) => ({
   page: 1,
-  limit: 20,
   ...Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '' && value !== null && value !== undefined)),
 })
 
