@@ -19,6 +19,8 @@ var Visit = require("../models/visitDetails");
 var Payment = require("../models/paymentMaster");
 var AdminMessage = require("../models/adminMessage");
 var Chat = require("../models/chatMaster");
+var Conversation = require("../models/conversation");
+var Message = require("../models/message");
 var Notification = require("../models/notification");
 var LeadEvent = require("../models/leadEvent");
 var MoveInConfirmation = require("../models/moveInConfirmation");
@@ -29,6 +31,28 @@ var PropertyUpdateRequest = require("../models/propertyUpdateRequest");
 const { hashPassword, isHashedPassword, verifyPassword } = require('../utils/security');
 const messageSecret = crypto.createHash('sha256').update(process.env.MESSAGE_SECRET || process.env.SESSION_SECRET || 'stayji-local-message-secret').digest()
 const jwtSecret = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'stayji-local-jwt-secret'
+
+const wrapAsync = (handler) => (req, res, next) => {
+    try {
+        const result = handler(req, res, next)
+        if (result && typeof result.catch === 'function') result.catch(next)
+    } catch (error) {
+        next(error)
+    }
+}
+
+;['get', 'post', 'put', 'patch', 'delete'].forEach((method) => {
+    const original = router[method].bind(router)
+    router[method] = (...args) => original(...args.map((arg) => (typeof arg === 'function' ? wrapAsync(arg) : arg)))
+})
+
+const normalizeText = (value = '') => value.toString().trim().replace(/\s+/g, ' ')
+
+const canonicalLocationName = (value = '') => {
+    const normalized = normalizeText(value)
+    if (/^(bengaluru|bangalore)$/i.test(normalized)) return 'Bangalore'
+    return normalized
+}
 
 const parseStringList = (value) => {
     if (!value) return []
@@ -125,7 +149,7 @@ const publicCityGate = async () => {
         CityState.find({ isActive: true, dummyVisible: true }).distinct('cityName'),
     ])
     const gates = []
-    if (liveCities.length) gates.push({ cityName: { $in: liveCities.map((city) => new RegExp(`^${escapeRegex(city)}$`, 'i')) } })
+    if (liveCities.length) gates.push({ cityName: { $in: liveCities.map((city) => new RegExp(`^${escapeRegex(city)}$`, 'i')) }, isDummy: { $ne: true } })
     if (demoVisibleCities.length) gates.push({ cityName: { $in: demoVisibleCities.map((city) => new RegExp(`^${escapeRegex(city)}$`, 'i')) }, isDummy: true })
     if (!gates.length) return { cityName: /^__stayji_no_live_city__$/i }
     return gates.length === 1 ? gates[0] : { $or: gates }
@@ -462,21 +486,24 @@ const propertyPopulate = () => [
 
 const buildPropertyFilters = (source = {}, includeInactive = false) => {
     const filters = {}
+    const andFilters = []
     if (!includeInactive) filters.isActive = true
     if (source.status === 'inactive') filters.isActive = false
     if (source.approvalStatus) filters.approvalStatus = source.approvalStatus
-    if (source.cityName || source.city) filters.cityName = new RegExp(source.cityName || source.city, 'i')
-    if (source.areaName || source.area) filters.areaName = new RegExp(source.areaName || source.area, 'i')
-    if (source.category) filters.propertyCategory = source.category
-    if (source.userIDFK || source.vendorId) filters.$or = [
-        { userIDFK: source.userIDFK || source.vendorId },
-        { vendorId: source.vendorId || source.userIDFK },
-    ]
+    if (source.cityName || source.city) filters.cityName = new RegExp(escapeRegex(canonicalLocationName(source.cityName || source.city)), 'i')
+    if (source.areaName || source.area || source.locality) filters.areaName = new RegExp(escapeRegex(normalizeText(source.areaName || source.area || source.locality)), 'i')
+    if (source.category) filters.propertyCategory = new RegExp(`^${escapeRegex(normalizeText(source.category))}$`, 'i')
+    if (source.userIDFK || source.vendorId || source.ownerId) {
+        const ownerId = source.userIDFK || source.vendorId || source.ownerId
+        andFilters.push({ $or: [{ userIDFK: ownerId }, { vendorId: ownerId }] })
+    }
 
-    const search = (source.q || source.search || '').trim()
+    const search = normalizeText(source.q || source.search || source.name || '')
     if (search) {
-        const regex = new RegExp(search, 'i')
-        filters.$or = [
+        const regex = new RegExp(escapeRegex(search), 'i')
+        andFilters.push({ $or: [
+            ...(mongoose.Types.ObjectId.isValid(search) ? [{ _id: new mongoose.Types.ObjectId(search) }] : []),
+            ...(stayjiIdSearchExpr(search) ? [stayjiIdSearchExpr(search)] : []),
             { propertyName: regex },
             { description: regex },
             { address: regex },
@@ -484,8 +511,9 @@ const buildPropertyFilters = (source = {}, includeInactive = false) => {
             { areaName: regex },
             { propertyCategory: regex },
             { aminityFeatures: regex },
-        ]
+        ] })
     }
+    if (andFilters.length) filters.$and = [...(filters.$and || []), ...andFilters]
 
     return filters
 }
@@ -569,8 +597,8 @@ router.post('/addUser', async (req, res) => {
     if (normalizeAccountType(req.body.userType || 'User') === 'owner' && (!req.body.state && !req.body.stateName || !req.body.city && !req.body.cityName)) {
         return res.json({ result: "failure", msg: "Owner registration requires state and city.", data: 0 });
     }
-    const signupCity = req.body.city || req.body.cityName || ''
-    const signupState = req.body.state || req.body.stateName || ''
+    const signupCity = canonicalLocationName(req.body.city || req.body.cityName || '')
+    const signupState = normalizeText(req.body.state || req.body.stateName || '')
     if (normalizeAccountType(req.body.userType || 'User') === 'owner') {
         const managedCityCount = await CityState.countDocuments({ isActive: true })
         const managedCity = managedCityCount ? await CityState.findOne({ isActive: true, stateName: new RegExp(`^${signupState}$`, 'i'), cityName: new RegExp(`^${signupCity}$`, 'i') }) : true
@@ -682,8 +710,8 @@ router.post('/googleAuth', async (req, res) => {
         objUser.occupation = "";
         const officialGoogleRole = officialRoleName(req.body.userType || "User");
         const normalizedGoogleRole = normalizeAccountType(officialGoogleRole);
-        const googleCity = req.body.city || req.body.cityName || "";
-        const googleState = req.body.state || req.body.stateName || "";
+        const googleCity = canonicalLocationName(req.body.city || req.body.cityName || "");
+        const googleState = normalizeText(req.body.state || req.body.stateName || "");
         if (normalizedGoogleRole === 'owner' && (!req.body.state && !req.body.stateName || !req.body.city && !req.body.cityName)) {
             return res.json({ result: "failure", msg: "Owner registration requires state and city.", data: 0 });
         }
@@ -1805,16 +1833,16 @@ router.post('/addProperty', upload.fields([{ name: 'propertyImage', maxCount: 10
     var objProperty = new Property({ userIDFK: req.body.userIDFK, vendorId: req.body.vendorId || req.body.userIDFK });
     objProperty.userIDFK = req.body.userIDFK,
         objProperty.vendorId = req.body.vendorId || req.body.userIDFK,
-        objProperty.propertyName = req.body.propertyName,
-        objProperty.description = req.body.description,
-        objProperty.address = req.body.address,
+        objProperty.propertyName = normalizeText(req.body.propertyName),
+        objProperty.description = normalizeText(req.body.description),
+        objProperty.address = normalizeText(req.body.address),
         objProperty.rent = req.body.rent,
         objProperty.sharing = req.body.sharing,
         objProperty.genderType = req.body.genderType,
-        objProperty.areaName = req.body.areaName,
+        objProperty.areaName = normalizeText(req.body.areaName),
         objProperty.localitySlug = req.body.localitySlug || slugify(req.body.areaName),
-        objProperty.cityName = req.body.cityName,
-        objProperty.stateName = req.body.stateName || req.body.state || owner?.assignedState || owner?.state || "",
+        objProperty.cityName = canonicalLocationName(req.body.cityName),
+        objProperty.stateName = normalizeText(req.body.stateName || req.body.state || owner?.assignedState || owner?.state || ""),
         objProperty.latitude = toNumberOrUndefined(req.body.latitude),
         objProperty.longitude = toNumberOrUndefined(req.body.longitude),
         objProperty.aminityFeatures = req.body.aminityFeatures || "",
@@ -1864,7 +1892,7 @@ router.post('/addProperty', upload.fields([{ name: 'propertyImage', maxCount: 10
     const inserted = await objProperty.save();
 
     if (inserted != null) {
-        await User.updateOne({ _id: req.body.userIDFK }, { $set: { userType: "Owner", city: owner?.city || req.body.cityName, state: owner?.state || objProperty.stateName, assignedCity: owner?.assignedCity || req.body.cityName, assignedState: owner?.assignedState || objProperty.stateName } });
+        await User.updateOne({ _id: req.body.userIDFK }, { $set: { userType: "Owner", city: owner?.city || objProperty.cityName, state: owner?.state || objProperty.stateName, assignedCity: owner?.assignedCity || objProperty.cityName, assignedState: owner?.assignedState || objProperty.stateName } });
         await recordAudit({ performerId: req.body.userIDFK, performerRole: 'Owner', action: 'property_submitted', entityType: 'property', entityId: inserted._id, updatedValue: { approvalStatus: 'Pending', isDummy: inserted.isDummy }, city: inserted.cityName, state: objProperty.stateName })
         res.json({ result: "success", msg: "Property Inserted", data: inserted._id });
     } else {
@@ -2211,16 +2239,16 @@ router.post('/reactivateProperty', async (req, res) => {
 
 router.post('/updateProperty', async (req, res) => {
     const updateFields = {}
-    if (req.body.propertyName !== undefined) updateFields.propertyName = req.body.propertyName
-    if (req.body.description !== undefined) updateFields.description = req.body.description
-    if (req.body.address !== undefined) updateFields.address = req.body.address
+    if (req.body.propertyName !== undefined) updateFields.propertyName = normalizeText(req.body.propertyName)
+    if (req.body.description !== undefined) updateFields.description = normalizeText(req.body.description)
+    if (req.body.address !== undefined) updateFields.address = normalizeText(req.body.address)
     if (req.body.rent !== undefined) updateFields.rent = req.body.rent
     if (req.body.sharing !== undefined) updateFields.sharing = req.body.sharing
     if (req.body.genderType !== undefined) updateFields.genderType = req.body.genderType
-    if (req.body.areaName !== undefined) updateFields.areaName = req.body.areaName
+    if (req.body.areaName !== undefined) updateFields.areaName = normalizeText(req.body.areaName)
     if (req.body.areaName !== undefined || req.body.localitySlug !== undefined) updateFields.localitySlug = req.body.localitySlug || slugify(req.body.areaName)
-    if (req.body.cityName !== undefined) updateFields.cityName = req.body.cityName
-    if (req.body.stateName !== undefined || req.body.state !== undefined) updateFields.stateName = req.body.stateName || req.body.state
+    if (req.body.cityName !== undefined) updateFields.cityName = canonicalLocationName(req.body.cityName)
+    if (req.body.stateName !== undefined || req.body.state !== undefined) updateFields.stateName = normalizeText(req.body.stateName || req.body.state)
     if (req.body.latitude !== undefined) updateFields.latitude = toNumberOrUndefined(req.body.latitude)
     if (req.body.longitude !== undefined) updateFields.longitude = toNumberOrUndefined(req.body.longitude)
     if (req.body.aminityFeatures !== undefined) updateFields.aminityFeatures = req.body.aminityFeatures
@@ -2456,7 +2484,8 @@ const toObjectIdIfValid = (id) => {
 
 const pageOptions = (source = {}) => {
     const page = Math.max(1, Number(source.page || 1))
-    const limit = Math.min(100, Math.max(1, Number(source.limit || 20)))
+    const defaultLimit = Number(process.env.DEFAULT_PAGE_LIMIT || 24)
+    const limit = Math.min(100, Math.max(1, Number(source.limit || defaultLimit)))
     return { page, limit, skip: (page - 1) * limit }
 }
 
@@ -2564,9 +2593,9 @@ const buildAdminPropertyQuery = (query = {}) => {
     if (query.status === 'inactive' || query.active === 'false') filters.isActive = false
     else if (query.status === 'active' || query.active === 'true') filters.isActive = true
     if (query.approvalStatus && query.approvalStatus !== 'all') filters.approvalStatus = query.approvalStatus
-    if (query.city) filters.cityName = new RegExp(query.city, 'i')
-    if (query.area || query.locality) filters.areaName = new RegExp(query.area || query.locality, 'i')
-    if (query.propertyType && query.propertyType !== 'all') filters.propertyCategory = new RegExp(`^${query.propertyType}$`, 'i')
+    if (query.city) filters.cityName = new RegExp(escapeRegex(canonicalLocationName(query.city)), 'i')
+    if (query.area || query.locality) filters.areaName = new RegExp(escapeRegex(normalizeText(query.area || query.locality)), 'i')
+    if (query.propertyType && query.propertyType !== 'all') filters.propertyCategory = new RegExp(`^${escapeRegex(normalizeText(query.propertyType))}$`, 'i')
     if (query.vendorId && mongoose.Types.ObjectId.isValid(query.vendorId)) {
         const vendorObjId = new mongoose.Types.ObjectId(query.vendorId)
         filters.$or = [{ userIDFK: vendorObjId }, { vendorId: vendorObjId }]
@@ -3487,7 +3516,7 @@ router.get('/properties', async (req, res) => {
         const search = (req.query.q || req.query.search || '').trim()
         const ownerNeedle = ownerSearch || search
         if (ownerNeedle) {
-            const regex = new RegExp(ownerNeedle, 'i')
+            const regex = new RegExp(escapeRegex(normalizeText(ownerNeedle)), 'i')
             const vendorIds = await User.find({ $or: [{ userFname: regex }, { userLname: regex }, { userEmail: regex }, { contact: regex }] }).distinct('_id')
             const vendorConditions = [{ userIDFK: { $in: vendorIds } }, { vendorId: { $in: vendorIds } }]
             if (search && filters.$and?.[0]?.$or) filters.$and[0].$or.push(...vendorConditions)
@@ -3561,7 +3590,7 @@ router.post('/properties/:id/status', async (req, res) => {
     if (req.body.isVerified !== undefined) update.isVerified = req.body.isVerified === true || req.body.isVerified === 'true'
     if (req.body.isDummy !== undefined) update.isDummy = req.body.isDummy === true || req.body.isDummy === 'true'
     if (req.body.status) update.status = req.body.status
-    if (req.body.cityName || req.body.city) update.cityName = req.body.cityName || req.body.city
+    if (req.body.cityName || req.body.city) update.cityName = canonicalLocationName(req.body.cityName || req.body.city)
     if (req.body.areaName || req.body.locality) update.areaName = req.body.areaName || req.body.locality
     if (req.body.assignedAdmin && mongoose.Types.ObjectId.isValid(req.body.assignedAdmin)) {
         update.assignedAdmin = new mongoose.Types.ObjectId(req.body.assignedAdmin)
@@ -3618,9 +3647,9 @@ router.post('/properties/bulk', async (req, res) => {
     if (req.body.action === 'unarchive') Object.assign(update, { status: 'active', isActive: true })
     if (req.body.action === 'verify') Object.assign(update, { isVerified: true, approvalStatus: 'Verified' })
     if (req.body.action === 'suspend') Object.assign(update, { status: 'suspended', approvalStatus: 'Suspended', isActive: false })
-    if (req.body.action === 'assign_city' && (req.body.city || req.body.cityName)) update.cityName = req.body.city || req.body.cityName
-    if (req.body.action === 'assign_city' && (req.body.state || req.body.stateName)) update.stateName = req.body.state || req.body.stateName
-    if (req.body.action === 'assign_city' && (req.body.locality || req.body.areaName)) update.areaName = req.body.locality || req.body.areaName
+    if (req.body.action === 'assign_city' && (req.body.city || req.body.cityName)) update.cityName = canonicalLocationName(req.body.city || req.body.cityName)
+    if (req.body.action === 'assign_city' && (req.body.state || req.body.stateName)) update.stateName = normalizeText(req.body.state || req.body.stateName)
+    if (req.body.action === 'assign_city' && (req.body.locality || req.body.areaName)) update.areaName = normalizeText(req.body.locality || req.body.areaName)
     if (req.body.action === 'assign_admin' && mongoose.Types.ObjectId.isValid(req.body.adminId || req.body.assignedAdmin)) update.assignedAdmin = new mongoose.Types.ObjectId(req.body.adminId || req.body.assignedAdmin)
     if (req.body.approvalStatus) update.approvalStatus = req.body.approvalStatus
     if (req.body.isActive !== undefined) update.isActive = req.body.isActive === true || req.body.isActive === 'true'
@@ -3664,7 +3693,7 @@ router.get('/vendors', async (req, res) => {
     else if (req.query.status !== 'all') filters.isActive = true
     const search = (req.query.q || req.query.search || '').trim()
     if (search) {
-        const regex = new RegExp(search, 'i')
+        const regex = new RegExp(escapeRegex(search), 'i')
         filters.$or = [{ userFname: regex }, { userLname: regex }, { userEmail: regex }, { contact: regex }]
     }
     const [total, vendors] = await Promise.all([
@@ -3857,12 +3886,14 @@ router.post('/city-states', requireSuperAdmin, async (req, res) => {
         return res.json({ result: 'failure', msg: 'State and city are required.', data: null })
     }
     const payload = {
-        stateName: req.body.stateName.trim(),
-        cityName: req.body.cityName.trim(),
+        stateName: normalizeText(req.body.stateName),
+        cityName: canonicalLocationName(req.body.cityName),
         isActive: req.body.isActive === undefined ? true : toBoolean(req.body.isActive),
         dummyVisible: toBoolean(req.body.dummyVisible),
         status: ['demo', 'live', 'paused', 'archived'].includes(req.body.status) ? req.body.status : 'demo',
-        localities: Array.isArray(req.body.localities) ? req.body.localities : parseStringList(req.body.localities).map((name) => ({ name, isActive: true, dummyVisible: false })),
+        localities: Array.isArray(req.body.localities)
+            ? req.body.localities.map((item) => ({ ...item, name: normalizeText(item.name || item) }))
+            : parseStringList(req.body.localities).map((name) => ({ name: normalizeText(name), isActive: true, dummyVisible: false })),
         monetizationRules: parseJsonValue(req.body.monetizationRules, {}),
         operationalScope: parseJsonValue(req.body.operationalScope, {}),
         assignedAdmins: (req.body.assignedAdmins || []).filter((id) => mongoose.Types.ObjectId.isValid(id)),
