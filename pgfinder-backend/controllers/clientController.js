@@ -305,14 +305,62 @@ const requireSuperAdmin = (req, res, next) => {
 
 const adminCityScope = (req) => {
     if (req.auth?.role !== 'admin' || !req.auth.assignedCity) return {}
-    return { cityName: new RegExp(`^${escapeRegex(req.auth.assignedCity)}$`, 'i') }
+    const cityRegex = new RegExp(`^${escapeRegex(req.auth.assignedCity)}$`, 'i')
+    const conditions = [
+        { cityName: cityRegex },
+        { city: cityRegex },
+    ]
+    if (req.auth.assignedState) {
+        const stateRegex = new RegExp(`^${escapeRegex(req.auth.assignedState)}$`, 'i')
+        conditions[0].stateName = stateRegex
+        conditions[1].state = stateRegex
+    }
+    return { $or: conditions }
 }
 
 const adminAssignedCity = (req) => (req.auth?.role === 'admin' && req.auth.assignedCity ? req.auth.assignedCity : '')
 
 const adminUserCityScope = (req) => {
     if (req.auth?.role !== 'admin' || !req.auth.assignedCity) return {}
-    return { $or: [{ assignedCity: new RegExp(`^${escapeRegex(req.auth.assignedCity)}$`, 'i') }, { city: new RegExp(`^${escapeRegex(req.auth.assignedCity)}$`, 'i') }] }
+    const cityRegex = new RegExp(`^${escapeRegex(req.auth.assignedCity)}$`, 'i')
+    const userScope = [
+        { assignedCity: cityRegex },
+        { city: cityRegex },
+        { cityName: cityRegex },
+    ]
+    if (req.auth.assignedState) {
+        const stateRegex = new RegExp(`^${escapeRegex(req.auth.assignedState)}$`, 'i')
+        userScope[0].assignedState = stateRegex
+        userScope[1].state = stateRegex
+        userScope[2].stateName = stateRegex
+    }
+    return { $or: userScope }
+}
+
+const syncAdminCityAssignment = async (adminId, targetCityName, targetStateName) => {
+    if (!mongoose.Types.ObjectId.isValid(adminId)) return
+    const normalizedCity = targetCityName ? canonicalLocationName(targetCityName) : ''
+    const normalizedState = targetStateName ? normalizeText(targetStateName) : ''
+    let removeQuery
+    if (!normalizedCity) {
+        removeQuery = { assignedAdmins: adminId }
+    } else if (normalizedState) {
+        removeQuery = {
+            assignedAdmins: adminId,
+            $or: [
+                { cityName: { $not: new RegExp(`^${escapeRegex(normalizedCity)}$`, 'i') } },
+                { stateName: { $not: new RegExp(`^${escapeRegex(normalizedState)}$`, 'i') } },
+            ],
+        }
+    } else {
+        removeQuery = { assignedAdmins: adminId, cityName: { $not: new RegExp(`^${escapeRegex(normalizedCity)}$`, 'i') } }
+    }
+    await CityState.updateMany(removeQuery, { $pull: { assignedAdmins: adminId }, updatedOn: new Date() })
+    if (!normalizedCity) return
+    const targetCity = await CityState.findOne({ cityName: new RegExp(`^${escapeRegex(normalizedCity)}$`, 'i'), stateName: normalizedState ? new RegExp(`^${escapeRegex(normalizedState)}$`, 'i') : { $exists: true } })
+    if (!targetCity) return
+    await CityState.updateMany({ assignedAdmins: adminId, _id: { $ne: targetCity._id } }, { $pull: { assignedAdmins: adminId }, updatedOn: new Date() })
+    await CityState.findOneAndUpdate({ _id: targetCity._id }, { $set: { assignedAdmins: [adminId], updatedOn: new Date() } }, { new: true })
 }
 
 const assertAdminCanManageUser = (req, targetUser) => {
@@ -550,6 +598,16 @@ const buildPropertyFilters = (source = {}, includeInactive = false) => {
         const normalizedSearch = canonicalLocationName(search)
         const regexes = [...new Set([search, normalizedSearch])]
             .map((value) => normalizedRegex(value))
+
+        const searchTokens = search.trim().split(/\s+/).filter(Boolean)
+        if (searchTokens.length === 1) {
+            andFilters.push({ $or: [
+                { cityName: regexes[0] },
+                { areaName: regexes[0] },
+                { address: regexes[0] },
+            ] })
+        }
+
         andFilters.push({ $or: [
             ...(mongoose.Types.ObjectId.isValid(search) ? [{ _id: new mongoose.Types.ObjectId(search) }] : []),
             ...(stayjiIdSearchExpr(search) ? [stayjiIdSearchExpr(search)] : []),
@@ -2287,7 +2345,11 @@ router.post('/payment-requests/:id/review', async (req, res) => {
 })
 
 router.post('/reactivateProperty', async (req, res) => {
-    const objUpdateProperty = await Property.updateOne({ _id: req.body.id }, { isActive: true, approvalStatus: "Pending" })
+    const propertyQuery = { _id: req.body.id }
+    if (req.auth?.role === 'admin') {
+        Object.assign(propertyQuery, adminCityScope(req))
+    }
+    const objUpdateProperty = await Property.updateOne(propertyQuery, { isActive: true, approvalStatus: "Pending" })
     if (objUpdateProperty.modifiedCount > 0) {
         const objProperty = await Property.findOne({ _id: req.body.id }).populate(propertyPopulate())
         res.json({ result: "success", msg: "Property reactivated and moved to pending review", data: objProperty })
@@ -2376,8 +2438,25 @@ router.post('/updateProperty', async (req, res) => {
         }
     }
 
-    const existingForGovernance = await Property.findOne({ _id: req.body.id }).select('userIDFK vendorId propertyName propertyImage propertyImageUrls address areaName cityName stateName latitude longitude')
-    if (!existingForGovernance) return res.json({ result: "failure", msg: "Property not found.", data: null })
+    const isAdminUpdate = req.auth?.role === 'admin'
+    const propertyQuery = { _id: req.body.id }
+    if (isAdminUpdate) {
+        Object.assign(propertyQuery, adminCityScope(req))
+    }
+    const existingForGovernance = await Property.findOne(propertyQuery).select('userIDFK vendorId propertyName propertyImage propertyImageUrls address areaName cityName stateName latitude longitude')
+    if (!existingForGovernance) return res.json({ result: "failure", msg: "Property not found or access denied.", data: null })
+
+    if (isAdminUpdate) {
+        const assignedCity = (req.auth.assignedCity || '').toString().trim().toLowerCase()
+        const assignedState = (req.auth.assignedState || '').toString().trim().toLowerCase()
+        if (updateFields.cityName && updateFields.cityName.toString().trim().toLowerCase() !== assignedCity) {
+            return res.status(403).json({ result: "failure", msg: "Admin may only update properties in their assigned city.", data: null })
+        }
+        if (updateFields.stateName && assignedState && updateFields.stateName.toString().trim().toLowerCase() !== assignedState) {
+            return res.status(403).json({ result: "failure", msg: "Admin may only update properties in their assigned state.", data: null })
+        }
+    }
+
     const protectedFields = ['propertyName', 'propertyImage', 'propertyImageUrls', 'address', 'areaName', 'cityName', 'stateName', 'latitude', 'longitude']
     const requesterId = (req.body.ownerId || req.body.vendorId || req.body.userIDFK || '').toString()
     const ownerId = (existingForGovernance?.vendorId || existingForGovernance?.userIDFK || '').toString()
@@ -2412,7 +2491,7 @@ router.post('/updateProperty', async (req, res) => {
         return res.json({ result: "success", msg: "Protected changes submitted for admin approval.", data: existingForGovernance })
     }
 
-    const updated = await Property.updateOne({ _id: req.body.id }, { $set: updateFields })
+    const updated = await Property.updateOne(propertyQuery, { $set: updateFields })
     if (updated.modifiedCount > 0) {
         const objProperty = await Property.findOne({ _id: req.body.id, isActive: true }).populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact']).populate('propertyTypeIDFK', ['typeName'])
         res.json({ result: "success", msg: "Property Updated", data: objProperty })
@@ -2428,8 +2507,12 @@ router.post('/updateProperty', async (req, res) => {
 
 router.post('/deleteProperty', async (req, res) => {
     const ownerId = asObjectId(req.body.ownerId || req.body.vendorId || req.body.userIDFK)
-    const property = await Property.findOne({ _id: req.body.id }).select('userIDFK vendorId propertyName isActive status approvalStatus')
-    if (!property) return res.json({ result: "failure", msg: "Property not found.", data: 0 })
+    const propertyQuery = { _id: req.body.id }
+    if (req.auth?.role === 'admin') {
+        Object.assign(propertyQuery, adminCityScope(req))
+    }
+    const property = await Property.findOne(propertyQuery).select('userIDFK vendorId propertyName isActive status approvalStatus')
+    if (!property) return res.json({ result: "failure", msg: "Property not found or access denied.", data: 0 })
     const propertyOwnerId = (property.vendorId || property.userIDFK || '').toString()
     const isOwnerDeleteRequest = ownerId && propertyOwnerId && ownerId.toString() === propertyOwnerId && !req.body.adminId && !req.body.performerRole
     if (isOwnerDeleteRequest) {
@@ -2449,7 +2532,7 @@ router.post('/deleteProperty', async (req, res) => {
         })
         return res.json({ result: "success", msg: "Delete request submitted for admin approval.", data: request })
     }
-    const objDeleteProperty = await Property.updateOne({ _id: req.body.id }, { isActive: false })
+    const objDeleteProperty = await Property.updateOne(propertyQuery, { isActive: false })
     if (objDeleteProperty.modifiedCount > 0) {
         res.json({ result: "success", msg: "Property deleted successfully", data: 1 })
     } else {
@@ -2458,17 +2541,52 @@ router.post('/deleteProperty', async (req, res) => {
 })
 
 router.get('/getAdminStats', async (req, res) => {
-    const [users, vendors, activeProperties, inactiveProperties, inquiries, pendingProperties, visitLeads, convertedVisits, convertedInquiries] = await Promise.all([
-        User.countDocuments({ isActive: true, userType: { $ne: "Admin" } }),
-        User.countDocuments({ isActive: true, userType: { $in: accountTypeVariants('Owner') } }),
-        Property.countDocuments({ isActive: true }),
-        Property.countDocuments({ isActive: false }),
-        Inquiry.countDocuments({ isActive: true }),
-        Property.countDocuments({ isActive: true, approvalStatus: "Pending" }),
-        Visit.countDocuments({ isActive: true }),
-        Visit.countDocuments({ isActive: true, isConverted: true }),
-        Inquiry.countDocuments({ isActive: true, isConverted: true }),
+    const userCityScope = adminUserCityScope(req)
+    const propertyCityScope = adminCityScope(req)
+
+    const queries = [
+        User.countDocuments({ isActive: true, userType: { $nin: ['Admin', 'Super Admin'] }, ...userCityScope }),
+        User.countDocuments({ isActive: true, userType: { $in: accountTypeVariants('Owner') }, ...userCityScope }),
+        Property.countDocuments({ isActive: true, ...propertyCityScope }),
+        Property.countDocuments({ isActive: false, ...propertyCityScope }),
+        Property.countDocuments({ isActive: true, approvalStatus: 'Pending', ...propertyCityScope }),
+    ]
+
+    const [users, vendors, activeProperties, inactiveProperties, pendingProperties] = await Promise.all(queries)
+
+    const inquiryCountResult = await Inquiry.aggregate([
+        { $match: { isActive: true } },
+        { $lookup: { from: 'propertymasters', localField: 'propertyIDFK', foreignField: '_id', as: 'property' } },
+        { $unwind: '$property' },
+        { $match: propertyCityScope },
+        { $count: 'count' },
     ])
+    const visitCountResult = await Visit.aggregate([
+        { $match: { isActive: true } },
+        { $lookup: { from: 'propertymasters', localField: 'propertyIDFK', foreignField: '_id', as: 'property' } },
+        { $unwind: '$property' },
+        { $match: propertyCityScope },
+        { $count: 'count' },
+    ])
+    const convertedVisitCountResult = await Visit.aggregate([
+        { $match: { isActive: true, isConverted: true } },
+        { $lookup: { from: 'propertymasters', localField: 'propertyIDFK', foreignField: '_id', as: 'property' } },
+        { $unwind: '$property' },
+        { $match: propertyCityScope },
+        { $count: 'count' },
+    ])
+    const convertedInquiryCountResult = await Inquiry.aggregate([
+        { $match: { isActive: true, isConverted: true } },
+        { $lookup: { from: 'propertymasters', localField: 'propertyIDFK', foreignField: '_id', as: 'property' } },
+        { $unwind: '$property' },
+        { $match: propertyCityScope },
+        { $count: 'count' },
+    ])
+
+    const inquiries = inquiryCountResult[0]?.count || 0
+    const visitLeads = visitCountResult[0]?.count || 0
+    const convertedVisits = convertedVisitCountResult[0]?.count || 0
+    const convertedInquiries = convertedInquiryCountResult[0]?.count || 0
 
     res.json({
         result: "success",
@@ -2676,7 +2794,7 @@ const buildAdminPropertyQuery = (query = {}) => {
     if (query.verificationStatus === 'unverified') filters.isVerified = false
     if (query.propertyStatus === 'live') Object.assign(filters, { isDummy: false, isActive: true, status: { $nin: ['archived', 'suspended'] }, approvalStatus: { $in: ['Approved', 'Verified'] } })
     if (query.propertyStatus === 'demo') Object.assign(filters, { isDummy: true })
-    if (query.propertyStatus === 'hidden') filters.isActive = false
+    if (query.propertyStatus === 'hidden') filters.$or = [...(filters.$or || []), { isActive: false }, { status: 'archived' }]
     if (query.propertyStatus === 'pending') filters.approvalStatus = 'Pending'
     if (query.propertyStatus === 'verified') Object.assign(filters, { isVerified: true, approvalStatus: { $in: ['Approved', 'Verified'] } })
     if (query.propertyStatus === 'suspended') filters.$or = [...(filters.$or || []), { status: 'suspended' }, { approvalStatus: 'Suspended' }]
@@ -3089,7 +3207,7 @@ router.post('/property-update-requests/:id/review', attachAuthenticatedUser, req
 // Input: { q, limit?: number }
 // Output: { result, data: { properties: [ { property, owner, leads:{visits:[], inquiries:[]} } ] } }
 router.use(
-    ['/admin', '/analytics', '/properties', '/vendors', '/users', '/create-account', '/auditLogs', '/governance', '/dummy-transition', '/city-states', '/leads', '/moveIns', '/payment-requests'],
+    ['/admin', '/analytics', '/properties', '/vendors', '/users', '/create-account', '/auditLogs', '/governance', '/dummy-transition', '/city-states', '/leads', '/moveIns', '/payment-requests', '/getAdminUsers', '/getAdminStats'],
     attachAuthenticatedUser,
     requireRoles(['admin', 'super_admin'])
 )
@@ -3105,10 +3223,10 @@ router.post('/admin/searchProperty', async (req, res) => {
     try {
         const normalizedSearch = canonicalLocationName(q)
         const regexes = [...new Set([q, normalizedSearch])].map((value) => normalizedRegex(value))
+        const isCityOnlySearch = q.split(/\s+/).filter(Boolean).length === 1
+        const scopedQuery = { ...publicPropertyQuery, isActive: true, ...adminCityScope(req) }
 
-        const propertyMatches = await Property.find({
-            ...publicPropertyQuery,
-            isActive: true,
+        const textMatchClause = {
             $or: regexes.flatMap((regex) => [
                 { propertyName: regex },
                 { description: regex },
@@ -3118,7 +3236,24 @@ router.post('/admin/searchProperty', async (req, res) => {
                 { propertyCategory: regex },
                 { aminityFeatures: regex },
             ]),
-        })
+        }
+
+        const propertyQuery = {
+            ...scopedQuery,
+            $and: [textMatchClause],
+        }
+
+        if (isCityOnlySearch) {
+            propertyQuery.$and.push({
+                $or: [
+                    { cityName: regexes[0] },
+                    { areaName: regexes[0] },
+                    { address: regexes[0] },
+                ],
+            })
+        }
+
+        const propertyMatches = await Property.find(propertyQuery)
             .limit(limit)
             .select('_id userIDFK vendorId propertyName description address rent sharing genderType areaName cityName propertyTypeIDFK aminityFeatures propertyImage propertyImageUrls videoUrl propertyCategory approvalStatus isActive isAvailable roomInventory verificationChecklist')
 
@@ -3215,7 +3350,8 @@ const getVendorFullProfile = async (req, res) => {
             return res.json({ result: 'failure', msg: 'Vendor not found', data: null })
         }
 
-        const properties = await Property.find({ $or: [{ userIDFK: vendorObjId }, { vendorId: vendorObjId }] }).select('_id userIDFK vendorId propertyName description address rent sharing genderType areaName cityName propertyTypeIDFK propertyImage propertyImageUrls videoUrl propertyCategory approvalStatus isAvailable isActive roomInventory verificationChecklist rating vacancyStatus')
+        const propertyScope = req.auth?.role === 'admin' ? adminCityScope(req) : {}
+        const properties = await Property.find({ $and: [{ $or: [{ userIDFK: vendorObjId }, { vendorId: vendorObjId }] }, propertyScope] }).select('_id userIDFK vendorId propertyName description address rent sharing genderType areaName cityName propertyTypeIDFK propertyImage propertyImageUrls videoUrl propertyCategory approvalStatus isAvailable isActive roomInventory verificationChecklist rating vacancyStatus')
         const propertyIds = properties.map((p) => p._id)
 
         const [visits, inquiries] = await Promise.all([
@@ -3376,14 +3512,23 @@ router.post('/updateUserStatus', async (req, res) => {
     if (req.body.accountStatus !== undefined) updateFields.accountStatus = req.body.accountStatus
     if (req.body.isVerified !== undefined) updateFields.isVerified = req.body.isVerified === true || req.body.isVerified === 'true'
     if (req.body.permissions !== undefined) updateFields.permissions = Array.isArray(req.body.permissions) ? req.body.permissions : parseStringList(req.body.permissions)
-    if (req.body.assignedCity !== undefined) updateFields.assignedCity = req.body.assignedCity
-    if (req.body.assignedState !== undefined) updateFields.assignedState = req.body.assignedState
+    if (req.body.assignedCity !== undefined) {
+        updateFields.assignedCity = canonicalLocationName(req.body.assignedCity)
+        updateFields.city = updateFields.assignedCity
+    }
+    if (req.body.assignedState !== undefined) {
+        updateFields.assignedState = normalizeText(req.body.assignedState)
+        updateFields.state = updateFields.assignedState
+    }
     if (req.body.forceLogout) updateFields.forceLogoutAt = new Date()
     if (!Object.keys(updateFields).length) return res.json({ result: "failure", msg: "No user status update supplied", data: null })
 
     const previous = await User.findOne({ _id: req.body.id }).select('-userPassword')
     const access = assertAdminCanManageUser(req, previous)
     if (!access.ok) return res.status(access.status).json({ result: 'failure', msg: access.msg, data: null })
+    if (normalizeAccountType(previous?.userType) === 'admin' && (updateFields.assignedCity !== undefined || updateFields.assignedState !== undefined)) {
+        await syncAdminCityAssignment(previous._id, updateFields.assignedCity ?? previous.assignedCity, updateFields.assignedState ?? previous.assignedState)
+    }
     const user = await User.findOneAndUpdate({ _id: req.body.id }, { $set: updateFields }, { new: true }).select('-userPassword')
     if (user) {
         await recordAudit({ performerId: req.body.adminId || req.body.performerId, performerRole: req.body.performerRole || 'Admin', action: 'account_status_changed', entityType: 'user', entityId: req.body.id, previousValue: previous?.toObject?.() || previous || {}, updatedValue: updateFields, city: user?.assignedCity, state: user?.assignedState })
@@ -3425,8 +3570,14 @@ router.post('/users/:id', async (req, res) => {
         updateFields.permissions = defaultPermissionsByRole(updateFields.userType)
     }
     if (req.body.permissions !== undefined) updateFields.permissions = Array.isArray(req.body.permissions) ? req.body.permissions : parseStringList(req.body.permissions)
-    if (req.body.assignedCity !== undefined) updateFields.assignedCity = req.body.assignedCity
-    if (req.body.assignedState !== undefined) updateFields.assignedState = req.body.assignedState
+    if (req.body.assignedCity !== undefined) {
+        updateFields.assignedCity = canonicalLocationName(req.body.assignedCity)
+        updateFields.city = updateFields.assignedCity
+    }
+    if (req.body.assignedState !== undefined) {
+        updateFields.assignedState = normalizeText(req.body.assignedState)
+        updateFields.state = updateFields.assignedState
+    }
     if (req.body.businessName !== undefined) updateFields.businessName = req.body.businessName
     if (req.body.vendorType !== undefined) updateFields.vendorType = req.body.vendorType
     if (req.body.isDummy !== undefined) updateFields.isDummy = toBoolean(req.body.isDummy)
@@ -3453,6 +3604,14 @@ router.post('/users/:id', async (req, res) => {
     if (!access.ok) return res.status(access.status).json({ result: 'failure', msg: access.msg, data: null })
     if (req.auth?.role === 'admin' && (updateFields.userType || updateFields.permissions || updateFields.assignedCity || updateFields.assignedState)) {
         return res.status(403).json({ result: 'failure', msg: 'City Admins cannot change roles, permissions, or admin scope.', data: null })
+    }
+    const previousRole = normalizeAccountType(previous?.userType)
+    const nextRole = updateFields.userType ? normalizeAccountType(updateFields.userType) : previousRole
+    if (previousRole === 'admin' && nextRole !== 'admin') {
+        await CityState.updateMany({ assignedAdmins: previous._id }, { $pull: { assignedAdmins: previous._id }, updatedOn: new Date() })
+    }
+    if (nextRole === 'admin' && (updateFields.assignedCity !== undefined || updateFields.assignedState !== undefined || previousRole !== 'admin')) {
+        await syncAdminCityAssignment(previous._id, updateFields.assignedCity ?? previous.assignedCity, updateFields.assignedState ?? previous.assignedState)
     }
     if (updateFields.userType && previous && previous.userType !== updateFields.userType) {
         updateFields.roleHistory = [...(previous.roleHistory || []), { from: previous.userType, to: updateFields.userType, changedBy: req.body.adminId || req.body.performerId, changedOn: new Date() }]
@@ -3789,6 +3948,7 @@ router.post('/properties/bulk', async (req, res) => {
     if (req.body.action === 'mark_live') Object.assign(update, { isDummy: false, status: 'active', isActive: true, approvalStatus: 'Approved', isVerified: true })
     if (req.body.action === 'mark_demo') Object.assign(update, { isDummy: true, status: 'demo', isActive: true })
     if (req.body.action === 'hide_publicly') update.isActive = false
+    if (req.body.action === 'unhide_publicly') Object.assign(update, { isActive: true, status: 'active' })
     if (req.body.action === 'archive') Object.assign(update, { status: 'archived', isActive: false })
     if (req.body.action === 'unarchive') Object.assign(update, { status: 'active', isActive: true })
     if (req.body.action === 'verify') Object.assign(update, { isVerified: true, approvalStatus: 'Verified' })
@@ -3906,6 +4066,9 @@ router.post('/create-account', async (req, res) => {
         addedOn: new Date(),
         isActive: true,
     })
+    if (normalizeAccountType(role) === 'admin' && (user.assignedCity || user.assignedState)) {
+        await syncAdminCityAssignment(user._id, user.assignedCity, user.assignedState)
+    }
     await recordAudit({ performerId: req.body.performerId || req.body.adminId, performerRole: req.body.performerRole || 'Admin', action: 'admin_created_account', entityType: 'user', entityId: user._id, updatedValue: { userType: role, permissions: user.permissions, assignedCity: user.assignedCity }, city: user.assignedCity, state: user.assignedState })
     const clean = user.toObject()
     delete clean.userPassword
@@ -4059,8 +4222,12 @@ router.post('/city-states', requireSuperAdmin, async (req, res) => {
 
 router.post('/city-states/:id/assign-admins', requireSuperAdmin, async (req, res) => {
     const adminIds = (req.body.adminIds || req.body.assignedAdmins || []).filter((id) => mongoose.Types.ObjectId.isValid(id))
-    const city = await CityState.findOneAndUpdate({ _id: req.params.id }, { $set: { assignedAdmins: adminIds, updatedOn: new Date() } }, { new: true })
+    const city = await CityState.findOne({ _id: req.params.id })
     if (!city) return res.json({ result: 'failure', msg: 'City/state not found.', data: null })
+    await CityState.updateMany({ assignedAdmins: { $in: adminIds }, _id: { $ne: city._id } }, { $pull: { assignedAdmins: { $in: adminIds } }, updatedOn: new Date() })
+    city.assignedAdmins = adminIds
+    city.updatedOn = new Date()
+    await city.save()
     await User.updateMany({ _id: { $in: adminIds }, userType: { $in: accountTypeVariants('Admin') } }, { $set: { assignedCity: city.cityName, assignedState: city.stateName, city: city.cityName, state: city.stateName } })
     await recordAudit({ performerId: req.auth.user._id, performerRole: 'Super Admin', action: 'city_admins_assigned', entityType: 'city_state', entityId: city._id, updatedValue: { adminIds }, city: city.cityName, state: city.stateName })
     res.json({ result: 'success', msg: 'Admins assigned.', data: city })

@@ -365,6 +365,7 @@ function AddPropertyPage() {
           referralAgreementAccepted: form.referralAgreementAccepted,
           leadPricingAccepted: form.leadPricingAccepted,
           ownerTermsAccepted: form.ownerTermsAccepted,
+          ...(role === 'admin' ? { adminId: user?._id, performerRole: 'Admin' } : {}),
           })
         setMessage('Property updated. Availability, rent, and room details are live; protected fields such as name, address, coordinates, and images wait for admin approval.')
       } else {

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiActivity, FiDatabase, FiEye, FiEyeOff } from 'react-icons/fi'
+import { FiActivity, FiDatabase, FiEye, FiEyeOff, FiUsers } from 'react-icons/fi'
 import Card from '../../../components/common/Card'
 import Button from '../../../components/common/Button'
 import AdvancedDataTable from '../../../components/admin/AdvancedDataTable'
@@ -18,19 +18,26 @@ function SuperAdminDashboard() {
   const [accountForm, setAccountForm] = useState({ name: '', email: '', phone: '', role: 'Admin', assignedCity: 'Bangalore', assignedState: 'Karnataka', temporaryPassword: '' })
   const [dummyForm, setDummyForm] = useState({ city: 'Bangalore', locality: '', scope: 'properties', isDummy: true, visible: true, status: 'demo' })
   const [propertyFilters, setPropertyFilters] = useState({ city: '', locality: '', propertyStatus: '', demoLive: '', verificationStatus: '', approvalStatus: '', occupancy: '' })
+  const [adminAssignForm, setAdminAssignForm] = useState({ assignedCity: 'Bangalore', assignedState: 'Karnataka', permissions: ['manage_users', 'manage_properties', 'manage_moderation', 'view_city_analytics'] })
+  const [editAdmin, setEditAdmin] = useState(null)
+  const [editAdminForm, setEditAdminForm] = useState({ assignedCity: '', assignedState: '', permissions: [] })
   const [bulkRequest, setBulkRequest] = useState(null)
   const [selectedAudit, setSelectedAudit] = useState(null)
   const [toast, setToast] = useState('')
   const { data: governance = { summary: {}, cityRows: [], auditLogs: [] }, isLoading } = useQuery({ queryKey: ['super-admin-governance'], queryFn: adminApi.governance, refetchInterval: 30_000 })
   const { data: cityStateData = { items: [] } } = useQuery({ queryKey: ['super-admin-city-states'], queryFn: () => adminApi.cityStates({ active: true }) })
-  const { data: adminUsers = [] } = useQuery({ queryKey: ['super-admin-admin-users'], queryFn: () => adminApi.users({ role: 'Admin', status: 'active', limit: 100 }) })
+  const { data: adminUsers = [] } = useQuery({ queryKey: ['super-admin-admin-users'], queryFn: () => adminApi.users({ role: 'Admin', status: 'all', limit: 100 }) })
   const propertyParams = useMemo(() => ({ ...propertyFilters, limit: 50 }), [propertyFilters])
   const { data: propertiesData = { items: [] }, isFetching: propertiesLoading } = useQuery({ queryKey: ['super-admin-properties', propertyParams], queryFn: () => adminApi.properties(propertyParams), refetchInterval: 30_000 })
   const properties = propertiesData.items || []
 
   const createAccount = useMutation({
     mutationFn: (payload) => adminApi.createAccount({ ...payload, performerId: user?._id, performerRole: 'Super Admin', permissions: payload.role === 'Admin' ? ['manage_users', 'manage_properties', 'manage_moderation', 'view_city_analytics'] : undefined }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['super-admin-governance'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['super-admin-governance'] })
+      queryClient.invalidateQueries({ queryKey: ['super-admin-admin-users'] })
+      queryClient.invalidateQueries({ queryKey: ['super-admin-city-states'] })
+    },
   })
 
   const dummyTransition = useMutation({
@@ -51,6 +58,94 @@ function SuperAdminDashboard() {
       queryClient.invalidateQueries({ queryKey: ['super-admin-properties'] })
     },
   })
+
+  const assignAdminsMutation = useMutation({
+    mutationFn: async ({ ids, assignedCity, assignedState, permissions }) => {
+      if (!ids.length) throw new Error('Select at least one admin first.')
+      await Promise.all(ids.map((id) => adminApi.updateUserStatus(id, {
+        assignedCity,
+        assignedState,
+        city: assignedCity,
+        state: assignedState,
+        permissions,
+        performerId: user?._id,
+        performerRole: 'Super Admin',
+      })))
+      const matchingCity = (cityStateData.items || []).find((item) => item.cityName?.toLowerCase() === assignedCity.toLowerCase() && (!assignedState || item.stateName?.toLowerCase() === assignedState.toLowerCase()))
+      if (matchingCity?._id) {
+        await adminApi.assignCityAdmins(matchingCity._id, { adminIds: ids })
+      }
+      return ids.length
+    },
+    onSuccess: (count) => {
+      setToast(`${count} admin ${count === 1 ? 'scope' : 'scopes'} updated. City ownership, permissions, and governance rows are refreshing.`)
+      queryClient.invalidateQueries({ queryKey: ['super-admin-admin-users'] })
+      queryClient.invalidateQueries({ queryKey: ['super-admin-city-states'] })
+      queryClient.invalidateQueries({ queryKey: ['super-admin-governance'] })
+    },
+    onError: (error) => setToast(error?.message || 'Admin assignment could not be completed.'),
+  })
+
+  const editAdminMutation = useMutation({
+    mutationFn: async ({ id, updates }) => {
+      if (!id) throw new Error('No admin selected for edit.')
+      return adminApi.updateUser(id, {
+        ...updates,
+        performerId: user?._id,
+        performerRole: 'Super Admin',
+      })
+    },
+    onSuccess: () => {
+      setToast('Admin assignment updated successfully. City scope and permissions are refreshing.')
+      queryClient.invalidateQueries({ queryKey: ['super-admin-admin-users'] })
+      queryClient.invalidateQueries({ queryKey: ['super-admin-city-states'] })
+      queryClient.invalidateQueries({ queryKey: ['super-admin-governance'] })
+      setEditAdmin(null)
+    },
+    onError: (error) => setToast(error?.message || 'Could not save admin changes.'),
+  })
+
+  const openEditAdmin = (admin) => {
+    setEditAdmin(admin)
+    setEditAdminForm({
+      assignedCity: admin.assignedCity || admin.city || '',
+      assignedState: admin.assignedState || admin.state || '',
+      permissions: Array.isArray(admin.permissions) ? [...admin.permissions] : (admin.permissions ? `${admin.permissions}`.split(',').map((item) => item.trim()).filter(Boolean) : []),
+    })
+  }
+
+  const saveEditAdmin = () => {
+    if (!editAdmin) return
+    editAdminMutation.mutate({ id: editAdmin._id || editAdmin.id, updates: {
+      assignedCity: editAdminForm.assignedCity,
+      assignedState: editAdminForm.assignedState,
+      city: editAdminForm.assignedCity,
+      state: editAdminForm.assignedState,
+      permissions: editAdminForm.permissions,
+    } })
+  }
+
+  const suspendAdminMutation = useMutation({
+    mutationFn: async ({ id, isActive }) => {
+      if (!id) throw new Error('No admin selected for suspension.')
+      return adminApi.updateUserStatus(id, {
+        isActive,
+        performerId: user?._id,
+        performerRole: 'Super Admin',
+      })
+    },
+    onSuccess: ({ name, email, isActive }) => {
+      setToast(`Admin ${name || email} has been ${isActive ? 'activated' : 'suspended'}. Governance data is refreshing.`)
+      queryClient.invalidateQueries({ queryKey: ['super-admin-admin-users'] })
+      queryClient.invalidateQueries({ queryKey: ['super-admin-city-states'] })
+      queryClient.invalidateQueries({ queryKey: ['super-admin-governance'] })
+    },
+    onError: (error) => setToast(error?.message || 'Unable to update admin active state.'),
+  })
+
+  const toggleAdminActive = (admin, isActive) => {
+    suspendAdminMutation.mutate({ id: admin._id || admin.id, isActive })
+  }
 
   const launchCity = useMutation({
     mutationFn: ({ id }) => adminApi.launchCity(id, { hideDemo: true }),
@@ -124,6 +219,7 @@ function SuperAdminDashboard() {
     suspend: { title: 'Suspend selected properties?', body: ['block public visibility', 'mark listings suspended', 'notify property owners'] },
     assign_city: { title: 'Assign selected properties to city?', body: ['move listings into the chosen city scope', 'sync dashboard filters', 'make city-admin ownership clearer'] },
     assign_admin: { title: 'Assign selected properties to admin?', body: ['attach an admin owner for operations', 'keep city moderation accountable', 'record the assignment in audit logs'] },
+    unhide_publicly: { title: 'Unhide selected properties publicly?', body: ['restore listings to public search eligibility', 'keep approved listings active', 'record the visibility restore in audit logs'] },
   }
   const openBulkAction = (action, selectedIds, extra = {}) => {
     const ids = selectedIds
@@ -138,11 +234,40 @@ function SuperAdminDashboard() {
     bulkMutation.mutate({ ids: bulkRequest.ids, action: bulkRequest.action, city: bulkRequest.city, state: bulkRequest.state, locality: bulkRequest.locality, assignedAdmin: bulkRequest.assignedAdmin })
   }
   const cityStateByName = new Map((cityStateData.items || []).map((item) => [item.cityName?.toLowerCase(), item]))
+  const selectedCityState = (cityStateData.items || []).find((item) => item.cityName?.toLowerCase() === adminAssignForm.assignedCity.toLowerCase())
   const availableAdmins = Array.from(new Map([
     ...(cityStateData.items || []).flatMap((city) => city.assignedAdmins || []),
     ...(adminUsers || []),
   ].map((admin) => [admin._id || admin.id, admin])).values())
   const cityRowByName = new Map((governance.cityRows || []).map((row) => [row.city, row]))
+  const adminColumns = [
+    { key: 'admin', label: 'Admin', value: (admin) => `${admin.name} ${admin.email}`, render: (admin) => (
+      <div>
+        <p className="font-semibold text-white">{admin.name || admin.email}</p>
+        <p className="mt-1 text-xs text-slate-500">{admin.email || '-'} · {admin.objectId || admin.id}</p>
+      </div>
+    ) },
+    { key: 'scope', label: 'City scope', value: (admin) => `${admin.assignedCity || admin.city || '-'} ${admin.assignedState || admin.state || ''}`, render: (admin) => (
+      <div>
+        <p className="text-slate-200">{admin.assignedCity || admin.city || '-'}</p>
+        <p className="mt-1 text-xs text-slate-500">{admin.assignedState || admin.state || 'Unmapped state'}</p>
+      </div>
+    ) },
+    { key: 'status', label: 'Status', value: (admin) => admin.accountStatus || (admin.isActive ? 'active' : 'inactive'), render: (admin) => <StatusChip status={admin.isActive ? 'LIVE' : 'HIDDEN'} title={admin.isActive ? 'Admin account is active.' : 'Admin account is inactive.'} /> },
+    { key: 'permissions', label: 'Permissions', value: (admin) => (admin.permissions || []).join(' '), render: (admin) => <p className="max-w-sm text-xs leading-5 text-slate-400">{(admin.permissions || []).join(', ') || 'Default admin permissions'}</p> },
+    { key: 'actions', label: 'Actions', value: () => '-', render: (admin) => (
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => openEditAdmin(admin)} className="rounded-full border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-accent-500">Edit</button>
+        <button
+          type="button"
+          onClick={() => toggleAdminActive(admin, !(admin.isActive !== false))}
+          className="rounded-full border border-rose-500/60 px-3 py-2 text-sm text-rose-200 hover:border-rose-400"
+        >
+          {admin.isActive !== false ? 'Suspend' : 'Activate'}
+        </button>
+      </div>
+    ) },
+  ]
   const scrollToProperties = () => window.setTimeout(() => document.getElementById('super-admin-properties')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0)
   const applySummaryFilter = (filter, label) => {
     setPropertyFilters((current) => ({ ...current, ...filter }))
@@ -266,6 +391,60 @@ function SuperAdminDashboard() {
       </div>
 
       <AdvancedDataTable
+        title="Admin control"
+        eyebrow="Assign city scope and permissions"
+        rows={adminUsers}
+        columns={adminColumns}
+        rowId={(admin) => admin.id || admin._id}
+        minWidth="920px"
+        emptyMessage="No admin accounts found. Create an Admin account above, then assign a city scope here."
+        actions={({ selected }) => (
+          <div>
+            <div className="mb-4 flex items-start gap-3 text-sm text-slate-400">
+              <FiUsers className="mt-1 text-accent-400" />
+              <p>{selected.length} admins selected. Super Admin can assign city/state ownership and operational permissions for all city tasks.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.4fr_auto]">
+              <select
+                value={adminAssignForm.assignedCity}
+                onChange={(event) => {
+                  const city = (cityStateData.items || []).find((item) => item.cityName === event.target.value)
+                  setAdminAssignForm((current) => ({ ...current, assignedCity: event.target.value, assignedState: city?.stateName || current.assignedState }))
+                }}
+                className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
+              >
+                <option value="">Choose city</option>
+                {(cityStateData.items || []).map((city) => <option key={city._id || city.cityName} value={city.cityName}>{city.cityName}</option>)}
+              </select>
+              <input
+                value={adminAssignForm.assignedState}
+                onChange={(event) => setAdminAssignForm((current) => ({ ...current, assignedState: event.target.value }))}
+                placeholder="State"
+                className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
+              />
+              <input
+                value={adminAssignForm.permissions.join(', ')}
+                onChange={(event) => setAdminAssignForm((current) => ({ ...current, permissions: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) }))}
+                placeholder="Permissions"
+                className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
+              />
+              <Button
+                onClick={() => assignAdminsMutation.mutate({
+                  ids: selected,
+                  assignedCity: adminAssignForm.assignedCity,
+                  assignedState: adminAssignForm.assignedState || selectedCityState?.stateName,
+                  permissions: adminAssignForm.permissions,
+                })}
+                disabled={!selected.length || !adminAssignForm.assignedCity || assignAdminsMutation.isPending}
+              >
+                Assign admins
+              </Button>
+            </div>
+          </div>
+        )}
+      />
+
+      <AdvancedDataTable
         title="City launch status"
         eyebrow="Real vs demo visibility"
         rows={governance.cityRows || []}
@@ -343,6 +522,7 @@ function SuperAdminDashboard() {
               <button type="button" onClick={() => openBulkAction('mark_live', selected)} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Mark LIVE</button>
               <button type="button" onClick={() => openBulkAction('mark_demo', selected)} className="rounded-full border border-amber-500/60 px-4 py-2 text-sm text-amber-200">Mark DEMO</button>
               <button type="button" onClick={() => openBulkAction('hide_publicly', selected)} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Hide Publicly</button>
+              <button type="button" onClick={() => openBulkAction('unhide_publicly', selected)} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Unhide Publicly</button>
               <button type="button" onClick={() => openBulkAction('archive', selected)} className="rounded-full border border-zinc-500/60 px-4 py-2 text-sm text-zinc-200">Archive</button>
               <button type="button" onClick={() => openBulkAction('unarchive', selected)} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Unarchive</button>
               <button type="button" onClick={() => openBulkAction('verify', selected)} className="rounded-full border border-cyan-500/60 px-4 py-2 text-sm text-cyan-200">Verify</button>
@@ -375,6 +555,44 @@ function SuperAdminDashboard() {
             <div className="mt-6 flex flex-wrap justify-end gap-3">
               <Button variant="secondary" onClick={() => setBulkRequest(null)}>Cancel</Button>
               <Button onClick={confirmBulkAction} disabled={bulkMutation.isPending || (bulkRequest.action === 'assign_city' && !bulkRequest.city) || (bulkRequest.action === 'assign_admin' && !bulkRequest.assignedAdmin)}>Confirm</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {editAdmin ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-slate-700 bg-surface-800 p-6 shadow-card">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-accent-400">Edit admin scope</p>
+                <h2 className="mt-3 text-2xl font-semibold text-white">{editAdmin.name || editAdmin.email}</h2>
+              </div>
+              <button type="button" onClick={() => setEditAdmin(null)} className="rounded-full border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-accent-500">Close</button>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <input
+                value={editAdminForm.assignedCity}
+                onChange={(event) => setEditAdminForm((current) => ({ ...current, assignedCity: event.target.value }))}
+                placeholder="Assigned city"
+                className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
+              />
+              <input
+                value={editAdminForm.assignedState}
+                onChange={(event) => setEditAdminForm((current) => ({ ...current, assignedState: event.target.value }))}
+                placeholder="Assigned state"
+                className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
+              />
+              <textarea
+                rows={3}
+                value={editAdminForm.permissions.join(', ')}
+                onChange={(event) => setEditAdminForm((current) => ({ ...current, permissions: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) }))}
+                placeholder="Permissions (comma separated)"
+                className="sm:col-span-2 rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
+              />
+            </div>
+            <div className="mt-5 flex flex-wrap justify-end gap-3">
+              <Button variant="secondary" onClick={() => setEditAdmin(null)}>Cancel</Button>
+              <Button onClick={saveEditAdmin} disabled={editAdminMutation.isPending || !editAdminForm.assignedCity}>Save changes</Button>
             </div>
           </div>
         </div>

@@ -83,7 +83,8 @@ function PropertyDetailPage() {
   useEffect(() => {
     const loadProperty = async () => {
       try {
-        const data = await propertyService.fetchPropertyById(activePropertyId)
+        const includePrivate = ['owner', 'admin', 'super-admin'].includes(role)
+        const data = await propertyService.fetchPropertyById(activePropertyId, { includePrivate })
         setProperty(data)
         const viewed = JSON.parse(localStorage.getItem('stayjiViewed') || '[]')
         localStorage.setItem('stayjiViewed', JSON.stringify([activePropertyId, ...viewed.filter((item) => item !== activePropertyId)].slice(0, 20)))
@@ -106,7 +107,7 @@ function PropertyDetailPage() {
       }
     }
     loadProperty()
-  }, [activePropertyId, user?._id])
+  }, [activePropertyId, role, user?._id])
 
   const isAdmin = role === 'admin' || role === 'super-admin'
   const isOwnerView = role === 'owner'

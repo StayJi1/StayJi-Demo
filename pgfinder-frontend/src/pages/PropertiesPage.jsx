@@ -144,11 +144,6 @@ function PropertiesPage() {
   } = useCurrentLocation()
 
   useEffect(() => {
-    if (role === 'owner') {
-      navigate('/dashboard/owner/properties', { replace: true })
-      return
-    }
-
     const loadWishlist = async () => {
       if (!isAuthenticated || !user?._id) {
         setSavedPropertyIds(new Set())
@@ -321,61 +316,72 @@ function PropertiesPage() {
     const matchingProperties = properties.map((item) => ({
       ...item,
       distanceKm: hasUserLocation ? getDistanceKm(position, item.location) : undefined,
-    })).filter((item) => {
-      const haystack = [
-        item.name,
-        item.description,
-        item.address,
-        item.city,
-        item.area,
-        item.locationLabel,
-        item.type,
-        item.category,
-        item.gender,
-        ...(item.amenities || []),
-      ].filter(Boolean).join(' ').toLowerCase()
+    }))
+      .filter((item) => {
+        const haystack = [
+          item.name,
+          item.description,
+          item.address,
+          item.city,
+          item.cityName,
+          item.state,
+          item.stateName,
+          item.area,
+          item.areaName,
+          item.locationLabel,
+          item.type,
+          item.category,
+          item.gender,
+          ...(item.amenities || []),
+        ].filter(Boolean).join(' ').toLowerCase()
 
-      if (searchTokens.length && !searchTokens.every((token) => {
-        if (haystack.includes(token)) return true
-        return [item.name, item.city, item.area, item.locationLabel, item.category, item.type]
+        const locationFields = [item.city, item.cityName, item.area, item.areaName, item.locationLabel, item.state, item.stateName]
           .filter(Boolean)
           .join(' ')
           .toLowerCase()
-          .split(/\W+/)
-          .some((word) => isSimilarToken(token, word))
-      })) {
-        return false
-      }
+        const isCityOnlySearch = searchTokens.length === 1 && normalizedSearch.split(/\s+/).length === 1
 
-      if (categoryFilters.length) {
-        const categoryMatch = categoryFilters.some((filter) => {
-          if (filter === 'Co-living') return ['Co-ed', 'Boys', 'Girls'].includes(item.gender) || /co.?living|co.?ed/i.test(`${item.category} ${item.type} ${item.description}`)
-          return item.category === filter || item.type === filter
+        if (isCityOnlySearch && !locationFields.includes(normalizedSearch)) {
+          return false
+        }
+
+        if (searchTokens.length && !searchTokens.every((token) => {
+          if (haystack.includes(token)) return true
+          return [item.name, item.city, item.state, item.stateName, item.area, item.locationLabel, item.category, item.type]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .split(/\W+/)
+            .some((word) => isSimilarToken(token, word))
+        })) {
+          return false
+        }
+
+        return utilityFilters.every((filter) => {
+          if (['PG', 'Flat', 'Hotel', 'Hostel', 'Co-living'].includes(filter)) {
+            if (filter === 'Co-living') {
+              return ['Co-ed', 'Boys', 'Girls'].includes(item.gender) || /co.?living|co.?ed/i.test(`${item.category} ${item.type} ${item.description}`)
+            }
+            return item.category === filter || item.type === filter
+          }
+          if (['Boys', 'Girls', 'Co-ed'].includes(filter)) {
+            const allowsCoLiving = categoryFilters.includes('Co-living') || filter === 'Co-ed'
+            return allowsCoLiving || filter === item.gender
+          }
+          if (filter === 'Per-day check-in') return item.perDayCheckIn
+          if (filter === 'Food included') return item.foodIncluded
+          if (filter === 'AC') return item.acAvailable || item.amenities?.some((amenity) => /ac|air conditioning/i.test(amenity))
+          if (filter === 'Non-AC') return !item.acAvailable && !item.amenities?.some((amenity) => /ac|air conditioning/i.test(amenity))
+          if (filter === 'Attached bathroom') return item.amenities?.some((amenity) => /bathroom/i.test(amenity))
+          if (filter === 'Parking') return item.parkingAvailable || item.amenities?.some((amenity) => /parking/i.test(amenity))
+          if (filter === 'Available now') return item.status === 'Available' && item.vacancyStatus !== 'Fully occupied'
+          if (filter === 'Rating 4+') return Number(item.rating) >= 4
+          if (filter === 'Single sharing') return /single|1/i.test(item.sharingAvailability || item.sharing || '')
+          if (filter === 'Double sharing') return /double|2/i.test(item.sharingAvailability || item.sharing || '')
+          if (filter === 'Triple sharing') return /triple|3/i.test(item.sharingAvailability || item.sharing || '')
+          return item.gender === filter
         })
-        if (!categoryMatch) return false
-      }
-
-      if (genderFilters.length) {
-        const allowsCoLiving = categoryFilters.includes('Co-living') || genderFilters.includes('Co-ed')
-        const genderMatch = allowsCoLiving || genderFilters.includes(item.gender)
-        if (!genderMatch) return false
-      }
-
-      return utilityFilters.every((filter) => {
-        if (filter === 'Per-day check-in') return item.perDayCheckIn
-        if (filter === 'Food included') return item.foodIncluded
-        if (filter === 'AC') return item.acAvailable || item.amenities?.some((amenity) => /ac|air conditioning/i.test(amenity))
-        if (filter === 'Non-AC') return !item.acAvailable && !item.amenities?.some((amenity) => /ac|air conditioning/i.test(amenity))
-        if (filter === 'Attached bathroom') return item.amenities?.some((amenity) => /bathroom/i.test(amenity))
-        if (filter === 'Parking') return item.parkingAvailable || item.amenities?.some((amenity) => /parking/i.test(amenity))
-        if (filter === 'Available now') return item.status === 'Available' && item.vacancyStatus !== 'Fully occupied'
-        if (filter === 'Rating 4+') return Number(item.rating) >= 4
-        if (filter === 'Single sharing') return /single|1/i.test(item.sharingAvailability || item.sharing || '')
-        if (filter === 'Double sharing') return /double|2/i.test(item.sharingAvailability || item.sharing || '')
-        if (filter === 'Triple sharing') return /triple|3/i.test(item.sharingAvailability || item.sharing || '')
-        return item.gender === filter
       })
-    })
       .filter((item) => {
         const price = Number(item.rent) || 0
         const min = Number(priceRange.min) || 0
@@ -384,10 +390,15 @@ function PropertiesPage() {
       })
 
     const nearbyMatches = matchingProperties.filter((item) => item.distanceKm !== null && item.distanceKm !== undefined && item.distanceKm <= searchRadiusKm)
-    const propertiesToShow = hasUserLocation && nearbyMode && nearbyMatches.length ? nearbyMatches : matchingProperties
+    const propertiesToShow = matchingProperties
 
     return propertiesToShow
       .sort((a, b) => {
+        if (hasUserLocation && nearbyMode && nearbyMatches.length) {
+          const aIsNearby = a.distanceKm !== null && a.distanceKm !== undefined && a.distanceKm <= searchRadiusKm ? 0 : 1
+          const bIsNearby = b.distanceKm !== null && b.distanceKm !== undefined && b.distanceKm <= searchRadiusKm ? 0 : 1
+          if (aIsNearby !== bIsNearby) return aIsNearby - bIsNearby
+        }
         if (sortBy === 'price-low') return (Number(a.rent) || 0) - (Number(b.rent) || 0)
         if (sortBy === 'price-high') return (Number(b.rent) || 0) - (Number(a.rent) || 0)
         if (sortBy === 'deposit-low') return (Number(a.depositAmount) || 0) - (Number(b.depositAmount) || 0)
@@ -414,6 +425,15 @@ function PropertiesPage() {
     [hasUserLocation, position, properties, searchRadiusKm],
   )
 
+  const suggestedProperties = useMemo(() => {
+    if (filteredProperties.length) return []
+    const filteredIds = new Set(filteredProperties.map((item) => item.id || item._id))
+    return [...properties]
+      .filter((item) => !filteredIds.has(item.id || item._id))
+      .sort((a, b) => Number(Boolean(a.isDummy)) - Number(Boolean(b.isDummy)))
+      .slice(0, 5)
+  }, [filteredProperties, properties])
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <SEO
@@ -427,9 +447,9 @@ function PropertiesPage() {
           <SectionHeading title="Search Bangalore stays" description="Explore Bangalore PGs, flats, hostels, and co-living rooms with price filters, maps, and daily check-in options." />
           <div className="mt-6 grid gap-4 md:grid-cols-4">
             {[
-              { label: 'Live listings', value: properties.length },
-              { label: 'Vacant now', value: properties.filter((item) => item.status === 'Available').length },
-              { label: 'Avg. rating', value: properties.length ? (properties.reduce((sum, item) => sum + (Number(item.rating) || 0), 0) / properties.length).toFixed(1) : '4.6' },
+              { label: 'Live listings', value: filteredProperties.length },
+              { label: 'Vacant now', value: filteredProperties.filter((item) => item.status === 'Available').length },
+              { label: 'Avg. rating', value: filteredProperties.length ? (filteredProperties.reduce((sum, item) => sum + (Number(item.rating) || 0), 0) / filteredProperties.length).toFixed(1) : '4.6' },
               { label: 'Nearby radius', value: `${searchRadiusKm} km` },
             ].map((item) => (
               <div key={item.label} className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card">
@@ -474,9 +494,14 @@ function PropertiesPage() {
             {mapSearchError ? <p className="mt-3 text-sm text-rose-300">{mapSearchError}</p> : null}
             {mapSearchMessage ? <p className="mt-3 text-sm text-emerald-300">{mapSearchMessage}</p> : null}
             {hasUserLocation && nearbyMode ? (
-              <p className="mt-3 text-sm text-emerald-300">
-                Searching within {searchRadiusKm} km first. Search for PG, hotel, flat, hostel, or an area to narrow it down.
-              </p>
+              <>
+                <p className="mt-3 text-sm text-emerald-300">
+                  Searching within {searchRadiusKm} km first. Search for PG, hotel, flat, hostel, or an area to narrow it down.
+                </p>
+                <p className="mt-2 text-sm text-slate-400">
+                  Nearby listings are shown first, but the search still includes all matching properties outside the radius.
+                </p>
+              </>
             ) : null}
             {hasUserLocation && nearbyMode ? (
               <label className="mt-4 block text-sm text-slate-300">
@@ -579,8 +604,27 @@ function PropertiesPage() {
                 />
               ))
             ) : (
-              <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-10 text-center text-slate-300">
-                No properties found. Adjust the filters or search query.
+              <div className="lg:col-span-2">
+                <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-10 text-center text-slate-300">
+                  No properties found. Adjust the filters or search query.
+                </div>
+                {suggestedProperties.length ? (
+                  <div className="mt-6">
+                    <p className="mb-4 text-sm text-slate-400">
+                      If you are interested in other or nearby properties, here are a few listings to explore.
+                    </p>
+                    <div className="grid gap-6 lg:grid-cols-2">
+                      {suggestedProperties.map((property) => (
+                        <PropertyCard
+                          key={property.id || property._id}
+                          property={property}
+                          saved={savedPropertyIds.has(property.id || property._id)}
+                          onToggleSave={handleToggleSave}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             )}
           </div>

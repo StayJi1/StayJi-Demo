@@ -5,6 +5,7 @@ import { FiArrowLeft, FiEdit2, FiEye, FiMessageSquare, FiPower, FiShield, FiTras
 import Card from '../../../components/common/Card'
 import Button from '../../../components/common/Button'
 import adminApi from '../../../api/adminApi'
+import { parseAssetList, toAssetUrl } from '../../../api/propertyApi'
 
 const userName = (user = {}) => user.name || [user.userFname, user.userLname].filter(Boolean).join(' ') || user.userEmail || user.email || 'Owner'
 
@@ -115,7 +116,7 @@ function AdminOwnerDetailPage() {
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {properties.map(({ property, leads }) => {
           const totalPropertyLeads = (leads?.visits?.length || 0) + (leads?.inquiries?.length || 0)
-          const image = property.propertyImageUrls?.[0] || property.propertyImage || property.image
+          const image = toAssetUrl([].concat(parseAssetList(property.propertyImageUrls), property.propertyImage, property.image).filter(Boolean)[0])
           return (
             <Card key={property._id || property.id} className="overflow-hidden p-0">
               {image ? <img src={image} alt={property.propertyName || property.name} className="h-44 w-full object-cover" /> : <div className="h-44 bg-slate-950" />}

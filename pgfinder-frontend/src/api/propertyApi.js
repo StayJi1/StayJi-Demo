@@ -3,7 +3,7 @@ import axiosClient, { baseURL } from './axiosClient'
 const toAssetUrl = (value) => {
   if (!value) return ''
   if (/^https?:\/\//i.test(value)) return value
-  const clean = value.toString().replace(/^\/+/, '')
+  const clean = value.toString().replace(/^\/+/, '').replace(/\\/g, '/')
   if (clean.startsWith('upload/')) return `${baseURL}/${clean}`
   if (clean.startsWith('public/upload/')) return `${baseURL}/${clean.replace(/^public\//, '')}`
   return `${baseURL}/upload/${clean}`
@@ -12,9 +12,23 @@ const toAssetUrl = (value) => {
 const toUploadUrl = (value) => {
   if (!value) return ''
   if (/^https?:\/\//i.test(value)) return value
-  const clean = value.toString().replace(/^\/+/, '')
+  const clean = value.toString().replace(/^\/+/, '').replace(/\\/g, '/')
   if (clean.startsWith('upload/')) return `${baseURL}/${clean}`
+  if (clean.startsWith('public/upload/')) return `${baseURL}/${clean.replace(/^public\//, '')}`
   return `${baseURL}/upload/${clean}`
+}
+
+export const parseAssetList = (value) => {
+  if (!value) return []
+  if (Array.isArray(value)) return value.flatMap(parseAssetList)
+  if (typeof value === 'object' && value !== null) {
+    return parseAssetList(value.image || value.url || '')
+  }
+  const source = value.toString()
+  return source
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 export const normalizeProperty = (property) => {
@@ -27,6 +41,7 @@ export const normalizeProperty = (property) => {
   const mealsAvailable = Array.isArray(property.mealsAvailable) ? property.mealsAvailable : []
 
   const cityName = (property.cityName || property.city || '').toString()
+  const stateName = (property.stateName || property.state || '').toString()
   const inferredCategory = property.propertyCategory || property.category || property.propertyTypeIDFK?.typeName || property.type || 'PG'
   const categoryFallbackImages = {
     PG: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=80',
@@ -36,7 +51,8 @@ export const normalizeProperty = (property) => {
   }
   const fallbackImage = categoryFallbackImages[inferredCategory] || categoryFallbackImages.PG
   const imageUrls = [
-    ...(Array.isArray(property.propertyImageUrls) ? property.propertyImageUrls : []),
+    ...parseAssetList(property.propertyImageUrls),
+    ...parseAssetList(property.images),
     property.propertyImage,
     property.image,
   ].filter(Boolean).map(toAssetUrl)
@@ -71,6 +87,8 @@ export const normalizeProperty = (property) => {
     location: normalizedLocation,
     locationLabel: property.address || property.areaName || property.city || '',
     city: property.cityName || property.city || '',
+    state: stateName,
+    stateName,
     area: property.areaName || property.area || '',
     localitySlug: property.localitySlug || '',
     contact: property.contact || property.userIDFK?.contact || '',

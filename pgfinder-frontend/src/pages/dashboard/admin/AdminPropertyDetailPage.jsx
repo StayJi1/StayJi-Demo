@@ -6,6 +6,7 @@ import { FiArrowLeft, FiCheck, FiEdit2, FiMapPin, FiMessageSquare, FiPower, FiTr
 import Card from '../../../components/common/Card'
 import Button from '../../../components/common/Button'
 import adminApi from '../../../api/adminApi'
+import { parseAssetList, toAssetUrl } from '../../../api/propertyApi'
 import { FieldNote, StatusChip, getOperationalStatus } from '../../../utils/operationalStatus.jsx'
 
 function AdminPropertyDetailPage() {
@@ -52,11 +53,11 @@ function AdminPropertyDetailPage() {
 
   const leads = data.leads || { visits: [], inquiries: [] }
   const images = [
-    ...(property.propertyImageUrls || []),
+    ...parseAssetList(property.propertyImageUrls),
     property.propertyImage,
     property.image,
     ...(data.images || []).map((item) => item.image),
-  ].filter(Boolean)
+  ].filter(Boolean).map(toAssetUrl)
   const chartData = [
     { name: 'Visits', value: leads.visits?.length || 0 },
     { name: 'Callbacks', value: leads.inquiries?.length || 0 },
