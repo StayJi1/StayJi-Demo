@@ -29,6 +29,7 @@ var CityState = require("../models/cityStateMaster");
 var WalletPayout = require("../models/walletPayout");
 var PropertyUpdateRequest = require("../models/propertyUpdateRequest");
 const { hashPassword, isHashedPassword, verifyPassword } = require('../utils/security');
+const { validateObjectIdParam } = require('../middleware/resilience');
 const messageSecret = crypto.createHash('sha256').update(process.env.MESSAGE_SECRET || process.env.SESSION_SECRET || 'stayji-local-message-secret').digest()
 const jwtSecret = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'stayji-local-jwt-secret'
 
@@ -44,6 +45,12 @@ const wrapAsync = (handler) => (req, res, next) => {
 ;['get', 'post', 'put', 'patch', 'delete'].forEach((method) => {
     const original = router[method].bind(router)
     router[method] = (...args) => original(...args.map((arg) => (typeof arg === 'function' ? wrapAsync(arg) : arg)))
+})
+
+router.param('messageId', validateObjectIdParam('messageId'))
+router.param('id', (req, res, next, value) => {
+    if (req.originalUrl.includes('/user/saved-searches/')) return next()
+    return validateObjectIdParam('id')(req, res, next, value)
 })
 
 const normalizeText = (value = '') => value.toString().trim().replace(/\s+/g, ' ')

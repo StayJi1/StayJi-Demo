@@ -17,6 +17,23 @@ var Visit = require("../models/visitDetails");
 var Payment = require("../models/paymentMaster");
 const { hashPassword, isHashedPassword, verifyPassword } = require('../utils/security');
 const { body } = require('express-validator');
+const { validateObjectIdParam } = require('../middleware/resilience');
+
+const wrapAsync = (handler) => (req, res, next) => {
+  try {
+    const result = handler(req, res, next);
+    if (result && typeof result.catch === 'function') result.catch(next);
+  } catch (error) {
+    next(error);
+  }
+};
+
+['get', 'post', 'put', 'patch', 'delete'].forEach((method) => {
+  const original = router[method].bind(router);
+  router[method] = (...args) => original(...args.map((arg) => (typeof arg === 'function' ? wrapAsync(arg) : arg)));
+});
+
+router.param('id', validateObjectIdParam('id'));
 const defaultAdmin = {
   userName: 'Admin',
   userFname: 'Admin',

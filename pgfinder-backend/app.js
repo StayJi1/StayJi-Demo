@@ -16,9 +16,26 @@ const session = require('express-session');
 var cors = require("cors");
 var helmet = require("helmet");
 var rateLimit = require("express-rate-limit");
+const {
+    errorHandler,
+    notFoundHandler,
+    requestContext,
+    requestLogger,
+    registerProcessErrorLogging,
+    structuredResponses,
+    timeoutHandler,
+    validateKnownObjectIds
+} = require('./middleware/resilience');
+
+registerProcessErrorLogging();
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+
+app.use(requestContext);
+app.use(structuredResponses);
+app.use(requestLogger);
+app.use(timeoutHandler());
 
 /*
 |--------------------------------------------------------------------------
@@ -92,6 +109,8 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({
     extended: false
 }));
+
+app.use(validateKnownObjectIds);
 
 /*
 |--------------------------------------------------------------------------
@@ -241,6 +260,9 @@ app.use('/api/notifications', (req, res, next) => {
     req.url = req.url === '/' ? '/notifications' : `/notifications${req.url}`;
     clientController(req, res, next);
 });
+
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 /*
 |--------------------------------------------------------------------------
