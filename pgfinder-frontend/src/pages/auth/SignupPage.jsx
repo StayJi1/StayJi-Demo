@@ -5,11 +5,10 @@ import Input from '../../components/common/Input'
 import { useAuth } from '../../context/AuthContext'
 import Card from '../../components/common/Card'
 import axiosClient from '../../api/axiosClient'
+import { MVP_CITY, MVP_STATE } from '../../config/mvp'
 
 const CITY_OPTIONS = {
-  Karnataka: ['Bangalore'],
-  Maharashtra: ['Mumbai', 'Pune'],
-  Telangana: ['Hyderabad'],
+  [MVP_STATE]: [MVP_CITY],
 }
 
 function SignupPage() {
@@ -19,7 +18,7 @@ function SignupPage() {
   const { signup, googleSignup, status, error, isAuthenticated, role } = useAuth()
   const googleButtonRef = useRef(null)
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-  const [form, setForm] = useState({ name: '', contact: '', email: '', password: '', role: requestedRole || 'user', state: 'Karnataka', city: 'Bangalore', acceptTerms: false, acceptPrivacy: false })
+  const [form, setForm] = useState({ name: '', contact: '', email: '', password: '', role: requestedRole || 'user', state: MVP_STATE, city: MVP_CITY, acceptTerms: false, acceptPrivacy: false })
   const [localError, setLocalError] = useState('')
   const [cityOptions, setCityOptions] = useState(CITY_OPTIONS)
 

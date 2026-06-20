@@ -12,7 +12,7 @@ function OwnerDashboard() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const queryClient = useQueryClient()
-  const [overview, setOverview] = useState({ totalProperties: 0, inquiries: 0, bookings: 0, views: 0, leads: 0 })
+  const [overview, setOverview] = useState({ totalProperties: 0, activeProperties: 0, pendingApproval: 0, rejectedProperties: 0, totalVisits: 0, totalMessages: 0, totalInquiries: 0 })
   const [properties, setProperties] = useState([])
   const [visits, setVisits] = useState([])
   const [moveIns, setMoveIns] = useState([])
@@ -62,7 +62,7 @@ function OwnerDashboard() {
         setVisits(ownerLeads?.visits || [])
         setMoveIns(moveInRows)
       } catch {
-        setOverview({ totalProperties: 0, inquiries: 0, bookings: 0, views: 0 })
+        setOverview({ totalProperties: 0, activeProperties: 0, pendingApproval: 0, rejectedProperties: 0, totalVisits: 0, totalMessages: 0, totalInquiries: 0 })
         setProperties([])
         setVisits([])
       } finally {
@@ -90,10 +90,13 @@ function OwnerDashboard() {
           <Card className="p-8">Loading stats…</Card>
         ) : (
           [
-            { label: 'Properties', value: overview.totalProperties, icon: <FiSliders />, onClick: () => navigate('/dashboard/owner/properties') },
-            { label: 'Leads', value: overview.leads ?? overview.inquiries + overview.bookings, icon: <FiUsers />, onClick: () => navigate('/dashboard/owner/leads') },
-            { label: 'Inquiries', value: overview.inquiries, icon: <FiUsers />, onClick: () => document.getElementById('owner-requests')?.scrollIntoView({ behavior: 'smooth' }) },
-            { label: 'Bookings', value: overview.bookings, icon: <FiPlusCircle />, onClick: () => document.getElementById('owner-requests')?.scrollIntoView({ behavior: 'smooth' }) },
+            { label: 'Total Properties', value: overview.totalProperties, icon: <FiSliders />, onClick: () => navigate('/dashboard/owner/properties') },
+            { label: 'Active Properties', value: overview.activeProperties, icon: <FiEye />, onClick: () => navigate('/dashboard/owner/properties') },
+            { label: 'Pending Approval', value: overview.pendingApproval, icon: <FiPlusCircle />, onClick: () => navigate('/dashboard/owner/properties') },
+            { label: 'Rejected Properties', value: overview.rejectedProperties, icon: <FiTrash2 />, onClick: () => navigate('/dashboard/owner/properties') },
+            { label: 'Total Visits', value: overview.totalVisits ?? overview.bookings, icon: <FiUsers />, onClick: () => navigate('/dashboard/owner/leads') },
+            { label: 'Total Messages', value: overview.totalMessages, icon: <FiMessageSquare />, onClick: () => navigate('/dashboard/owner/messages') },
+            { label: 'Total Inquiries', value: overview.totalInquiries ?? overview.inquiries, icon: <FiUsers />, onClick: () => navigate('/dashboard/owner/leads') },
           ].map((item) => (
             <button key={item.label} type="button" onClick={item.onClick} className="text-left">
               <Card className="h-full p-6 transition hover:border-accent-500">
@@ -169,7 +172,7 @@ function OwnerDashboard() {
               const phone = visitor.contact || visitor.phone || visitor.mobile || 'No phone available'
               const visitDate = visit.visitDate ? new Date(visit.visitDate).toLocaleDateString() : 'TBD'
               const visitTime = visit.visitTime && visit.visitTime !== '-' ? `, ${visit.visitTime}` : ''
-              const request = visit.status === '1' ? 'Visit approved' : visit.status === '2' ? 'Visit rejected' : 'Visit requested'
+              const request = visit.status === '1' ? 'Visit approved' : visit.status === '2' ? 'Visit completed' : visit.status === '3' ? 'Visit rejected' : visit.status === '4' ? 'Visit cancelled' : 'Visit requested'
               return (
                 <button key={visit._id || `${visit.userIDFK}-${visit.propertyIDFK}`} type="button" onClick={() => navigate('/dashboard/owner/leads')} className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-left hover:border-accent-500">
                   <p className="font-semibold text-white">{visitorName}</p>

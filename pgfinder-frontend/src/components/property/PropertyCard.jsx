@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import propertyService from '../../services/propertyService'
 import { formatDistance } from '../../utils/distance'
 
-function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
+function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSave = false }) {
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
   const [internalSaved, setInternalSaved] = useState(Boolean(savedProp))
@@ -16,6 +16,7 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
   const propertyPath = `/properties/${property.id || property._id || 'detail'}`
 
   const openProperty = () => {
+    sessionStorage.setItem('stayji-properties-scroll', String(window.scrollY || 0))
     navigate(propertyPath)
   }
 
@@ -86,17 +87,19 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-accent-500">{property.category || property.type || 'PG'}</p>
             <h3 className="mt-2 line-clamp-2 text-xl font-semibold text-white">{property.name}</h3>
           </div>
-          <button
-            type="button"
-            onClick={handleShortlist}
-            disabled={saving}
-            className={`inline-flex h-11 w-11 items-center justify-center rounded-3xl shadow-soft transition ${
-              saved ? 'bg-rose-500 text-white' : 'bg-slate-900 text-slate-200 hover:text-rose-300'
-            }`}
-            aria-label={saved ? 'Remove from wishlist' : 'Add to wishlist'}
-          >
-            <FiHeart />
-          </button>
+          {hideSave ? null : (
+            <button
+              type="button"
+              onClick={handleShortlist}
+              disabled={saving}
+              className={`inline-flex h-11 w-11 items-center justify-center rounded-3xl shadow-soft transition ${
+                saved ? 'bg-rose-500 text-white' : 'bg-slate-900 text-slate-200 hover:text-rose-300'
+              }`}
+              aria-label={saved ? 'Remove from wishlist' : 'Add to wishlist'}
+            >
+              <FiHeart />
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-400">
           <FiMapPin className="h-4 w-4" />

@@ -1,6 +1,7 @@
 import axiosClient, { baseURL } from './axiosClient'
+import { MVP_CITY } from '../config/mvp'
 
-const toAssetUrl = (value) => {
+export const toAssetUrl = (value) => {
   if (!value) return ''
   if (/^https?:\/\//i.test(value)) return value
   const clean = value.toString().replace(/^\/+/, '').replace(/\\/g, '/')
@@ -57,14 +58,8 @@ export const normalizeProperty = (property) => {
     property.image,
   ].filter(Boolean).map(toAssetUrl)
   const coordinates = {
-    mumbai: { lat: 19.076, lng: 72.8777 },
     bangalore: { lat: 12.9716, lng: 77.5946 },
-    pune: { lat: 18.5204, lng: 73.8567 },
-    delhi: { lat: 28.7041, lng: 77.1025 },
-    hyderabad: { lat: 17.385, lng: 78.4867 },
-    chennai: { lat: 13.0827, lng: 80.2707 },
-    kolkata: { lat: 22.5726, lng: 88.3639 },
-    jaipur: { lat: 26.9124, lng: 75.7873 },
+    bengaluru: { lat: 12.9716, lng: 77.5946 },
   }
 
   const explicitLocation = {
@@ -165,20 +160,30 @@ const fetchRemainingPropertyPages = async (requestParams, totalPages) => {
 }
 
 const propertyApi = {
+  page: async (params = {}) => {
+    const scopedParams = { ...params, cityName: MVP_CITY }
+    const page = await fetchPropertyPage({
+      ...scopedParams,
+      page: scopedParams.page || 1,
+    })
+    return page
+  },
+
   // Return full property list from backend
   list: async (params = {}) => {
     const { allPages, ...requestParams } = params || {}
+    const scopedParams = { ...requestParams, cityName: MVP_CITY }
     const firstPage = await fetchPropertyPage({
-      ...requestParams,
+      ...scopedParams,
       ...(allPages ? { limit: 100 } : {}),
-      page: requestParams.page || 1,
+      page: scopedParams.page || 1,
     })
     if (!allPages) return firstPage.items
 
     const totalPages = Number(firstPage.meta.pages || 1)
     if (totalPages <= 1) return firstPage.items
 
-    const remainingPages = await fetchRemainingPropertyPages(requestParams, totalPages)
+    const remainingPages = await fetchRemainingPropertyPages(scopedParams, totalPages)
     return [...firstPage.items, ...remainingPages.flatMap((page) => page.items)]
   },
 
@@ -186,8 +191,8 @@ const propertyApi = {
   detail: (id, options = {}) => axiosClient.post('/client/getPropertyById', { id, includePrivate: Boolean(options.includePrivate) }).then((res) => mapResponse(res.data && res.data.data)),
 
   // Popular: backend has no featured endpoint; reuse property list and let caller slice
-  popular: () => axiosClient.get('/client/getPropertyList').then((res) => mapResponse(res.data && res.data.data)),
-  all: (params) => axiosClient.get('/client/getAllPropertyList', { params }).then((res) => mapResponse(res.data && res.data.data)),
+  popular: () => axiosClient.get('/client/getPropertyList', { params: { cityName: MVP_CITY } }).then((res) => mapResponse(res.data && res.data.data)),
+  all: (params) => axiosClient.get('/client/getAllPropertyList', { params: { ...params, cityName: MVP_CITY } }).then((res) => mapResponse(res.data && res.data.data)),
   review: ({ id, approvalStatus }) => axiosClient.post('/client/reviewProperty', { id, approvalStatus }).then((res) => {
     if (res.data?.result === 'failure') {
       throw new Error(res.data?.msg || 'Property review was not updated')
@@ -198,10 +203,9 @@ const propertyApi = {
 
   // Try city/area lookups if provided, otherwise return full list
   nearby: (coords) => {
-    if (!coords) return axiosClient.get('/client/getPropertyList').then((res) => mapResponse(res.data && res.data.data))
-    if (coords.cityName) return axiosClient.post('/client/getPropertyByCity', { cityName: coords.cityName }).then((res) => mapResponse(res.data && res.data.data))
-    if (coords.areaName) return axiosClient.post('/client/getPropertyByArea', { areaName: coords.areaName }).then((res) => mapResponse(res.data && res.data.data))
-    return axiosClient.get('/client/getPropertyList').then((res) => mapResponse(res.data && res.data.data))
+    if (!coords) return axiosClient.get('/client/getPropertyList', { params: { cityName: MVP_CITY } }).then((res) => mapResponse(res.data && res.data.data))
+    if (coords.areaName) return axiosClient.post('/client/getPropertyByArea', { cityName: MVP_CITY, areaName: coords.areaName }).then((res) => mapResponse(res.data && res.data.data))
+    return axiosClient.post('/client/getPropertyByCity', { cityName: MVP_CITY }).then((res) => mapResponse(res.data && res.data.data))
   },
 
   // Shortlist expects userIDFK and propertyIDFK
@@ -247,12 +251,16 @@ const propertyApi = {
     return res.data?.data
   }),
 
-  update: (id, payload) => axiosClient.post('/client/updateProperty', { id, ...payload }).then((res) => {
+  update: (id, payload) => {
+    const body = payload instanceof FormData ? payload : { id, ...payload }
+    if (payload instanceof FormData && !payload.has('id')) payload.append('id', id)
+    return axiosClient.post('/client/updateProperty', body, payload instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined).then((res) => {
     if (res.data?.result === 'failure') {
       throw new Error(res.data?.msg || 'Property was not updated')
     }
     return res.data?.data
-  }),
+    })
+  },
 
   remove: (id, payload = {}) => axiosClient.post('/client/deleteProperty', { id, ...payload }).then((res) => {
     if (res.data?.result === 'failure') {

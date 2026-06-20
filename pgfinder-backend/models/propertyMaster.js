@@ -253,6 +253,23 @@ propertySchema = mongoose.Schema({
         default:false,
         index:true
     },
+    photoTypes:{
+        type:Mixed,
+        default:{}
+    },
+    honestScore:{
+        cleanliness:{ type:Number, default:0 },
+        food:{ type:Number, default:0 },
+        internet:{ type:Number, default:0 },
+        safety:{ type:Number, default:0 },
+        computed:{ type:Number, default:0 }
+    },
+    nearby:{
+        metro:{ type:String, default:'' },
+        busStop:{ type:String, default:'' },
+        hospital:{ type:String, default:'' },
+        grocery:{ type:String, default:'' }
+    },
     status:{
         type:String,
         enum:["active","archived","demo","suspended"],

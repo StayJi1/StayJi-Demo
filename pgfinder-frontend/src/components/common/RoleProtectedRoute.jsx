@@ -8,18 +8,13 @@ function RoleProtectedRoute({ children, role }) {
     ? 'owner'
     : ['personal', 'student'].includes(rawRole)
       ? 'user'
-      : ['super admin', 'super_admin', 'superadmin'].includes(rawRole)
-        ? 'super-admin'
-        : rawRole
+      : rawRole
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }
   const allowedRoles = Array.isArray(role) ? role : [role]
-  const effectiveRoles = currentRole === 'super-admin'
-    ? Array.from(new Set([...allowedRoles, 'admin', 'super-admin']))
-    : allowedRoles
-  if (!effectiveRoles.includes(currentRole) && !(currentRole === 'super-admin' && allowedRoles.includes('admin'))) {
+  if (!allowedRoles.includes(currentRole)) {
     return <Navigate to="/" replace />
   }
   return children

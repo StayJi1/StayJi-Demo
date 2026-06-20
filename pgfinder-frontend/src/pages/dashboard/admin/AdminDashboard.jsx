@@ -81,8 +81,13 @@ function AdminDashboard() {
   const statCards = [
     { label: 'Total users', value: summary.totalUsers, icon: <FiUsers />, onClick: () => navigate('/dashboard/admin/users') },
     { label: 'Owners', value: summary.owners, icon: <FiHome />, onClick: () => navigate('/dashboard/admin/users?role=Owner') },
-    { label: 'Active listings', value: summary.activeListings, icon: <FiBarChart2 />, onClick: () => { setFilters((current) => ({ ...current, active: 'true' })); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) } },
-    { label: 'Leads', value: summary.leads, icon: <FiCheck />, onClick: () => document.getElementById('lead-analytics')?.scrollIntoView({ behavior: 'smooth' }) },
+    { label: 'Total properties', value: (summary.realProperties || 0) + (summary.demoProperties || 0), icon: <FiBarChart2 />, onClick: () => document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) },
+    { label: 'Pending verification', value: summary.pendingVerification || summary.pendingProperties, icon: <FiCheck />, onClick: () => { setFilters((current) => ({ ...current, propertyStatus: 'pending', approvalStatus: 'Pending' })); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) } },
+    { label: 'Approved properties', value: summary.approvedProperties, icon: <FiCheck />, onClick: () => { setFilters((current) => ({ ...current, approvalStatus: 'Approved' })); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) } },
+    { label: 'Rejected properties', value: summary.rejectedProperties, icon: <FiCheck />, onClick: () => { setFilters((current) => ({ ...current, approvalStatus: 'Rejected' })); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) } },
+    { label: "Today's visits", value: summary.todayVisits, icon: <FiUsers />, onClick: () => document.getElementById('lead-analytics')?.scrollIntoView({ behavior: 'smooth' }) },
+    { label: 'Monthly visits', value: summary.monthlyVisits, icon: <FiUsers />, onClick: () => document.getElementById('lead-analytics')?.scrollIntoView({ behavior: 'smooth' }) },
+    { label: 'Unread messages', value: summary.unreadMessages, icon: <FiUsers />, onClick: () => document.getElementById('lead-analytics')?.scrollIntoView({ behavior: 'smooth' }) },
   ]
   const operationCards = [
     { label: 'LIVE properties', value: summary.activeListings, note: 'Public searchable listings', filter: { propertyStatus: 'live', demoLive: 'live', active: 'true' } },
@@ -191,7 +196,7 @@ function AdminDashboard() {
         </div>
       </header>
 
-      <div className="grid gap-5 xl:grid-cols-4">
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         {statCards.map((item) => (
           <button key={item.label} type="button" onClick={item.onClick} className="w-full text-left">
             <Card className="h-full p-5 transition hover:border-accent-500">
@@ -501,6 +506,19 @@ function AdminDashboard() {
                 <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', color: '#e2e8f0' }} />
               </PieChart>
             </ResponsiveContainer>
+          </div>
+        </Card>
+        <Card>
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Latest activities</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">Recent admin actions</h2>
+          <div className="mt-5 space-y-3">
+            {(analytics?.latestActivities || []).slice(0, 8).map((item) => (
+              <div key={item._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+                <p className="font-semibold text-white">{item.action || 'Activity'} · {item.entityType || 'record'}</p>
+                <p className="mt-1 text-slate-500">{item.city || 'Platform'} {item.addedOn || item.createdAt ? `· ${new Date(item.addedOn || item.createdAt).toLocaleString()}` : ''}</p>
+              </div>
+            ))}
+            {!analytics?.latestActivities?.length ? <p className="text-sm text-slate-400">No recent admin activity yet.</p> : null}
           </div>
         </Card>
       </div>

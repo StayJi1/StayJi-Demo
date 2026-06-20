@@ -13,11 +13,10 @@ import useCurrentLocation from '../hooks/useCurrentLocation'
 import { useAuth } from '../context/AuthContext'
 import { getDistanceKm } from '../utils/distance'
 import SEO from '../components/SEO'
+import { MVP_CITY } from '../config/mvp'
 
 const filterOptions = [
   'PG',
-  'Flat',
-  'Hotel',
   'Hostel',
   'Co-living',
   'Boys',
@@ -42,8 +41,6 @@ const ignoredSearchWords = new Set(['near', 'nearby', 'me', 'my', 'location', 'a
 const normalizeSearchToken = (token) => {
   const singularMap = {
     pgs: 'pg',
-    flats: 'flat',
-    hotels: 'hotel',
     hostels: 'hostel',
     rooms: 'room',
   }
@@ -127,6 +124,9 @@ function PropertiesPage() {
   const [sortBy, setSortBy] = useState(initialSavedSearchState.sortBy)
   const [nearbyMode, setNearbyMode] = useState(initialSavedSearchState.nearbyMode)
   const [searchRadiusKm, setSearchRadiusKm] = useState(initialSavedSearchState.searchRadiusKm)
+  const [page, setPage] = useState(Number(initialSavedSearchState.pagination?.page) || 1)
+  const [pageSize, setPageSize] = useState(Number(initialSavedSearchState.pagination?.pageSize) || 24)
+  const [paginationMeta, setPaginationMeta] = useState({ page: Number(initialSavedSearchState.pagination?.page) || 1, limit: 24, total: 0, pages: 1 })
   const [mapSearchQuery, setMapSearchQuery] = useState(initialSavedSearchState.mapSearchQuery)
   const [mapSearchLoading, setMapSearchLoading] = useState(false)
   const [mapSearchError, setMapSearchError] = useState('')
@@ -177,6 +177,8 @@ function PropertiesPage() {
       setNearbyMode(nextState.nearbyMode)
       setSearchRadiusKm(nextState.searchRadiusKm)
       setMapSearchQuery(nextState.mapSearchQuery)
+      setPage(Number(nextState.pagination?.page) || 1)
+      setPageSize(Number(nextState.pagination?.pageSize) || 24)
     }, 0)
   }, [searchParams])
 
@@ -221,8 +223,8 @@ function PropertiesPage() {
         nearbyMode,
         searchRadiusKm,
         pagination: {
-          page: searchParams.get('page') || '1',
-          pageSize: searchParams.get('pageSize') || '',
+          page,
+          pageSize,
         },
       }
       await dashboardService.saveSearch({
@@ -241,19 +243,62 @@ function PropertiesPage() {
     }
   }
 
+  const backendFilterParams = useMemo(() => {
+    const gender = activeFilters.filter((filter) => ['Boys', 'Girls', 'Co-ed'].includes(filter)).join(',')
+    const categories = activeFilters.filter((filter) => ['PG', 'Hostel', 'Co-living'].includes(filter)).join(',')
+    const amenities = activeFilters.filter((filter) => ['AC', 'Parking', 'Attached bathroom'].includes(filter)).join(',')
+    const sharingType = activeFilters
+      .filter((filter) => ['Single sharing', 'Double sharing', 'Triple sharing'].includes(filter))
+      .map((filter) => filter.replace(' sharing', ''))
+      .join(',')
+
+    return {
+      cityName: MVP_CITY,
+      search: searchQuery,
+      area: mapSearchQuery,
+      minPrice: priceRange.min,
+      maxPrice: priceRange.max,
+      gender,
+      categories,
+      sharingType,
+      amenities,
+      foodIncluded: activeFilters.includes('Food included'),
+      ac: activeFilters.includes('AC'),
+      parking: activeFilters.includes('Parking'),
+      attachedBathroom: activeFilters.includes('Attached bathroom'),
+      availableNow: activeFilters.includes('Available now'),
+      rating: activeFilters.includes('Rating 4+') ? 4 : '',
+      page,
+      limit: pageSize,
+    }
+  }, [activeFilters, mapSearchQuery, page, pageSize, priceRange.max, priceRange.min, searchQuery])
+
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await propertyService.fetchProperties({ includeAllCities: true, limit: 100, allPages: true })
-        setProperties(data || [])
+        setLoading(true)
+        const data = await propertyService.fetchPropertyPage(backendFilterParams)
+        setProperties(data.items || [])
+        setPaginationMeta(data.meta || { page, limit: pageSize, total: data.items?.length || 0, pages: 1 })
       } catch {
         setProperties([])
+        setPaginationMeta({ page, limit: pageSize, total: 0, pages: 1 })
       } finally {
         setLoading(false)
       }
     }
     load()
-  }, [])
+  }, [backendFilterParams, page, pageSize])
+
+  useEffect(() => {
+    if (loading) return
+    const savedScroll = Number(sessionStorage.getItem('stayji-properties-scroll') || 0)
+    if (!savedScroll) return
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: savedScroll, behavior: 'auto' })
+      sessionStorage.removeItem('stayji-properties-scroll')
+    })
+  }, [loading])
 
   useEffect(() => {
     if (hasUserLocation && nearbyMode) {
@@ -280,7 +325,7 @@ function PropertiesPage() {
     setMapSearchLoading(true)
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(`${query}, ${MVP_CITY}, Karnataka`)}&limit=1`,
       )
       const results = await response.json()
 
@@ -309,7 +354,7 @@ function PropertiesPage() {
       .filter((token) => token && !ignoredSearchWords.has(token))
       .map(normalizeSearchToken)
 
-    const categoryFilters = activeFilters.filter((filter) => ['PG', 'Flat', 'Hotel', 'Hostel', 'Co-living'].includes(filter))
+    const categoryFilters = activeFilters.filter((filter) => ['PG', 'Hostel', 'Co-living'].includes(filter))
     const genderFilters = activeFilters.filter((filter) => ['Boys', 'Girls', 'Co-ed'].includes(filter))
     const utilityFilters = activeFilters.filter((filter) => !categoryFilters.includes(filter) && !genderFilters.includes(filter))
 
@@ -335,16 +380,6 @@ function PropertiesPage() {
           ...(item.amenities || []),
         ].filter(Boolean).join(' ').toLowerCase()
 
-        const locationFields = [item.city, item.cityName, item.area, item.areaName, item.locationLabel, item.state, item.stateName]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-        const isCityOnlySearch = searchTokens.length === 1 && normalizedSearch.split(/\s+/).length === 1
-
-        if (isCityOnlySearch && !locationFields.includes(normalizedSearch)) {
-          return false
-        }
-
         if (searchTokens.length && !searchTokens.every((token) => {
           if (haystack.includes(token)) return true
           return [item.name, item.city, item.state, item.stateName, item.area, item.locationLabel, item.category, item.type]
@@ -358,7 +393,7 @@ function PropertiesPage() {
         }
 
         return utilityFilters.every((filter) => {
-          if (['PG', 'Flat', 'Hotel', 'Hostel', 'Co-living'].includes(filter)) {
+          if (['PG', 'Hostel', 'Co-living'].includes(filter)) {
             if (filter === 'Co-living') {
               return ['Co-ed', 'Boys', 'Girls'].includes(item.gender) || /co.?living|co.?ed/i.test(`${item.category} ${item.type} ${item.description}`)
             }
@@ -438,13 +473,13 @@ function PropertiesPage() {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <SEO
         title="Search PG in Bangalore"
-        description="Search verified PGs, boys PG, girls PG, hostels, flats, and co-living rooms across Bangalore localities with filters, maps, wishlist, and visit booking."
+        description="Search verified PGs, boys PG, girls PG, hostels, and co-living rooms across Bangalore localities with filters, maps, wishlist, and visit booking."
         path="/properties"
         keywords={['PG in Bangalore', 'Affordable PG Bangalore', 'PG near Whitefield', 'PG near Electronic City']}
       />
       <div className="grid gap-10 lg:grid-cols-[0.95fr_0.45fr]">
         <section>
-          <SectionHeading title="Search Bangalore stays" description="Explore Bangalore PGs, flats, hostels, and co-living rooms with price filters, maps, and daily check-in options." />
+          <SectionHeading title="Search Bangalore PGs" description="Explore Bangalore PGs, hostels, and co-living rooms with price filters, maps, and visit requests." />
           <div className="mt-6 grid gap-4 md:grid-cols-4">
             {[
               { label: 'Live listings', value: filteredProperties.length },
@@ -466,7 +501,10 @@ function PropertiesPage() {
                   type="search"
                   placeholder="Search city, locality or college"
                   value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value)
+                    setPage(1)
+                  }}
                   className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
                 />
               </div>
@@ -483,7 +521,10 @@ function PropertiesPage() {
               <input
                 type="search"
                 value={mapSearchQuery}
-                onChange={(event) => setMapSearchQuery(event.target.value)}
+                onChange={(event) => {
+                  setMapSearchQuery(event.target.value)
+                  setPage(1)
+                }}
                 placeholder="Search location on map (e.g. Bangalore, Koramangala)"
                 className="w-full rounded-3xl border border-slate-700/80 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
               />
@@ -496,10 +537,10 @@ function PropertiesPage() {
             {hasUserLocation && nearbyMode ? (
               <>
                 <p className="mt-3 text-sm text-emerald-300">
-                  Searching within {searchRadiusKm} km first. Search for PG, hotel, flat, hostel, or an area to narrow it down.
+                  Searching within {searchRadiusKm} km first. Search for PG name, hostel, co-living, or a Bangalore area to narrow it down.
                 </p>
                 <p className="mt-2 text-sm text-slate-400">
-                  Nearby listings are shown first, but the search still includes all matching properties outside the radius.
+                  Nearby listings are shown first, followed by matching Bangalore properties outside the radius.
                 </p>
               </>
             ) : null}
@@ -536,27 +577,36 @@ function PropertiesPage() {
             ) : null}
             {hasUserLocation && nearbyMode && nearbyCount === 0 && searchRadiusKm === expandedNearbyRadiusKm ? (
               <p className="mt-4 rounded-3xl border border-slate-700 bg-slate-950/70 p-4 text-sm text-slate-300">
-                Sorry, we currently do not have properties in this range. Showing all available properties{searchQuery ? ` for ${searchQuery}` : ''}.
+                Sorry, we currently do not have PGs in this range. Showing all available Bangalore PGs{searchQuery ? ` for ${searchQuery}` : ''}.
               </p>
             ) : null}
             <div className="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_1.2fr]">
               <input
                 type="number"
                 value={priceRange.min}
-                onChange={(event) => setPriceRange((current) => ({ ...current, min: event.target.value }))}
+                onChange={(event) => {
+                  setPriceRange((current) => ({ ...current, min: event.target.value }))
+                  setPage(1)
+                }}
                 placeholder="Min monthly price"
                 className="w-full rounded-3xl border border-slate-700/80 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
               />
               <input
                 type="number"
                 value={priceRange.max}
-                onChange={(event) => setPriceRange((current) => ({ ...current, max: event.target.value }))}
+                onChange={(event) => {
+                  setPriceRange((current) => ({ ...current, max: event.target.value }))
+                  setPage(1)
+                }}
                 placeholder="Max monthly price"
                 className="w-full rounded-3xl border border-slate-700/80 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
               />
               <select
                 value={sortBy}
-                onChange={(event) => setSortBy(event.target.value)}
+                onChange={(event) => {
+                  setSortBy(event.target.value)
+                  setPage(1)
+                }}
                 className="w-full rounded-3xl border border-slate-700/80 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
               >
                 <option value="recommended">Recommended</option>
@@ -577,6 +627,7 @@ function PropertiesPage() {
                       setActiveFilters((current) =>
                         current.includes(option) ? current.filter((item) => item !== option) : [...current, option],
                       )
+                      setPage(1)
                     }}
                     className={`rounded-full border px-4 py-2 text-sm transition ${
                       active
@@ -611,7 +662,7 @@ function PropertiesPage() {
                 {suggestedProperties.length ? (
                   <div className="mt-6">
                     <p className="mb-4 text-sm text-slate-400">
-                      If you are interested in other or nearby properties, here are a few listings to explore.
+                      Here are a few Bangalore PGs to explore while you adjust the filters.
                     </p>
                     <div className="grid gap-6 lg:grid-cols-2">
                       {suggestedProperties.map((property) => (
@@ -627,6 +678,42 @@ function PropertiesPage() {
                 ) : null}
               </div>
             )}
+          </div>
+          <div className="mt-8 flex flex-col gap-4 rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-4 text-sm text-slate-300 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              Showing page {paginationMeta.page || page} of {paginationMeta.pages || 1}
+              {paginationMeta.total ? ` (${paginationMeta.total} matching Bangalore PGs)` : ''}
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value))
+                  setPage(1)
+                }}
+                className="rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-2 text-sm text-slate-100 outline-none"
+              >
+                <option value={12}>12 per page</option>
+                <option value={24}>24 per page</option>
+                <option value={48}>48 per page</option>
+              </select>
+              <button
+                type="button"
+                disabled={page <= 1 || loading}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                className="rounded-full border border-slate-700 px-4 py-2 text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                disabled={page >= (paginationMeta.pages || 1) || loading}
+                onClick={() => setPage((current) => Math.min(paginationMeta.pages || current + 1, current + 1))}
+                className="rounded-full border border-slate-700 px-4 py-2 text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
           </div>
         </section>
 
@@ -648,7 +735,7 @@ function PropertiesPage() {
             <div className="mt-6 grid gap-4">
               <div className="rounded-3xl bg-slate-950/80 p-4 text-slate-300">
                 <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Total listings</p>
-                <p className="mt-2 text-3xl font-semibold text-white">{filteredProperties.length}</p>
+                <p className="mt-2 text-3xl font-semibold text-white">{paginationMeta.total || filteredProperties.length}</p>
               </div>
               <div className="rounded-3xl bg-slate-950/80 p-4 text-slate-300">
                 <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Available now</p>

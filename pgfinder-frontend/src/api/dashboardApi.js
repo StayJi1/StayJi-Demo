@@ -32,13 +32,29 @@ const normalizeProperty = (property) => ({
   status: property.status || (property.isAvailable === false ? 'Booked' : 'Available'),
 })
 
+const visitStatusLabel = (status) => {
+  const value = status?.toString().toLowerCase()
+  if (value === '0' || value === 'pending') return 'Pending'
+  if (value === '1' || value === 'approved' || value === 'approve') return 'Approved'
+  if (value === '2' || value === 'completed' || value === 'complete') return 'Completed'
+  if (value === '3' || value === 'rejected' || value === 'reject') return 'Rejected'
+  if (value === '4' || value === 'cancelled' || value === 'canceled' || value === 'cancel') return 'Cancelled'
+  return status || 'Pending'
+}
+
+const normalizeVisit = (visit) => ({
+  ...visit,
+  id: visit._id || visit.id,
+  statusLabel: visit.statusLabel || visitStatusLabel(visit.status),
+  property: visit.property ? normalizeProperty(visit.property) : visit.property,
+})
 
 const getAdminUsers = (params) => axiosClient.get('/client/getAdminUsers', { params }).then((res) => (res.data?.data || []).map(normalizeUser))
 const getProperties = () => axiosClient.get('/client/getAllPropertyList').then((res) => (res.data?.data || []).map(normalizeProperty))
 const getPropertiesByUser = (userIDFK) => axiosClient.post('/client/getPropertyListByUser', { userIDFK }).then((res) => (res.data?.data || []).map(normalizeProperty))
 
 const getShortlist = (userIDFK) => axiosClient.post('/client/getShortlistById', { userIDFK }).then((res) => res.data?.data || [])
-const getVendorVisits = (userIDFK) => axiosClient.post('/client/getVisitorList', { userIDFK }).then((res) => res.data?.data || [])
+const getVendorVisits = (userIDFK) => axiosClient.post('/client/getVisitorList', { userIDFK }).then((res) => (res.data?.data || []).map(normalizeVisit))
 const getVendorInquiries = (userIDFK) => axiosClient.post('/client/getInquiry', { userIDFK }).then((res) => res.data?.data || [])
 const getVendorShortlists = (userIDFK) => axiosClient.post('/client/getShortlistByVendor', { userIDFK }).then((res) => res.data?.data || [])
 
@@ -62,11 +78,28 @@ const dashboardApi = {
     return res.data?.data || { users: 0, vendors: 0, properties: 0, inactiveProperties: 0, inquiries: 0, pendingProperties: 0, leads: 0 }
   },
   vendorOverview: async (userIDFK) => {
-    const [properties, visits, inquiries, shortlists] = userIDFK
-      ? await Promise.all([getPropertiesByUser(userIDFK), getVendorVisits(userIDFK), getVendorInquiries(userIDFK), getVendorShortlists(userIDFK)])
+    const [properties, visits, inquiries, shortlists, chatData] = userIDFK
+      ? await Promise.all([
+        getPropertiesByUser(userIDFK),
+        getVendorVisits(userIDFK),
+        getVendorInquiries(userIDFK),
+        getVendorShortlists(userIDFK),
+        axiosClient.get('/client/chats').then((res) => res.data?.data || { conversations: [], unreadTotal: 0 }).catch(() => ({ conversations: [], unreadTotal: 0 })),
+      ])
       : [await getProperties(), [], [], []]
+    const activeProperties = properties.filter((property) => property.isActive !== false && ['Approved', 'Verified'].includes(property.approvalStatus || 'Approved')).length
+    const pendingApproval = properties.filter((property) => (property.approvalStatus || 'Pending') === 'Pending').length
+    const rejectedProperties = properties.filter((property) => (property.approvalStatus || '') === 'Rejected').length
+    const totalMessages = Number(chatData?.messageCount) || Number(chatData?.conversations?.length) || 0
     return {
       totalProperties: properties.length,
+      activeProperties,
+      pendingApproval,
+      rejectedProperties,
+      totalVisits: visits.length,
+      totalMessages,
+      totalInquiries: inquiries.length,
+      unreadMessages: Number(chatData?.unreadTotal) || 0,
       inquiries: inquiries.length,
       bookings: visits.length,
       savedByStudents: shortlists.length,

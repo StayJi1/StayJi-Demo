@@ -20,8 +20,8 @@ function OwnerLeadsPage() {
       await dashboardService.markLeadConverted({ type, id })
       setLeads((current) => ({
         ...current,
-        visits: type === 'visit' ? current.visits.map((item) => (item._id === id ? { ...item, isConverted: true, leadStage: 'converted' } : item)) : current.visits,
-        inquiries: type === 'inquiry' ? current.inquiries.map((item) => (item._id === id ? { ...item, isConverted: true, leadStage: 'converted' } : item)) : current.inquiries,
+        visits: type === 'visit' ? current.visits.map((item) => ((item._id || item.id) === id ? { ...item, isConverted: true, leadStage: 'converted' } : item)) : current.visits,
+        inquiries: type === 'inquiry' ? current.inquiries.map((item) => ((item._id || item.id) === id ? { ...item, isConverted: true, leadStage: 'converted' } : item)) : current.inquiries,
       }))
     } catch (err) {
       setError(err?.message || 'Unable to mark lead converted.')
@@ -32,11 +32,19 @@ function OwnerLeadsPage() {
       const updated = await dashboardService.updateVisit(id, payload)
       setLeads((current) => ({
         ...current,
-        visits: current.visits.map((item) => (item._id === id ? { ...item, ...updated } : item)),
+        visits: current.visits.map((item) => ((item._id || item.id) === id ? { ...item, ...updated } : item)),
       }))
     } catch (err) {
       setError(err?.message || 'Unable to update visit.')
     }
+  }
+
+  const rescheduleVisit = async (visit) => {
+    const currentDate = visit.visitDate ? new Date(visit.visitDate).toISOString().slice(0, 10) : ''
+    const visitDate = window.prompt('New visit date (YYYY-MM-DD)', currentDate)
+    if (!visitDate) return
+    const visitTime = window.prompt('New visit time', visit.visitTime && visit.visitTime !== '-' ? visit.visitTime : '')
+    await updateVisit(visit._id || visit.id, { action: 'approve', visitDate, visitTime: visitTime || '-' })
   }
 
   useEffect(() => {
@@ -60,8 +68,7 @@ function OwnerLeadsPage() {
         } else {
           setLeads(data)
         }
-      } catch (err) {
-        console.error(err)
+      } catch {
         setError('Unable to load your leads. Please try again later.')
       } finally {
         setLoading(false)
@@ -124,8 +131,8 @@ function OwnerLeadsPage() {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm text-slate-400">Student</p>
-                        <p className="text-lg font-semibold text-white">{visit.visituser?.userFname || visit.visituser?.userName || 'Unknown student'} {visit.visituser?.userLname || ''}</p>
-                        <p className="text-sm text-slate-400">{visit.visituser?.contact || visit.visituser?.userEmail || 'No contact available'}</p>
+                        <p className="text-lg font-semibold text-white">{visit.visituser?.userFname || visit.user?.userFname || visit.visituser?.userName || visit.user?.name || 'Unknown student'} {visit.visituser?.userLname || visit.user?.userLname || ''}</p>
+                        <p className="text-sm text-slate-400">{visit.visituser?.contact || visit.user?.contact || visit.visituser?.userEmail || visit.user?.email || 'No contact available'}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Visit date</p>
@@ -133,12 +140,14 @@ function OwnerLeadsPage() {
                         <p className="mt-1 text-sm text-slate-400">Move-in: {visit.moveInPreference || 'Not shared'}</p>
                       </div>
                     </div>
-                    <button type="button" onClick={() => markConverted('visit', visit._id)} className="mt-4 rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10">
+                    <p className="mt-3 text-sm text-slate-400">Status: {visit.statusLabel || visit.status || 'Pending'}</p>
+                    <button type="button" onClick={() => markConverted('visit', visit._id || visit.id)} className="mt-4 rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10">
                       {visit.isConverted ? 'Converted' : 'Mark converted'}
                     </button>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={() => updateVisit(visit._id, { action: 'approve' })} className="rounded-full border border-cyan-500/60 px-3 py-2 text-xs text-cyan-200">Approve visit</button>
-                      <button type="button" onClick={() => updateVisit(visit._id, { action: 'reject' })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject visit</button>
+                      <button type="button" onClick={() => updateVisit(visit._id || visit.id, { action: 'approve' })} className="rounded-full border border-cyan-500/60 px-3 py-2 text-xs text-cyan-200">Approve visit</button>
+                      <button type="button" onClick={() => updateVisit(visit._id || visit.id, { action: 'reject' })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject visit</button>
+                      <button type="button" onClick={() => rescheduleVisit(visit)} className="rounded-full border border-amber-500/60 px-3 py-2 text-xs text-amber-100">Reschedule</button>
                     </div>
                   </div>
                 ))
@@ -175,7 +184,7 @@ function OwnerLeadsPage() {
                     </div>
                     <p className="mt-3 text-slate-300">{inquiry.subject || 'Interested in this property'}</p>
                     <p className="mt-2 text-sm text-slate-400">Preferred visit: {inquiry.preferredVisitTime || 'Not shared'} • Move-in: {inquiry.moveInPreference || 'Not shared'}</p>
-                    <button type="button" onClick={() => markConverted('inquiry', inquiry._id)} className="mt-4 rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10">
+                    <button type="button" onClick={() => markConverted('inquiry', inquiry._id || inquiry.id)} className="mt-4 rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10">
                       {inquiry.isConverted ? 'Converted' : 'Mark converted'}
                     </button>
                   </div>

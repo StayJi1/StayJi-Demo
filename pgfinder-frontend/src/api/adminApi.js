@@ -25,7 +25,6 @@ const normalizeUser = (user = {}) => ({
   role: (() => {
     const raw = (user.role || user.userType || 'user').toString().toLowerCase()
     if (['vendor', 'owner'].includes(raw)) return 'owner'
-    if (['super admin', 'super_admin', 'superadmin'].includes(raw)) return 'super-admin'
     return raw
   })(),
   userType: user.userType,

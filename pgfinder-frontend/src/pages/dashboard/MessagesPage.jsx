@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { FiMessageSquare, FiSend } from 'react-icons/fi'
 import Button from '../../components/common/Button'
@@ -19,12 +19,17 @@ function MessagesPage() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const activeIdRef = useRef(activeId)
 
   const normalizedRole = role === 'owner' ? 'owner' : 'user'
   const activeConversation = useMemo(
-    () => conversations.find((item) => item.id === activeId || item._id === activeId),
+    () => conversations.find((item) => (item.id || item._id)?.toString() === activeId?.toString()),
     [activeId, conversations],
   )
+
+  useEffect(() => {
+    activeIdRef.current = activeId
+  }, [activeId])
 
   const loadConversations = async (nextActiveId = activeId) => {
     setError('')
@@ -32,7 +37,7 @@ function MessagesPage() {
     const nextConversations = data.conversations || []
     setConversations(nextConversations)
     const resolvedActiveId = nextActiveId || nextConversations[0]?.id || nextConversations[0]?._id || ''
-    setActiveId(resolvedActiveId)
+    setActiveId(resolvedActiveId ? resolvedActiveId.toString() : '')
     if (resolvedActiveId && (!nextActiveId || resolvedActiveId !== nextActiveId)) {
       const activeData = await dashboardService.chats({ conversationId: resolvedActiveId })
       setConversations(activeData.conversations || nextConversations)
@@ -56,7 +61,7 @@ function MessagesPage() {
     }
     load()
     const timer = window.setInterval(() => {
-      loadConversations(activeId).catch(() => {})
+      loadConversations(activeIdRef.current).catch(() => {})
     }, 15000)
     return () => {
       active = false
@@ -66,7 +71,7 @@ function MessagesPage() {
   }, [searchParams])
 
   const openConversation = async (conversationId) => {
-    setActiveId(conversationId)
+    setActiveId(conversationId ? conversationId.toString() : '')
     try {
       await loadConversations(conversationId)
     } catch (err) {
@@ -112,7 +117,7 @@ function MessagesPage() {
       <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
         <Card className="p-0">
           <div className="border-b border-slate-800 p-4">
-            <p className="text-sm font-semibold text-white">{conversations.reduce((sum, item) => sum + Number(normalizedRole === 'owner' ? item.unreadByOwner : item.unreadByUser || 0), 0)} unread</p>
+            <p className="text-sm font-semibold text-white">{conversations.reduce((sum, item) => sum + (Number(normalizedRole === 'owner' ? item.unreadByOwner : item.unreadByUser) || 0), 0)} unread</p>
           </div>
           <div className="max-h-[620px] overflow-y-auto">
             {loading ? <p className="p-4 text-sm text-slate-400">Loading conversations...</p> : null}

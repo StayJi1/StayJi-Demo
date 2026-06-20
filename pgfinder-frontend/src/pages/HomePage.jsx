@@ -215,8 +215,8 @@ function HomePage() {
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-blue-600">Featured stays</p>
               <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Premium verified stays</h2>
             </div>
-            <Link to="/properties" className="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-purple-600">
-              View all stays <FiArrowRight className="ml-2" />
+            <Link to="/bangalore" className="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-purple-600">
+              Explore Bangalore PGs <FiArrowRight className="ml-2" />
             </Link>
           </div>
           <div className="mt-10 grid gap-6 lg:grid-cols-3">
@@ -298,7 +298,7 @@ function HomePage() {
               <Button onClick={requestLocation} disabled={locationLoading}>
                 <FiNavigation className="mr-2" /> {hasUserLocation ? 'Refresh location' : 'Use my location'}
               </Button>
-              <Link to="/properties">
+              <Link to="/bangalore">
                 <Button variant="secondary">Open map search</Button>
               </Link>
             </div>

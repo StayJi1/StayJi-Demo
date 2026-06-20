@@ -32,6 +32,9 @@ const { hashPassword, isHashedPassword, verifyPassword } = require('../utils/sec
 const { validateObjectIdParam } = require('../middleware/resilience');
 const messageSecret = crypto.createHash('sha256').update(process.env.MESSAGE_SECRET || process.env.SESSION_SECRET || 'stayji-local-message-secret').digest()
 const jwtSecret = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'stayji-local-jwt-secret'
+const MVP_CITY = 'Bangalore'
+const MVP_STATE = 'Karnataka'
+const MVP_CITY_REGEX = /^(bangalore|bengaluru)$/i
 
 const wrapAsync = (handler) => (req, res, next) => {
     try {
@@ -60,6 +63,17 @@ const canonicalLocationName = (value = '') => {
     if (/^(bengaluru|bangalore)$/i.test(normalized)) return 'Bangalore'
     return normalized
 }
+
+const isBangaloreValue = (value = '') => MVP_CITY_REGEX.test(normalizeText(value))
+const bangalorePropertyScope = () => ({ cityName: MVP_CITY_REGEX })
+const blankLegacyCityScope = [
+    { assignedCity: { $exists: false } },
+    { assignedCity: '' },
+    { city: { $exists: false } },
+    { city: '' },
+]
+const bangaloreUserScope = () => ({ $or: [{ assignedCity: MVP_CITY_REGEX }, { city: MVP_CITY_REGEX }, { cityName: MVP_CITY_REGEX }, ...blankLegacyCityScope] })
+const propertyOwnerExpression = () => ({ $ifNull: ['$property.vendorId', '$property.userIDFK'] })
 
 const parseStringList = (value) => {
     if (!value) return []
@@ -139,6 +153,29 @@ const stayjiIdSearchExpr = (search = '') => {
     }
 }
 
+const propertySearchClauses = (regex) => [
+    { propertyName: regex },
+    { description: regex },
+    { address: regex },
+    { cityName: regex },
+    { areaName: regex },
+    { propertyCategory: regex },
+    { aminityFeatures: regex },
+    { sharing: regex },
+    { genderType: regex },
+    { sharingAvailability: regex },
+    { mealsAvailable: regex },
+    { customFeatures: regex },
+    { securityFeatures: regex },
+    { nearbyLandmarks: regex },
+    { 'roomInventory.sharingType': regex },
+    { 'roomInventory.foodPreference': regex },
+    { 'roomInventory.gender': regex },
+    { 'roomTypes.label': regex },
+    { 'roomTypes.foodPreference': regex },
+    { 'roomTypes.gender': regex },
+]
+
 const dedupeLatestByKey = (items = [], keyGetter) => {
     const map = new Map()
     items.forEach((item) => {
@@ -151,17 +188,7 @@ const dedupeLatestByKey = (items = [], keyGetter) => {
 }
 
 const publicCityGate = async () => {
-    const managedCount = await CityState.countDocuments({ isActive: true })
-    if (!managedCount) return null
-    const [liveCities, demoVisibleCities] = await Promise.all([
-        CityState.find({ isActive: true, status: 'live' }).distinct('cityName'),
-        CityState.find({ isActive: true, dummyVisible: true }).distinct('cityName'),
-    ])
-    const gates = []
-    if (liveCities.length) gates.push({ cityName: { $in: liveCities.map((city) => new RegExp(`^${escapeRegex(city)}$`, 'i')) }, isDummy: { $ne: true } })
-    if (demoVisibleCities.length) gates.push({ cityName: { $in: demoVisibleCities.map((city) => new RegExp(`^${escapeRegex(city)}$`, 'i')) }, isDummy: true })
-    if (!gates.length) return { cityName: /^__stayji_no_live_city__$/i }
-    return gates.length === 1 ? gates[0] : { $or: gates }
+    return bangalorePropertyScope()
 }
 
 const refreshPropertyRating = async (propertyId) => {
@@ -200,7 +227,6 @@ const normalizeAccountType = (value) => {
     if (['owner', 'host', 'hostel', 'vendor', 'pg owner', 'flat owner'].includes(normalized)) return 'owner'
     if (['personal', 'student', 'user'].includes(normalized)) return 'user'
     if (normalized === 'admin') return 'admin'
-    if (['super admin', 'super-admin', 'super_admin', 'superadmin'].includes(normalized)) return 'super_admin'
     return normalized
 }
 
@@ -209,7 +235,6 @@ const accountTypeVariants = (value) => {
     if (normalized === 'owner') return ['Owner', 'owner', 'Vendor', 'vendor']
     if (normalized === 'user') return ['User', 'Personal', 'Student', 'user', 'personal', 'student']
     if (normalized === 'admin') return ['Admin', 'admin']
-    if (normalized === 'super_admin') return ['Super Admin', 'SuperAdmin', 'super_admin', 'super-admin', 'superadmin']
     return [value]
 }
 
@@ -217,21 +242,18 @@ const officialRoleName = (value) => {
     const normalized = normalizeAccountType(value)
     if (normalized === 'owner') return 'Owner'
     if (normalized === 'admin') return 'Admin'
-    if (normalized === 'super_admin') return 'Super Admin'
     return 'User'
 }
 
 const defaultPermissionsByRole = (value) => {
     const normalized = normalizeAccountType(value)
-    if (normalized === 'super_admin') return ['manage_users', 'manage_properties', 'manage_finance', 'manage_admins', 'manage_dummy_data', 'manage_seo', 'manage_moderation', 'view_global_analytics']
-    if (normalized === 'admin') return ['manage_users', 'manage_properties', 'manage_moderation', 'manage_seo', 'view_city_analytics']
+    if (normalized === 'admin') return ['manage_users', 'manage_properties', 'manage_finance', 'manage_admins', 'manage_dummy_data', 'manage_seo', 'manage_moderation', 'view_global_analytics', 'view_city_analytics']
     if (normalized === 'owner') return ['manage_own_properties', 'view_own_leads', 'view_own_finance']
     return ['browse_properties', 'manage_own_profile']
 }
 
 const tokenRoleName = (value) => {
     const normalized = normalizeAccountType(value)
-    if (normalized === 'super_admin') return 'super-admin'
     if (normalized === 'owner') return 'owner'
     if (normalized === 'admin') return 'admin'
     return 'user'
@@ -283,6 +305,11 @@ const attachAuthenticatedUser = async (req, res, next) => {
     }
 }
 
+const attachOptionalAuthenticatedUser = async (req, res, next) => {
+    if (!getBearerToken(req)) return next()
+    return attachAuthenticatedUser(req, res, next)
+}
+
 const requireRoles = (allowedRoles = []) => async (req, res, next) => {
     if (!req.auth) {
         return attachAuthenticatedUser(req, res, () => requireRoles(allowedRoles)(req, res, next))
@@ -294,17 +321,17 @@ const requireRoles = (allowedRoles = []) => async (req, res, next) => {
     next()
 }
 
-const isSuperAdminRequest = (req) => req.auth?.role === 'super_admin'
+const isAdminRequest = (req) => req.auth?.role === 'admin'
 
-const requireSuperAdmin = (req, res, next) => {
-    if (!isSuperAdminRequest(req)) {
-        return res.status(403).json({ result: 'failure', msg: 'Only Super Admin can access this governance workflow.', data: null })
+const requireAdminGovernance = (req, res, next) => {
+    if (!isAdminRequest(req)) {
+        return res.status(403).json({ result: 'failure', msg: 'Only Admin can access this governance workflow.', data: null })
     }
     next()
 }
 
 const adminCityScope = (req) => {
-    if (req.auth?.role !== 'admin' || !req.auth.assignedCity) return {}
+    if (req.auth?.role !== 'admin' || !req.auth.assignedCity) return bangalorePropertyScope()
     const cityRegex = new RegExp(`^${escapeRegex(req.auth.assignedCity)}$`, 'i')
     const conditions = [
         { cityName: cityRegex },
@@ -321,7 +348,7 @@ const adminCityScope = (req) => {
 const adminAssignedCity = (req) => (req.auth?.role === 'admin' && req.auth.assignedCity ? req.auth.assignedCity : '')
 
 const adminUserCityScope = (req) => {
-    if (req.auth?.role !== 'admin' || !req.auth.assignedCity) return {}
+    if (req.auth?.role !== 'admin' || !req.auth.assignedCity) return bangaloreUserScope()
     const cityRegex = new RegExp(`^${escapeRegex(req.auth.assignedCity)}$`, 'i')
     const userScope = [
         { assignedCity: cityRegex },
@@ -334,7 +361,13 @@ const adminUserCityScope = (req) => {
         userScope[1].state = stateRegex
         userScope[2].stateName = stateRegex
     }
-    return { $or: userScope }
+    return { $or: [...userScope, ...blankLegacyCityScope] }
+}
+
+const applyScope = (filters = {}, scope = {}) => {
+    if (!scope || !Object.keys(scope).length) return filters
+    if (!Object.keys(filters).length) return { ...scope }
+    return { $and: [filters, scope] }
 }
 
 const syncAdminCityAssignment = async (adminId, targetCityName, targetStateName) => {
@@ -367,8 +400,8 @@ const assertAdminCanManageUser = (req, targetUser) => {
     if (!targetUser) return { ok: false, status: 404, msg: 'User not found.' }
     const targetRole = normalizeAccountType(targetUser.userType)
     if (req.auth?.role === 'admin') {
-        if (['admin', 'super_admin'].includes(targetRole)) {
-            return { ok: false, status: 403, msg: 'City Admins cannot manage Admin or Super Admin accounts.' }
+        if (targetRole === 'admin' && targetUser._id?.toString() !== req.auth.user._id.toString()) {
+            return { ok: false, status: 403, msg: 'Admins cannot manage other Admin accounts through this user workflow.' }
         }
         const assignedCity = (req.auth.assignedCity || '').toString().toLowerCase()
         const targetCity = (targetUser.assignedCity || targetUser.city || '').toString().toLowerCase()
@@ -417,6 +450,27 @@ const assertMessagingAccess = (req, res) => {
     const permission = messagingPermissionForRole(role)
     if (!['user', 'owner'].includes(role) || (permission && !req.auth.permissions.includes(permission))) {
         res.status(403).json({ result: 'failure', msg: 'You do not have permission to use user-owner messaging.', data: null })
+        return false
+    }
+    return true
+}
+
+const authenticatedUserId = (req) => req.auth?.user?._id?.toString()
+const assertSelfOrRoles = (req, res, targetId, roles = []) => {
+    const selfId = authenticatedUserId(req)
+    if (selfId && targetId && selfId === targetId.toString()) return true
+    if (roles.includes(req.auth?.role)) return true
+    res.status(403).json({ result: 'failure', msg: 'You do not have permission to access this record.', data: null })
+    return false
+}
+
+const assertBangaloreRequest = (res, city, state = MVP_STATE) => {
+    if (city && !isBangaloreValue(city)) {
+        res.status(400).json({ result: 'failure', msg: 'StayJi MVP is currently available only in Bangalore.', data: null })
+        return false
+    }
+    if (state && normalizeText(state).toLowerCase() !== MVP_STATE.toLowerCase()) {
+        res.status(400).json({ result: 'failure', msg: 'StayJi MVP is currently available only in Bangalore, Karnataka.', data: null })
         return false
     }
     return true
@@ -491,7 +545,7 @@ const createLeadEvent = async (payload = {}) => {
 }
 
 const notifyAdmins = async (payload = {}) => {
-    const admins = await User.find({ userType: { $in: ['Admin', 'admin', 'Super Admin', 'SuperAdmin', 'super_admin'] }, isActive: true }).select('_id userType')
+    const admins = await User.find({ userType: { $in: accountTypeVariants('Admin') }, isActive: true }).select('_id userType')
     await Promise.all(admins.map((admin) => createNotification({ ...payload, recipientId: admin._id, recipientRole: 'admin' })))
 }
 
@@ -588,6 +642,97 @@ const buildPropertyFilters = (source = {}, includeInactive = false) => {
     if (source.cityName || source.city) filters.cityName = new RegExp(`^${normalizedRegexSource(canonicalLocationName(source.cityName || source.city))}$`, 'i')
     if (source.areaName || source.area || source.locality) filters.areaName = new RegExp(`^${normalizedRegexSource(source.areaName || source.area || source.locality)}$`, 'i')
     if (source.category) filters.propertyCategory = new RegExp(`^${normalizedRegexSource(source.category)}$`, 'i')
+    if (source.categories) {
+        const categoryRegexes = parseStringList(source.categories).map((item) => normalizedRegex(item))
+        if (categoryRegexes.length) andFilters.push({ $or: categoryRegexes.map((regex) => ({ propertyCategory: regex })) })
+    }
+    if (source.gender) {
+        const genderValues = Array.isArray(source.gender) ? source.gender : source.gender.toString().split(',')
+        const genderRegexes = genderValues.map((item) => normalizeText(item)).filter(Boolean).map((item) => normalizedRegex(item))
+        if (genderRegexes.length) {
+            andFilters.push({ $or: genderRegexes.map((regex) => ({ genderType: regex })) })
+        }
+    }
+    if (source.sharingType || source.sharing) {
+        const sharingValues = Array.isArray(source.sharingType || source.sharing)
+            ? (source.sharingType || source.sharing)
+            : (source.sharingType || source.sharing).toString().split(',')
+        const sharingRegexes = sharingValues.map((item) => normalizeText(item)).filter(Boolean).map((item) => normalizedRegex(item))
+        if (sharingRegexes.length) {
+            andFilters.push({
+                $or: sharingRegexes.flatMap((regex) => [
+                    { sharing: regex },
+                    { sharingAvailability: regex },
+                    { 'roomInventory.sharingType': regex },
+                    { 'roomTypes.label': regex },
+                ]),
+            })
+        }
+    }
+    if (toBoolean(source.foodIncluded) || toBoolean(source.food)) {
+        andFilters.push({
+            $or: [
+                { mealsAvailable: { $exists: true, $ne: [] } },
+                { aminityFeatures: /food|meal|breakfast|lunch|dinner/i },
+                { 'roomInventory.foodPreference': /veg|non-veg|both/i },
+                { 'roomTypes.foodPreference': /veg|non-veg|both/i },
+            ],
+        })
+    }
+    if (source.amenities) {
+        const amenityRegexes = parseStringList(source.amenities).map((item) => normalizedRegex(item))
+        if (amenityRegexes.length) {
+            andFilters.push({
+                $and: amenityRegexes.map((regex) => ({
+                    $or: [
+                        { aminityFeatures: regex },
+                        { customFeatures: regex },
+                        { securityFeatures: regex },
+                        { nearbyLandmarks: regex },
+                    ],
+                })),
+            })
+        }
+    }
+    if (toBoolean(source.ac)) {
+        andFilters.push({ $or: [{ acAvailable: true }, { aminityFeatures: /ac|air conditioning/i }, { 'roomInventory.ac': true }, { 'roomTypes.ac': true }] })
+    }
+    if (toBoolean(source.parking)) {
+        andFilters.push({ $or: [{ parkingAvailable: true }, { aminityFeatures: /parking/i }] })
+    }
+    if (toBoolean(source.attachedBathroom)) {
+        andFilters.push({ $or: [{ aminityFeatures: /bathroom/i }, { 'roomInventory.bathroom': 'attached' }, { 'roomTypes.bathroom': 'attached' }] })
+    }
+    if (toBoolean(source.availableNow)) {
+        andFilters.push({ $or: [{ isAvailable: true }, { availableBeds: { $gt: 0 } }, { vacancyStatus: { $not: /fully occupied/i } }] })
+    }
+    if (source.rating) filters.rating = { $gte: Number(source.rating) || 0 }
+    const minBudget = toNumberOrUndefined(source.minPrice || source.minBudget || source.budgetMin)
+    const maxBudget = toNumberOrUndefined(source.maxPrice || source.maxBudget || source.budgetMax)
+    if (minBudget !== undefined || maxBudget !== undefined) {
+        const rentNumberExpression = {
+            $convert: {
+                input: {
+                    $replaceAll: {
+                        input: { $replaceAll: { input: '$rent', find: ',', replacement: '' } },
+                        find: '₹',
+                        replacement: '',
+                    },
+                },
+                to: 'double',
+                onError: 0,
+                onNull: 0,
+            },
+        }
+        andFilters.push({
+            $expr: {
+                $and: [
+                    ...(minBudget !== undefined ? [{ $gte: [rentNumberExpression, minBudget] }] : []),
+                    ...(maxBudget !== undefined ? [{ $lte: [rentNumberExpression, maxBudget] }] : []),
+                ],
+            },
+        })
+    }
     if (source.userIDFK || source.vendorId || source.ownerId) {
         const ownerId = source.userIDFK || source.vendorId || source.ownerId
         andFilters.push({ $or: [{ userIDFK: ownerId }, { vendorId: ownerId }] })
@@ -598,28 +743,19 @@ const buildPropertyFilters = (source = {}, includeInactive = false) => {
         const normalizedSearch = canonicalLocationName(search)
         const regexes = [...new Set([search, normalizedSearch])]
             .map((value) => normalizedRegex(value))
-
-        const searchTokens = search.trim().split(/\s+/).filter(Boolean)
-        if (searchTokens.length === 1) {
-            andFilters.push({ $or: [
-                { cityName: regexes[0] },
-                { areaName: regexes[0] },
-                { address: regexes[0] },
-            ] })
-        }
+        const tokenRegexes = search
+            .split(/\s+/)
+            .map((token) => normalizeText(token))
+            .filter((token) => token && !['near', 'nearby', 'in', 'at', 'for'].includes(token.toLowerCase()))
+            .map((token) => normalizedRegex(token))
 
         andFilters.push({ $or: [
             ...(mongoose.Types.ObjectId.isValid(search) ? [{ _id: new mongoose.Types.ObjectId(search) }] : []),
             ...(stayjiIdSearchExpr(search) ? [stayjiIdSearchExpr(search)] : []),
-            ...regexes.flatMap((regex) => [
-                { propertyName: regex },
-                { description: regex },
-                { address: regex },
-                { cityName: regex },
-                { areaName: regex },
-                { propertyCategory: regex },
-                { aminityFeatures: regex },
-            ]),
+            ...regexes.flatMap(propertySearchClauses),
+            ...(tokenRegexes.length > 1 ? [{
+                $and: tokenRegexes.map((regex) => ({ $or: propertySearchClauses(regex) })),
+            }] : []),
         ] })
     }
     if (andFilters.length) filters.$and = [...(filters.$and || []), ...andFilters]
@@ -645,12 +781,9 @@ const publicPropertyQuery = {
 }
 
 router.get('/city-options', async (req, res) => {
-    const rows = await CityState.find({ isActive: true }).select('stateName cityName localities dummyVisible').sort({ stateName: 1, cityName: 1 }).lean()
+    const rows = await CityState.find({ isActive: true, cityName: MVP_CITY_REGEX }).select('stateName cityName localities dummyVisible').sort({ stateName: 1, cityName: 1 }).lean()
     const fallback = rows.length ? rows : [
         { stateName: 'Karnataka', cityName: 'Bangalore', dummyVisible: false, localities: [] },
-        { stateName: 'Maharashtra', cityName: 'Mumbai', dummyVisible: true, localities: [] },
-        { stateName: 'Maharashtra', cityName: 'Pune', dummyVisible: true, localities: [] },
-        { stateName: 'Telangana', cityName: 'Hyderabad', dummyVisible: true, localities: [] },
     ]
     const options = fallback.reduce((acc, item) => {
         if (!acc[item.stateName]) acc[item.stateName] = []
@@ -710,17 +843,13 @@ router.post('/addUser', async (req, res) => {
     if (!strongPasswordPattern.test(req.body.userPassword || '')) {
         return res.json({ result: "failure", msg: "Password must be at least 8 characters and include uppercase, lowercase, and a number.", data: 0 });
     }
-    if (normalizeAccountType(req.body.userType || 'User') === 'owner' && (!req.body.state && !req.body.stateName || !req.body.city && !req.body.cityName)) {
-        return res.json({ result: "failure", msg: "Owner registration requires state and city.", data: 0 });
-    }
-    const signupCity = canonicalLocationName(req.body.city || req.body.cityName || '')
-    const signupState = normalizeText(req.body.state || req.body.stateName || '')
+    const signupCity = canonicalLocationName(req.body.city || req.body.cityName || MVP_CITY)
+    const signupState = normalizeText(req.body.state || req.body.stateName || MVP_STATE)
+    if (!assertBangaloreRequest(res, signupCity, signupState)) return
     if (normalizeAccountType(req.body.userType || 'User') === 'owner') {
-        const managedCityCount = await CityState.countDocuments({ isActive: true })
-        const managedCity = managedCityCount ? await CityState.findOne({ isActive: true, stateName: new RegExp(`^${signupState}$`, 'i'), cityName: new RegExp(`^${signupCity}$`, 'i') }) : true
-        if (!managedCity) {
-            return res.json({ result: "failure", msg: "Select a StayJi-managed city/state from the approved list.", data: 0 });
-        }
+        const managedCityCount = await CityState.countDocuments({ isActive: true, cityName: MVP_CITY_REGEX })
+        const managedCity = managedCityCount ? await CityState.findOne({ isActive: true, stateName: new RegExp(`^${escapeRegex(MVP_STATE)}$`, 'i'), cityName: MVP_CITY_REGEX }) : true
+        if (!managedCity) return res.json({ result: "failure", msg: "Bangalore operations are not marked live yet.", data: 0 });
     }
 
     if (req.body.contact && suspiciousPhonePattern.test(req.body.contact.toString().replace(/\D/g, ''))) {
@@ -826,17 +955,13 @@ router.post('/googleAuth', async (req, res) => {
         objUser.occupation = "";
         const officialGoogleRole = officialRoleName(req.body.userType || "User");
         const normalizedGoogleRole = normalizeAccountType(officialGoogleRole);
-        const googleCity = canonicalLocationName(req.body.city || req.body.cityName || "");
-        const googleState = normalizeText(req.body.state || req.body.stateName || "");
-        if (normalizedGoogleRole === 'owner' && (!req.body.state && !req.body.stateName || !req.body.city && !req.body.cityName)) {
-            return res.json({ result: "failure", msg: "Owner registration requires state and city.", data: 0 });
-        }
+        const googleCity = canonicalLocationName(req.body.city || req.body.cityName || MVP_CITY);
+        const googleState = normalizeText(req.body.state || req.body.stateName || MVP_STATE);
+        if (!assertBangaloreRequest(res, googleCity, googleState)) return
         if (normalizedGoogleRole === 'owner') {
-            const managedCityCount = await CityState.countDocuments({ isActive: true })
-            const managedCity = managedCityCount ? await CityState.findOne({ isActive: true, stateName: new RegExp(`^${googleState}$`, 'i'), cityName: new RegExp(`^${googleCity}$`, 'i') }) : true
-            if (!managedCity) {
-                return res.json({ result: "failure", msg: "Select a StayJi-managed city/state from the approved list.", data: 0 });
-            }
+            const managedCityCount = await CityState.countDocuments({ isActive: true, cityName: MVP_CITY_REGEX })
+            const managedCity = managedCityCount ? await CityState.findOne({ isActive: true, stateName: new RegExp(`^${escapeRegex(MVP_STATE)}$`, 'i'), cityName: MVP_CITY_REGEX }) : true
+            if (!managedCity) return res.json({ result: "failure", msg: "Bangalore operations are not marked live yet.", data: 0 });
         }
         objUser.userType = officialGoogleRole;
         objUser.city = googleCity;
@@ -868,8 +993,8 @@ router.post('/googleAuth', async (req, res) => {
     }
 });
 
-router.get('/getUserList', async (req, res) => {
-    const objUser = await User.find().select('-userPassword');
+router.get('/getUserList', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
+    const objUser = await User.find(adminUserCityScope(req)).select('-userPassword');
 
     if (objUser != null) {
         res.json({ result: "success", msg: "User List Found", data: objUser });
@@ -891,14 +1016,11 @@ router.post('/loginByUser', async (req, res) => {
         const actualRole = normalizeAccountType(objUser.userType)
         const requestedRole = normalizeAccountType(req.body.accountType || req.body.role || req.body.userType)
         const portal = (req.body.authPortal || 'public').toString().toLowerCase()
-        if (portal === 'public' && ['admin', 'super_admin'].includes(actualRole)) {
+        if (portal === 'public' && actualRole === 'admin') {
             return res.json({ result: "fail", msg: "Use the dedicated admin login portal.", data: null });
         }
         if (portal === 'admin' && actualRole !== 'admin') {
             return res.json({ result: "fail", msg: "Only Admin accounts can use this portal.", data: null });
-        }
-        if (portal === 'super_admin' && actualRole !== 'super_admin') {
-            return res.json({ result: "fail", msg: "Only Super Admin accounts can use this portal.", data: null });
         }
         if (requestedRole && actualRole !== requestedRole) {
             return res.json({ result: "fail", msg: "Account type mismatch. Select the correct account type to continue.", data: null });
@@ -940,7 +1062,8 @@ router.post('/updateUserPhoto', upload.single('profile'), async (req, res) => {
     }
 });
 
-router.post('/getUser', async (req, res) => {
+router.post('/getUser', attachAuthenticatedUser, async (req, res) => {
+    if (!assertSelfOrRoles(req, res, req.body.id, ['admin'])) return
     const objUser = await User.findOne({ _id: req.body.id, isActive: true });
 
     if (objUser != null) {
@@ -981,7 +1104,9 @@ router.post('/authStatus', async (req, res) => {
     res.json({ result: "success", msg: "Account active", data: objUser });
 });
 
-router.post('/updateUser', async (req, res) => {
+router.post('/updateUser', attachAuthenticatedUser, async (req, res) => {
+    const targetId = req.body._id || req.body.id
+    if (!assertSelfOrRoles(req, res, targetId, ['admin'])) return
     const updateFields = {}
     if (req.body.userFname !== undefined) updateFields.userFname = req.body.userFname
     if (req.body.userLname !== undefined) updateFields.userLname = req.body.userLname
@@ -996,16 +1121,16 @@ router.post('/updateUser', async (req, res) => {
     if (req.body.gender !== undefined) updateFields.gender = req.body.gender
     if (req.body.dob !== undefined) updateFields.dob = req.body.dob
     if (req.body.bio !== undefined) updateFields.bio = req.body.bio
-    if (req.body.city !== undefined) updateFields.city = req.body.city
-    if (req.body.state !== undefined) updateFields.state = req.body.state
+    if (req.body.city !== undefined || req.body.cityName !== undefined) updateFields.city = MVP_CITY
+    if (req.body.state !== undefined || req.body.stateName !== undefined) updateFields.state = MVP_STATE
     if (req.body.socialLinks !== undefined) updateFields.socialLinks = parseStringList(req.body.socialLinks)
 
-    const objResult = await User.updateOne({ _id: req.body._id }, { $set: updateFields })
+    const objResult = await User.updateOne({ _id: targetId }, { $set: updateFields })
     if (objResult.modifiedCount > 0) {
-        const updatedUser = await User.findOne({ _id: req.body._id })
+        const updatedUser = await User.findOne({ _id: targetId }).select('-userPassword')
         res.json({ result: "success", msg: "User Updated", data: updatedUser })
     } else {
-        const existingUser = await User.findOne({ _id: req.body._id })
+        const existingUser = await User.findOne({ _id: targetId }).select('-userPassword')
         if (existingUser) {
             res.json({ result: "success", msg: "No changes needed", data: existingUser })
         } else {
@@ -1016,11 +1141,9 @@ router.post('/updateUser', async (req, res) => {
 
 
 router.get('/getPropertyList', async (req, res) => {
-    const publicFilters = buildPropertyFilters(req.query)
+    const publicFilters = buildPropertyFilters({ ...req.query, cityName: MVP_CITY })
     const { page, limit, skip } = pageOptions(req.query)
-    if (!req.query.includeAllCities && !req.query.city && !req.query.cityName) {
-        publicFilters.cityName = /bangalore|bengaluru/i
-    }
+    publicFilters.cityName = MVP_CITY_REGEX
     if (req.query.analyticsMode === 'real' || req.query.includeDummy === 'false') publicFilters.isDummy = false
     if (req.query.analyticsMode === 'demo') publicFilters.isDummy = true
     if (req.query.status) publicFilters.status = req.query.status
@@ -1046,7 +1169,8 @@ router.get('/getPropertyList', async (req, res) => {
 });
 
 router.post('/getAreaListByCity', async (req, res) => {
-    const cityName = canonicalLocationName(req.body.cityName || req.body.city || '')
+    const cityName = canonicalLocationName(req.body.cityName || req.body.city || MVP_CITY)
+    if (!assertBangaloreRequest(res, cityName)) return
     const objArea = await Area.find({ cityName: new RegExp(`^${normalizedRegexSource(cityName)}$`, 'i'), isActive: true });
     if (objArea != null) {
         res.json({ result: "success", msg: "Area List Found", data: objArea });
@@ -1059,7 +1183,9 @@ router.post('/getAreaListByCity', async (req, res) => {
 
 router.post('/getPropertyByCity', async (req, res) => {
     const cityGate = await publicCityGate()
-    const publicFilters = buildPropertyFilters({ ...req.body, cityName: req.body.cityName || req.body.city })
+    const cityName = canonicalLocationName(req.body.cityName || req.body.city || MVP_CITY)
+    if (!assertBangaloreRequest(res, cityName)) return
+    const publicFilters = buildPropertyFilters({ ...req.body, cityName: MVP_CITY })
     const objProperty = await Property.find({ $and: [publicPropertyQuery, publicFilters, ...(cityGate ? [cityGate] : [])] });
     if (objProperty != null) {
         res.json({ result: "success", msg: "PropertyByCity List Found", data: objProperty });
@@ -1072,7 +1198,7 @@ router.post('/getPropertyByCity', async (req, res) => {
 
 router.post('/getPropertyByArea', async (req, res) => {
     const cityGate = await publicCityGate()
-    const publicFilters = buildPropertyFilters({ ...req.body, areaName: req.body.areaName || req.body.area || req.body.locality })
+    const publicFilters = buildPropertyFilters({ ...req.body, cityName: MVP_CITY, areaName: req.body.areaName || req.body.area || req.body.locality })
     const objProperty = await Property.find({ $and: [publicPropertyQuery, publicFilters, ...(cityGate ? [cityGate] : [])] });
     if (objProperty != null) {
         res.json({ result: "success", msg: "PropertyByArea List Found", data: objProperty });
@@ -1083,8 +1209,11 @@ router.post('/getPropertyByArea', async (req, res) => {
     }
 });
 
-router.post('/getVisitorList', async (req, res) => {
+router.post('/getVisitorList', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
+    if (req.auth.role === 'owner' && !assertSelfOrRoles(req, res, req.body.userIDFK, [])) return
     let objData = [];
+    const ownerObjectId = asObjectId(req.body.userIDFK)
+    if (!ownerObjectId) return res.json({ result: 'failure', msg: 'Owner user ID is required.', data: [] })
 
     const pipeline =
     [
@@ -1119,9 +1248,13 @@ router.post('/getVisitorList', async (req, res) => {
             }
           }
         }, {
+          '$addFields': {
+            'propertyOwnerId': propertyOwnerExpression()
+          }
+        }, {
           '$lookup': {
             'from': 'usermasters', 
-            'localField': 'property.userIDFK', 
+            'localField': 'propertyOwnerId',
             'foreignField': '_id', 
             'as': 'user'
           }
@@ -1135,10 +1268,10 @@ router.post('/getVisitorList', async (req, res) => {
           }
         }, {
           '$match': {
-            'user._id': mongoose.Types.ObjectId(req.body.userIDFK),
+            'propertyOwnerId': ownerObjectId,
           }
         }, {
-          '$unset': ['visituser.userPassword', 'user.userPassword']
+          '$unset': ['visituser.userPassword', 'user.userPassword', 'propertyOwnerId']
         }
       ]
         ;
@@ -1257,8 +1390,11 @@ router.post('/getInquiryById', async (req, res) => {
     }
 });
 
-router.post('/getInquiry', async (req, res) => {
+router.post('/getInquiry', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
+    if (req.auth.role === 'owner' && !assertSelfOrRoles(req, res, req.body.userIDFK, [])) return
     let objData = [];
+    const ownerObjectId = asObjectId(req.body.userIDFK)
+    if (!ownerObjectId) return res.json({ result: 'failure', msg: 'Owner user ID is required.', data: [] })
 
     const pipeline =
     [
@@ -1278,9 +1414,13 @@ router.post('/getInquiry', async (req, res) => {
                 }
             }
         }, {
+            '$addFields': {
+                'propertyOwnerId': propertyOwnerExpression()
+            }
+        }, {
             '$lookup': {
                 'from': 'usermasters', 
-                'localField': 'property.userIDFK', 
+                'localField': 'propertyOwnerId',
                 'foreignField': '_id', 
                 'as': 'user'
             }
@@ -1309,10 +1449,10 @@ router.post('/getInquiry', async (req, res) => {
             }
         }, {
             '$match': {
-                'user._id': mongoose.Types.ObjectId(req.body.userIDFK),
+                'propertyOwnerId': ownerObjectId,
             }
         }, {
-            '$unset': ['inquiryuser.userPassword', 'user.userPassword']
+            '$unset': ['inquiryuser.userPassword', 'user.userPassword', 'propertyOwnerId']
         }
     ]
         ;
@@ -1356,11 +1496,18 @@ router.post('/getInquiry', async (req, res) => {
 // });
 
 
-router.post('/getPropertyById', async (req, res) => {
-    const cityGate = req.body.includePrivate ? null : await publicCityGate()
-    const filters = req.body.includePrivate
-        ? { _id: req.body.id }
+router.post('/getPropertyById', attachOptionalAuthenticatedUser, async (req, res) => {
+    const privateRequested = toBoolean(req.body.includePrivate) && req.auth
+    const cityGate = privateRequested ? bangalorePropertyScope() : await publicCityGate()
+    let filters = privateRequested
+        ? { _id: req.body.id, ...bangalorePropertyScope() }
         : { $and: [{ _id: req.body.id, ...publicPropertyQuery }, ...(cityGate ? [cityGate] : [])] }
+    if (privateRequested && req.auth.role === 'owner') {
+        filters = { ...filters, $or: [{ userIDFK: req.auth.user._id }, { vendorId: req.auth.user._id }] }
+    }
+    if (privateRequested && req.auth.role === 'admin') {
+        filters = { _id: req.body.id, ...adminCityScope(req) }
+    }
     const objProperty = await Property.findOne(filters).
         populate(propertyPopulate());
     if (objProperty != null) {
@@ -1420,7 +1567,9 @@ router.post('/getReviewById', async (req, res) => {
     }
 });
 
-router.post('/updateUser', async (req, res) => {
+router.post('/updateUser', attachAuthenticatedUser, async (req, res) => {
+    const targetId = req.body.id || req.body._id
+    if (!assertSelfOrRoles(req, res, targetId, ['admin'])) return
 
     const updateFields = {}
     if (req.body.userName !== undefined) updateFields.userName = req.body.userName
@@ -1431,11 +1580,11 @@ router.post('/updateUser', async (req, res) => {
     if (req.body.contact !== undefined) updateFields.contact = req.body.contact
     if (req.body.occupation !== undefined) updateFields.occupation = req.body.occupation
     if (req.body.bio !== undefined) updateFields.bio = req.body.bio
-    if (req.body.city !== undefined) updateFields.city = req.body.city
-    if (req.body.state !== undefined) updateFields.state = req.body.state
+    if (req.body.city !== undefined || req.body.cityName !== undefined) updateFields.city = MVP_CITY
+    if (req.body.state !== undefined || req.body.stateName !== undefined) updateFields.state = MVP_STATE
     if (req.body.socialLinks !== undefined) updateFields.socialLinks = parseStringList(req.body.socialLinks)
 
-    const objUser = await User.updateOne({ _id: req.body.id || req.body._id }, { $set: updateFields });
+    const objUser = await User.updateOne({ _id: targetId }, { $set: updateFields });
     // res.send(objStudent);
     if (objUser != null) {
         res.json({ result: "success", msg: "User updated Successfully", data: 1 });
@@ -1446,7 +1595,8 @@ router.post('/updateUser', async (req, res) => {
     }
 });
 
-router.post('/getShortlistById', async (req, res) => {
+router.post('/getShortlistById', attachAuthenticatedUser, requireRoles(['user']), async (req, res) => {
+    if (!assertSelfOrRoles(req, res, req.body.userIDFK, [])) return
     const objShort = await Shortlisted.find({ userIDFK: req.body.userIDFK, isActive: true })
         .populate('userIDFK', ['userFname', 'userLname'])
         .populate('propertyIDFK', ['propertyName', 'propertyImage', 'rent', 'address', 'areaName', 'isActive', 'approvalStatus']);
@@ -1464,7 +1614,9 @@ router.post('/getShortlistByVendor', async (req, res) => {
         return res.json({ result: 'failure', msg: 'Vendor user ID is required', data: [] });
     }
 
-    const properties = await Property.find({ userIDFK: req.body.userIDFK, isActive: true }).select('_id');
+    const ownerObjectId = asObjectId(req.body.userIDFK);
+    if (!ownerObjectId) return res.json({ result: 'failure', msg: 'Vendor user ID is invalid', data: [] });
+    const properties = await Property.find({ $or: [{ userIDFK: ownerObjectId }, { vendorId: ownerObjectId }], isActive: true }).select('_id');
     const propertyIds = properties.map((property) => property._id);
 
     if (!propertyIds.length) {
@@ -1534,8 +1686,10 @@ router.post('/getShortlistByPropertyId', async (req, res) => {
 
 });
 
-router.post('/addInquiry', async (req, res) => {
-    const property = await Property.findOne({ _id: req.body.propertyIDFK }).select('userIDFK vendorId')
+router.post('/addInquiry', attachAuthenticatedUser, requireRoles(['user']), async (req, res) => {
+    if (!assertSelfOrRoles(req, res, req.body.userIDFK, [])) return
+    const property = await Property.findOne({ _id: req.body.propertyIDFK, ...bangalorePropertyScope() }).select('userIDFK vendorId')
+    if (!property) return res.json({ result: 'failure', msg: 'Bangalore property not found.', data: 0 })
     var objInquiry = new Inquiry({ userIDFK: req.body.userIDFK, propertyIDFK: req.body.propertyIDFK });
     objInquiry.propertyIDFK = req.body.propertyIDFK,
         objInquiry.propertyId = req.body.propertyIDFK,
@@ -1579,8 +1733,10 @@ router.post('/addInquiry', async (req, res) => {
     }
 });
 
-router.post('/addInterest', async (req, res) => {
-    const property = await Property.findOne({ _id: req.body.propertyIDFK }).select('userIDFK vendorId')
+router.post('/addInterest', attachAuthenticatedUser, requireRoles(['user']), async (req, res) => {
+    if (!assertSelfOrRoles(req, res, req.body.userIDFK, [])) return
+    const property = await Property.findOne({ _id: req.body.propertyIDFK, ...bangalorePropertyScope() }).select('userIDFK vendorId')
+    if (!property) return res.json({ result: 'failure', msg: 'Bangalore property not found.', data: 0 })
     const inquiryPayload = {
         propertyIDFK: req.body.propertyIDFK,
         propertyId: req.body.propertyIDFK,
@@ -1646,8 +1802,10 @@ router.post('/addPropertyImages', upload.single('propertyImage'), async (req, re
     res.json({ result: "success", msg: "Images Inserted", data: 1 });
 });
 
-router.post('/addVisit', async (req, res) => {
-    const property = await Property.findOne({ _id: req.body.propertyIDFK }).select('userIDFK vendorId')
+router.post('/addVisit', attachAuthenticatedUser, requireRoles(['user']), async (req, res) => {
+    if (!assertSelfOrRoles(req, res, req.body.userIDFK, [])) return
+    const property = await Property.findOne({ _id: req.body.propertyIDFK, ...bangalorePropertyScope() }).select('userIDFK vendorId')
+    if (!property) return res.json({ result: 'failure', msg: 'Bangalore property not found.', data: 0 })
     const visitPayload = {
         visitDate: req.body.visitDate,
         visitTime: req.body.visitTime || "-",
@@ -1664,7 +1822,7 @@ router.post('/addVisit', async (req, res) => {
         isActive: true,
     }
     const inserted = await Visit.findOneAndUpdate(
-        { userIDFK: req.body.userIDFK, propertyIDFK: req.body.propertyIDFK },
+        { userIDFK: req.body.userIDFK, propertyIDFK: req.body.propertyIDFK, status: { $in: ['0', '1'] }, isActive: true },
         { $set: visitPayload },
         { new: true, upsert: true }
     )
@@ -1699,16 +1857,24 @@ router.post('/addVisit', async (req, res) => {
     }
 });
 
-router.post('/markLeadConverted', async (req, res) => {
+router.post('/markLeadConverted', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
     const allowedTypes = ['visit', 'inquiry']
     if (!allowedTypes.includes(req.body.type) || !req.body.id) {
         return res.json({ result: 'failure', msg: 'Lead type and ID are required', data: 0 })
     }
 
     const Model = req.body.type === 'visit' ? Visit : Inquiry
+    const lead = await Model.findOne({ _id: req.body.id }).select('userIDFK propertyIDFK vendorId')
+    if (!lead) return res.json({ result: 'failure', msg: 'Lead not found.', data: 0 })
+    if (req.auth.role === 'owner' && (lead.vendorId || '').toString() !== req.auth.user._id.toString()) {
+        return res.status(403).json({ result: 'failure', msg: 'Owners can only update their own leads.', data: 0 })
+    }
+    if (req.auth.role === 'admin') {
+        const property = await Property.findOne({ _id: lead.propertyIDFK, ...adminCityScope(req) }).select('_id')
+        if (!property) return res.status(403).json({ result: 'failure', msg: 'Lead is outside Bangalore admin scope.', data: 0 })
+    }
     const updated = await Model.updateOne({ _id: req.body.id }, { isConverted: true, leadStage: 'converted' })
     if (updated.modifiedCount > 0) {
-        const lead = await Model.findOne({ _id: req.body.id }).select('userIDFK propertyIDFK vendorId')
         if (lead) {
             await createNotification({
                 recipientId: lead.userIDFK,
@@ -1810,7 +1976,7 @@ router.post('/reviews/:id/reply', async (req, res) => {
     res.json({ result: 'success', msg: 'Review reply saved.', data: review })
 })
 
-router.post('/reviews/:id/moderate', attachAuthenticatedUser, requireRoles(['admin', 'super_admin']), async (req, res) => {
+router.post('/reviews/:id/moderate', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
     const status = ['active', 'flagged', 'suspended', 'archived'].includes(req.body.status) ? req.body.status : 'active'
     const review = await UserReview.findOneAndUpdate(
         { _id: req.params.id },
@@ -1823,7 +1989,10 @@ router.post('/reviews/:id/moderate', attachAuthenticatedUser, requireRoles(['adm
     res.json({ result: 'success', msg: 'Review moderated.', data: { review, summary } })
 })
 
-router.post('/addShortlist', async (req, res) => {
+router.post('/addShortlist', attachAuthenticatedUser, requireRoles(['user']), async (req, res) => {
+    if (!assertSelfOrRoles(req, res, req.body.userIDFK, [])) return
+    const targetProperty = await Property.findOne({ _id: req.body.propertyIDFK, ...publicPropertyQuery, ...bangalorePropertyScope() }).select('_id')
+    if (!targetProperty) return res.json({ result: 'failure', msg: 'Bangalore property not available for saving.', data: 0 })
     let objShortlist = await Shortlisted.findOne({
         userIDFK: req.body.userIDFK,
         propertyIDFK: req.body.propertyIDFK,
@@ -1886,6 +2055,7 @@ router.post('/addShortlist', async (req, res) => {
 });
 
 const removeShortlist = async (req, res) => {
+    if (!assertSelfOrRoles(req, res, req.body.userIDFK, [])) return
 
     const objShortlist = await Shortlisted.updateOne({
         propertyIDFK: req.body.propertyIDFK,
@@ -1907,8 +2077,8 @@ const removeShortlist = async (req, res) => {
     }
 }
 
-router.delete('/deleteShortlist', removeShortlist);
-router.post('/deleteShortlist', removeShortlist);
+router.delete('/deleteShortlist', attachAuthenticatedUser, requireRoles(['user']), removeShortlist);
+router.post('/deleteShortlist', attachAuthenticatedUser, requireRoles(['user']), removeShortlist);
 
 router.get('/getPropertyType', async (req, res) => {
     const objtype = await PropertyType.find({ isActive: true });
@@ -1922,7 +2092,11 @@ router.get('/getPropertyType', async (req, res) => {
     }
 });
 
-router.post('/addProperty', upload.fields([{ name: 'propertyImage', maxCount: 10 }, { name: 'video', maxCount: 1 }]), async (req, res) => {
+router.post('/addProperty', attachAuthenticatedUser, requireRoles(['owner']), upload.fields([{ name: 'propertyImage', maxCount: 10 }, { name: 'video', maxCount: 1 }]), async (req, res) => {
+    req.body.userIDFK = req.auth.user._id.toString()
+    req.body.vendorId = req.auth.user._id.toString()
+    req.body.cityName = MVP_CITY
+    req.body.stateName = MVP_STATE
     if (!req.body.areaName || !req.body.cityName || (!req.body.stateName && !req.body.state) || !req.body.latitude || !req.body.longitude) {
         return res.json({ result: "failure", msg: "State, city, locality, and map coordinates are required for StayJi locality pages.", data: 0 });
     }
@@ -2024,8 +2198,8 @@ router.post('/resetPassword', attachAuthenticatedUser, async (req, res) => {
     const target = await User.findOne({ userEmail: new RegExp(`^${targetEmail}$`, 'i'), isActive: true })
     if (!target) return res.json({ result: "failure", msg: "User not found.", data: 0 });
     const sameUser = target._id.toString() === req.auth.user._id.toString()
-    if (!sameUser && !isSuperAdminRequest(req)) {
-        return res.status(403).json({ result: "failure", msg: "Only Super Admin can reset another user's password.", data: 0 });
+    if (!sameUser && !isAdminRequest(req)) {
+        return res.status(403).json({ result: "failure", msg: "Only Admin can reset another user's password.", data: 0 });
     }
     if (!strongPasswordPattern.test(req.body.userPassword || req.body.password || '')) {
         return res.json({ result: "failure", msg: "Password must be at least 8 characters and include uppercase, lowercase, and a number.", data: 0 });
@@ -2152,7 +2326,9 @@ router.post('/getemailbydata', async (req, res) => {
 });
 
 
-router.post('/getPropertyListByUser', async (req, res) => {
+router.post('/getPropertyListByUser', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
+    if (req.auth.role === 'owner' && !assertSelfOrRoles(req, res, req.body.userIDFK, [])) return
+    req.body.cityName = MVP_CITY
     const objProperty = await Property.find(buildPropertyFilters(req.body)).
         populate(propertyPopulate());
     if (objProperty != null) {
@@ -2287,7 +2463,7 @@ router.post('/moveIns/:id/owner-confirm', async (req, res) => {
 
 router.post('/moveIns/:id/review', async (req, res) => {
     const adminId = asObjectId(req.body.adminId)
-    const admin = adminId ? await User.findOne({ _id: adminId, userType: { $in: ['Admin', 'admin', 'Super Admin', 'SuperAdmin', 'super_admin'] }, isActive: true }).select('_id userType') : null
+    const admin = adminId ? await User.findOne({ _id: adminId, userType: { $in: accountTypeVariants('Admin') }, isActive: true }).select('_id userType') : null
     if (!admin) return res.json({ result: 'failure', msg: 'Only StayJi admin can verify move-ins.', data: null })
     const status = ['Verified', 'Rejected', 'Suspicious'].includes(req.body.status) ? req.body.status : 'Pending'
     const existingMoveIn = await MoveInConfirmation.findOne({ _id: req.params.id, isActive: true })
@@ -2344,10 +2520,12 @@ router.post('/payment-requests/:id/review', async (req, res) => {
     return router.handle(req, res)
 })
 
-router.post('/reactivateProperty', async (req, res) => {
+router.post('/reactivateProperty', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
     const propertyQuery = { _id: req.body.id }
     if (req.auth?.role === 'admin') {
         Object.assign(propertyQuery, adminCityScope(req))
+    } else {
+        propertyQuery.$or = [{ userIDFK: req.auth.user._id }, { vendorId: req.auth.user._id }]
     }
     const objUpdateProperty = await Property.updateOne(propertyQuery, { isActive: true, approvalStatus: "Pending" })
     if (objUpdateProperty.modifiedCount > 0) {
@@ -2358,7 +2536,14 @@ router.post('/reactivateProperty', async (req, res) => {
     }
 })
 
-router.post('/updateProperty', async (req, res) => {
+router.post('/updateProperty', attachAuthenticatedUser, requireRoles(['owner', 'admin']), upload.fields([{ name: 'propertyImage', maxCount: 10 }, { name: 'video', maxCount: 1 }]), async (req, res) => {
+    if (req.auth.role === 'owner') {
+        req.body.userIDFK = req.auth.user._id.toString()
+        req.body.vendorId = req.auth.user._id.toString()
+        req.body.ownerId = req.auth.user._id.toString()
+        delete req.body.adminId
+        delete req.body.performerRole
+    }
     const updateFields = {}
     if (req.body.propertyName !== undefined) updateFields.propertyName = normalizeText(req.body.propertyName)
     if (req.body.description !== undefined) updateFields.description = normalizeText(req.body.description)
@@ -2368,8 +2553,8 @@ router.post('/updateProperty', async (req, res) => {
     if (req.body.genderType !== undefined) updateFields.genderType = req.body.genderType
     if (req.body.areaName !== undefined) updateFields.areaName = normalizeText(req.body.areaName)
     if (req.body.areaName !== undefined || req.body.localitySlug !== undefined) updateFields.localitySlug = req.body.localitySlug || slugify(req.body.areaName)
-    if (req.body.cityName !== undefined) updateFields.cityName = canonicalLocationName(req.body.cityName)
-    if (req.body.stateName !== undefined || req.body.state !== undefined) updateFields.stateName = normalizeText(req.body.stateName || req.body.state)
+    if (req.body.cityName !== undefined || req.body.city !== undefined) updateFields.cityName = MVP_CITY
+    if (req.body.stateName !== undefined || req.body.state !== undefined) updateFields.stateName = MVP_STATE
     if (req.body.latitude !== undefined) updateFields.latitude = toNumberOrUndefined(req.body.latitude)
     if (req.body.longitude !== undefined) updateFields.longitude = toNumberOrUndefined(req.body.longitude)
     if (req.body.aminityFeatures !== undefined) updateFields.aminityFeatures = req.body.aminityFeatures
@@ -2380,13 +2565,18 @@ router.post('/updateProperty', async (req, res) => {
         updateFields.menuPhotoUrls = menuPhotoUrls
         if (!updateFields.menuPhoto && menuPhotoUrls.length) updateFields.menuPhoto = menuPhotoUrls[0]
     }
+    const uploadedImages = (req.files?.propertyImage || []).map((file) => file.filename)
+    const uploadedVideo = req.files?.video?.[0]?.filename || ''
     if (req.body.propertyImage !== undefined) updateFields.propertyImage = req.body.propertyImage
     if (req.body.propertyImageUrls !== undefined) {
-        const imageUrls = parseStringList(req.body.propertyImageUrls)
+        const imageUrls = [...uploadedImages, ...parseStringList(req.body.propertyImageUrls)]
         updateFields.propertyImageUrls = imageUrls
         if (!updateFields.propertyImage && imageUrls.length) updateFields.propertyImage = imageUrls[0]
+    } else if (uploadedImages.length) {
+        updateFields.propertyImageUrls = uploadedImages
+        updateFields.propertyImage = uploadedImages[0]
     }
-    if (req.body.videoUrl !== undefined) updateFields.videoUrl = req.body.videoUrl
+    if (req.body.videoUrl !== undefined || uploadedVideo) updateFields.videoUrl = uploadedVideo || req.body.videoUrl
     if (req.body.depositAmount !== undefined) updateFields.depositAmount = req.body.depositAmount
     if (req.body.availableBeds !== undefined) updateFields.availableBeds = toNumberOrUndefined(req.body.availableBeds) || 0
     if (req.body.roomInventory !== undefined) updateFields.roomInventory = parseRoomInventory(req.body.roomInventory)
@@ -2442,11 +2632,13 @@ router.post('/updateProperty', async (req, res) => {
     const propertyQuery = { _id: req.body.id }
     if (isAdminUpdate) {
         Object.assign(propertyQuery, adminCityScope(req))
+    } else {
+        propertyQuery.$or = [{ userIDFK: req.auth.user._id }, { vendorId: req.auth.user._id }]
     }
     const existingForGovernance = await Property.findOne(propertyQuery).select('userIDFK vendorId propertyName propertyImage propertyImageUrls address areaName cityName stateName latitude longitude')
     if (!existingForGovernance) return res.json({ result: "failure", msg: "Property not found or access denied.", data: null })
 
-    if (isAdminUpdate) {
+    if (req.auth?.role === 'admin') {
         const assignedCity = (req.auth.assignedCity || '').toString().trim().toLowerCase()
         const assignedState = (req.auth.assignedState || '').toString().trim().toLowerCase()
         if (updateFields.cityName && updateFields.cityName.toString().trim().toLowerCase() !== assignedCity) {
@@ -2505,11 +2697,13 @@ router.post('/updateProperty', async (req, res) => {
     }
 })
 
-router.post('/deleteProperty', async (req, res) => {
-    const ownerId = asObjectId(req.body.ownerId || req.body.vendorId || req.body.userIDFK)
+router.post('/deleteProperty', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
+    const ownerId = req.auth.role === 'owner' ? req.auth.user._id : asObjectId(req.body.ownerId || req.body.vendorId || req.body.userIDFK)
     const propertyQuery = { _id: req.body.id }
     if (req.auth?.role === 'admin') {
         Object.assign(propertyQuery, adminCityScope(req))
+    } else {
+        propertyQuery.$or = [{ userIDFK: req.auth.user._id }, { vendorId: req.auth.user._id }]
     }
     const property = await Property.findOne(propertyQuery).select('userIDFK vendorId propertyName isActive status approvalStatus')
     if (!property) return res.json({ result: "failure", msg: "Property not found or access denied.", data: 0 })
@@ -2540,58 +2734,56 @@ router.post('/deleteProperty', async (req, res) => {
     }
 })
 
-router.get('/getAdminStats', async (req, res) => {
+router.get('/getAdminStats', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
     const userCityScope = adminUserCityScope(req)
     const propertyCityScope = adminCityScope(req)
+    const scopedPropertyIds = await Property.find(propertyCityScope).distinct('_id')
+    const leadScope = { isActive: true, propertyIDFK: { $in: scopedPropertyIds } }
+    const conversationScope = { isActive: true, propertyId: { $in: scopedPropertyIds } }
+
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1)
 
     const queries = [
-        User.countDocuments({ isActive: true, userType: { $nin: ['Admin', 'Super Admin'] }, ...userCityScope }),
+        User.countDocuments({ isActive: true, userType: { $nin: accountTypeVariants('Admin') }, ...userCityScope }),
         User.countDocuments({ isActive: true, userType: { $in: accountTypeVariants('Owner') }, ...userCityScope }),
         Property.countDocuments({ isActive: true, ...propertyCityScope }),
         Property.countDocuments({ isActive: false, ...propertyCityScope }),
         Property.countDocuments({ isActive: true, approvalStatus: 'Pending', ...propertyCityScope }),
+        Property.countDocuments({ isActive: true, approvalStatus: { $in: ['Approved', 'Verified'] }, ...propertyCityScope }),
+        Property.countDocuments({ approvalStatus: 'Rejected', ...propertyCityScope }),
+        Conversation.aggregate([
+            { $match: conversationScope },
+            { $group: { _id: null, conversations: { $sum: 1 }, unreadMessages: { $sum: { $add: ['$unreadByUser', '$unreadByOwner'] } } } },
+        ]),
+        AuditLog.find({ isActive: true }).sort({ addedOn: -1, createdAt: -1 }).limit(12).lean(),
     ]
 
-    const [users, vendors, activeProperties, inactiveProperties, pendingProperties] = await Promise.all(queries)
+    const [users, vendors, activeProperties, inactiveProperties, pendingProperties, approvedProperties, rejectedProperties, messageSummary, latestActivities] = await Promise.all(queries)
+    const messages = messageSummary[0]?.conversations || 0
+    const unreadMessages = messageSummary[0]?.unreadMessages || 0
 
-    const inquiryCountResult = await Inquiry.aggregate([
-        { $match: { isActive: true } },
-        { $lookup: { from: 'propertymasters', localField: 'propertyIDFK', foreignField: '_id', as: 'property' } },
-        { $unwind: '$property' },
-        { $match: propertyCityScope },
-        { $count: 'count' },
+    const [
+        inquiries,
+        visitLeads,
+        visitsToday,
+        monthlyVisits,
+        convertedVisits,
+        convertedInquiries,
+    ] = await Promise.all([
+        Inquiry.countDocuments(leadScope),
+        Visit.countDocuments(leadScope),
+        Visit.countDocuments({ ...leadScope, $or: [{ addedOn: { $gte: todayStart } }, { visitDate: { $gte: todayStart.toISOString().slice(0, 10) } }] }),
+        Visit.countDocuments({ ...leadScope, $or: [{ addedOn: { $gte: monthStart } }, { visitDate: { $gte: monthStart.toISOString().slice(0, 10) } }] }),
+        Visit.countDocuments({ ...leadScope, isConverted: true }),
+        Inquiry.countDocuments({ ...leadScope, isConverted: true }),
     ])
-    const visitCountResult = await Visit.aggregate([
-        { $match: { isActive: true } },
-        { $lookup: { from: 'propertymasters', localField: 'propertyIDFK', foreignField: '_id', as: 'property' } },
-        { $unwind: '$property' },
-        { $match: propertyCityScope },
-        { $count: 'count' },
-    ])
-    const convertedVisitCountResult = await Visit.aggregate([
-        { $match: { isActive: true, isConverted: true } },
-        { $lookup: { from: 'propertymasters', localField: 'propertyIDFK', foreignField: '_id', as: 'property' } },
-        { $unwind: '$property' },
-        { $match: propertyCityScope },
-        { $count: 'count' },
-    ])
-    const convertedInquiryCountResult = await Inquiry.aggregate([
-        { $match: { isActive: true, isConverted: true } },
-        { $lookup: { from: 'propertymasters', localField: 'propertyIDFK', foreignField: '_id', as: 'property' } },
-        { $unwind: '$property' },
-        { $match: propertyCityScope },
-        { $count: 'count' },
-    ])
-
-    const inquiries = inquiryCountResult[0]?.count || 0
-    const visitLeads = visitCountResult[0]?.count || 0
-    const convertedVisits = convertedVisitCountResult[0]?.count || 0
-    const convertedInquiries = convertedInquiryCountResult[0]?.count || 0
 
     res.json({
         result: "success",
         msg: "Admin stats found",
-        data: { users, vendors, properties: activeProperties, inactiveProperties, inquiries, pendingProperties, leads: inquiries + visitLeads, conversions: convertedVisits + convertedInquiries },
+        data: { users, owners: vendors, vendors, properties: activeProperties, totalProperties: activeProperties + inactiveProperties, inactiveProperties, pendingProperties, approvedProperties, rejectedProperties, visitsToday, todayVisits: visitsToday, monthlyVisits, messages, unreadMessages, latestActivities, inquiries, leads: inquiries + visitLeads, conversions: convertedVisits + convertedInquiries },
     })
 })
 
@@ -2805,16 +2997,17 @@ const buildAdminPropertyQuery = (query = {}) => {
     if (search) {
         const normalizedSearch = canonicalLocationName(search)
         const regexes = [...new Set([search, normalizedSearch])].map((value) => normalizedRegex(value))
+        const tokenRegexes = search
+            .split(/\s+/)
+            .map((token) => normalizeText(token))
+            .filter((token) => token && !['near', 'nearby', 'in', 'at', 'for'].includes(token.toLowerCase()))
+            .map((token) => normalizedRegex(token))
         const propertySearch = [
             ...(mongoose.Types.ObjectId.isValid(search) ? [{ _id: new mongoose.Types.ObjectId(search) }] : []),
-            ...regexes.flatMap((regex) => [
-                { propertyName: regex },
-                { description: regex },
-                { address: regex },
-                { cityName: regex },
-                { areaName: regex },
-                { propertyCategory: regex },
-            ]),
+            ...regexes.flatMap(propertySearchClauses),
+            ...(tokenRegexes.length > 1 ? [{
+                $and: tokenRegexes.map((regex) => ({ $or: propertySearchClauses(regex) })),
+            }] : []),
         ]
         filters.$and = [...(filters.$and || []), { $or: [...(filters.$or || []), ...propertySearch] }]
         delete filters.$or
@@ -2844,9 +3037,10 @@ const propertyAnalyticsMap = async (propertyIds = []) => {
     return map
 }
 
-router.get('/user/overview', async (req, res) => {
+router.get('/user/overview', attachAuthenticatedUser, requireRoles(['user', 'admin']), async (req, res) => {
     const userId = asObjectId(req.query.userId || req.query.userIDFK)
     if (!userId) return res.json({ result: 'failure', msg: 'User ID is required.', data: null })
+    if (!assertSelfOrRoles(req, res, userId, ['admin'])) return
     const user = await User.findOne({ _id: userId }).select('-userPassword')
     if (!user) return res.json({ result: 'failure', msg: 'User not found.', data: null })
 
@@ -2875,7 +3069,6 @@ router.get('/user/overview', async (req, res) => {
     const approvedRewards = moveIns.filter((item) => item.status === 'Verified' && item.ownerConfirmed)
     const totalCoins = approvedRewards.reduce((sum, item) => sum + (Number(item.rewardCoins || item.cashbackAmount) || 0), 0)
     const latestShortlist = dedupeLatestByKey(shortlist, (item) => (item.propertyIDFK?._id || item.propertyIDFK || item.propertyId)?.toString())
-    const latestVisits = dedupeLatestByKey(visits, (item) => (item.propertyIDFK?._id || item.propertyIDFK || item.propertyId)?.toString())
     const latestInquiries = dedupeLatestByKey(inquiries, (item) => (item.propertyIDFK?._id || item.propertyIDFK || item.propertyId)?.toString())
     res.json({
         result: 'success',
@@ -2883,7 +3076,7 @@ router.get('/user/overview', async (req, res) => {
         data: {
             shortlist: latestShortlist.length,
             shortlistItems: latestShortlist.map((item) => ({ id: item._id, property: propertyDto(item.propertyIDFK || {}) })),
-            visits: latestVisits.map(normalizeVisitDto),
+            visits: visits.map(normalizeVisitDto),
             inquiries: latestInquiries.map(normalizeInquiryDto),
             moveIns,
             notifications,
@@ -2905,10 +3098,11 @@ router.get('/user/overview', async (req, res) => {
     })
 })
 
-router.post('/user/viewed-properties', async (req, res) => {
+router.post('/user/viewed-properties', attachAuthenticatedUser, requireRoles(['user']), async (req, res) => {
     const userId = asObjectId(req.body.userId || req.body.userIDFK)
     const propertyId = asObjectId(req.body.propertyId || req.body.propertyIDFK)
     if (!userId || !propertyId) return res.json({ result: 'failure', msg: 'User and property are required.', data: null })
+    if (!assertSelfOrRoles(req, res, userId, [])) return
     const property = await Property.findOne({ _id: propertyId }).select('propertyName cityName areaName rent')
     const entry = {
         propertyId,
@@ -2923,9 +3117,10 @@ router.post('/user/viewed-properties', async (req, res) => {
     res.json({ result: 'success', msg: 'Viewed property stored.', data: user?.viewedProperties || [] })
 })
 
-router.post('/user/saved-searches', async (req, res) => {
+router.post('/user/saved-searches', attachAuthenticatedUser, requireRoles(['user']), async (req, res) => {
     const userId = asObjectId(req.body.userId || req.body.userIDFK)
     if (!userId) return res.json({ result: 'failure', msg: 'User ID is required.', data: null })
+    if (!assertSelfOrRoles(req, res, userId, [])) return
     const searchId = req.body.searchId || new mongoose.Types.ObjectId().toString()
     const entry = {
         id: searchId,
@@ -2944,9 +3139,10 @@ router.post('/user/saved-searches', async (req, res) => {
     res.json({ result: 'success', msg: 'Saved search stored.', data: user?.savedSearches || [] })
 })
 
-router.delete('/user/saved-searches/:id', async (req, res) => {
+router.delete('/user/saved-searches/:id', attachAuthenticatedUser, requireRoles(['user']), async (req, res) => {
     const userId = asObjectId(req.body.userId || req.query.userId || req.query.userIDFK)
     if (!userId) return res.json({ result: 'failure', msg: 'User ID is required.', data: null })
+    if (!assertSelfOrRoles(req, res, userId, [])) return
     const user = await User.findOneAndUpdate({ _id: userId }, { $pull: { savedSearches: { id: req.params.id } } }, { new: true }).select('savedSearches')
     res.json({ result: 'success', msg: 'Saved search deleted.', data: user?.savedSearches || [] })
 })
@@ -3084,13 +3280,36 @@ router.post('/chats', attachAuthenticatedUser, async (req, res) => {
     res.json({ result: 'success', msg: 'Message sent.', data: { conversation: conversationDto(populatedConversation), message: messageDto(message) } })
 })
 
-router.post('/visits/:id/status', async (req, res) => {
+router.post('/visits/:id/status', attachAuthenticatedUser, requireRoles(['user', 'owner', 'admin']), async (req, res) => {
     const statusMap = { pending: '0', approve: '1', approved: '1', complete: '2', completed: '2', reject: '3', rejected: '3', cancel: '4', cancelled: '4' }
     const update = {}
     if (req.body.visitDate !== undefined) update.visitDate = req.body.visitDate
     if (req.body.visitTime !== undefined) update.visitTime = req.body.visitTime
     if (req.body.moveInPreference !== undefined) update.moveInPreference = req.body.moveInPreference
     if (req.body.status || req.body.action) update.status = statusMap[(req.body.status || req.body.action).toString().toLowerCase()] || req.body.status
+    const existingVisit = await Visit.findOne({ _id: req.params.id, isActive: true }).populate('propertyIDFK')
+    if (!existingVisit) return res.json({ result: 'failure', msg: 'Visit not found.', data: null })
+    if (req.auth.role === 'user') {
+        const visitUserId = (existingVisit.userIDFK || existingVisit.userId || '').toString()
+        if (visitUserId !== req.auth.user._id.toString()) {
+            return res.status(403).json({ result: 'failure', msg: 'Users can only update their own visits.', data: null })
+        }
+        const requestedStatus = update.status || existingVisit.status
+        if (!['0', '4'].includes(requestedStatus)) {
+            return res.status(403).json({ result: 'failure', msg: 'Users can only reschedule pending visits or cancel visits.', data: null })
+        }
+    }
+    if (req.auth.role === 'owner') {
+        const ownerId = (existingVisit.vendorId || existingVisit.propertyIDFK?.vendorId || existingVisit.propertyIDFK?.userIDFK || '').toString()
+        if (ownerId !== req.auth.user._id.toString()) {
+            return res.status(403).json({ result: 'failure', msg: 'Owners can only update visits for their own properties.', data: null })
+        }
+    }
+    if (req.auth.role === 'admin') {
+        const propertyId = existingVisit.propertyIDFK?._id || existingVisit.propertyIDFK
+        const property = await Property.findOne({ _id: propertyId, ...adminCityScope(req) }).select('_id')
+        if (!property) return res.status(403).json({ result: 'failure', msg: 'Visit is outside Bangalore admin scope.', data: null })
+    }
     const visit = await Visit.findOneAndUpdate({ _id: req.params.id, isActive: true }, { $set: update }, { new: true }).populate('propertyIDFK userIDFK')
     if (!visit) return res.json({ result: 'failure', msg: 'Visit not found.', data: null })
     await createLeadEvent({
@@ -3128,7 +3347,7 @@ router.post('/wallet/payouts', upload.single('upiQr'), async (req, res) => {
     res.json({ result: 'success', msg: 'Payout request submitted.', data: payout })
 })
 
-router.get('/wallet/payouts', attachAuthenticatedUser, requireRoles(['admin', 'super_admin']), async (req, res) => {
+router.get('/wallet/payouts', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
     const filters = { isActive: true }
     if (req.query.userId && mongoose.Types.ObjectId.isValid(req.query.userId)) filters.userId = new mongoose.Types.ObjectId(req.query.userId)
     if (req.query.status) filters.status = req.query.status
@@ -3138,7 +3357,7 @@ router.get('/wallet/payouts', attachAuthenticatedUser, requireRoles(['admin', 's
     res.json({ result: 'success', msg: 'Wallet payouts found.', data: items })
 })
 
-router.post('/wallet/payouts/:id/review', attachAuthenticatedUser, requireRoles(['admin', 'super_admin']), async (req, res) => {
+router.post('/wallet/payouts/:id/review', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
     const status = ['Pending', 'Approved', 'Paid', 'Rejected'].includes(req.body.status) ? req.body.status : 'Pending'
     const payout = await WalletPayout.findOneAndUpdate({ _id: req.params.id, isActive: true }, { $set: { status, adminNote: req.body.adminNote || '', reviewedBy: req.body.adminId || req.body.reviewedBy, reviewedOn: new Date(), paidOn: status === 'Paid' ? new Date() : undefined } }, { new: true })
     if (!payout) return res.json({ result: 'failure', msg: 'Payout not found.', data: null })
@@ -3146,8 +3365,14 @@ router.post('/wallet/payouts/:id/review', attachAuthenticatedUser, requireRoles(
     res.json({ result: 'success', msg: 'Payout reviewed.', data: payout })
 })
 
-router.post('/properties/:id/occupancy', async (req, res) => {
-    const property = await Property.findOne({ _id: req.params.id })
+router.post('/properties/:id/occupancy', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
+    const propertyQuery = { _id: req.params.id }
+    if (req.auth?.role === 'admin') {
+        Object.assign(propertyQuery, adminCityScope(req))
+    } else {
+        propertyQuery.$or = [{ userIDFK: req.auth.user._id }, { vendorId: req.auth.user._id }]
+    }
+    const property = await Property.findOne(propertyQuery)
     if (!property) return res.json({ result: 'failure', msg: 'Property not found.', data: null })
     const update = {}
     if (req.body.availableBeds !== undefined) update.availableBeds = toNumberOrUndefined(req.body.availableBeds) || 0
@@ -3157,13 +3382,13 @@ router.post('/properties/:id/occupancy', async (req, res) => {
     if (req.body.roomInventory !== undefined) update.roomInventory = parseRoomInventory(req.body.roomInventory)
     if (req.body.roomTypes !== undefined) update.roomTypes = parseJsonValue(req.body.roomTypes, [])
     if (req.body.isAvailable !== undefined) update.isAvailable = toBoolean(req.body.isAvailable)
-    const updated = await Property.findOneAndUpdate({ _id: req.params.id }, { $set: update }, { new: true }).populate(propertyPopulate())
+    const updated = await Property.findOneAndUpdate(propertyQuery, { $set: update }, { new: true }).populate(propertyPopulate())
     await createNotification({ recipientRole: 'all', propertyId: updated._id, type: 'vacancy_alert', title: 'Vacancy updated', message: `${updated.propertyName || 'A StayJi property'} updated room availability.`, link: `/properties/${updated._id}` })
     res.json({ result: 'success', msg: 'Occupancy updated.', data: propertyDto(updated) })
 })
 
-router.post('/properties/:id/update-request', async (req, res) => {
-    const ownerId = asObjectId(req.body.ownerId || req.body.vendorId || req.body.userIDFK)
+router.post('/properties/:id/update-request', attachAuthenticatedUser, requireRoles(['owner']), async (req, res) => {
+    const ownerId = req.auth.user._id
     const property = await Property.findOne({ _id: req.params.id, $or: [{ userIDFK: ownerId }, { vendorId: ownerId }] })
     if (!ownerId || !property) return res.json({ result: 'failure', msg: 'Only the property owner can request protected updates.', data: null })
     const protectedFields = ['propertyName', 'propertyImage', 'propertyImageUrls', 'address', 'areaName', 'cityName', 'stateName', 'latitude', 'longitude']
@@ -3178,7 +3403,7 @@ router.post('/properties/:id/update-request', async (req, res) => {
     res.json({ result: 'success', msg: 'Update request submitted for admin approval.', data: request })
 })
 
-router.get('/property-update-requests', attachAuthenticatedUser, requireRoles(['admin', 'super_admin']), async (req, res) => {
+router.get('/property-update-requests', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
     const filters = { isActive: true }
     if (req.query.status) filters.status = req.query.status
     if (req.query.propertyId && mongoose.Types.ObjectId.isValid(req.query.propertyId)) filters.propertyId = new mongoose.Types.ObjectId(req.query.propertyId)
@@ -3188,7 +3413,7 @@ router.get('/property-update-requests', attachAuthenticatedUser, requireRoles(['
     res.json({ result: 'success', msg: 'Property update requests found.', data: items })
 })
 
-router.post('/property-update-requests/:id/review', attachAuthenticatedUser, requireRoles(['admin', 'super_admin']), async (req, res) => {
+router.post('/property-update-requests/:id/review', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
     const status = ['Approved', 'Rejected'].includes(req.body.status) ? req.body.status : 'Rejected'
     const request = await PropertyUpdateRequest.findOne({ _id: req.params.id, isActive: true })
     if (!request) return res.json({ result: 'failure', msg: 'Update request not found.', data: null })
@@ -3209,7 +3434,7 @@ router.post('/property-update-requests/:id/review', attachAuthenticatedUser, req
 router.use(
     ['/admin', '/analytics', '/properties', '/vendors', '/users', '/create-account', '/auditLogs', '/governance', '/dummy-transition', '/city-states', '/leads', '/moveIns', '/payment-requests', '/getAdminUsers', '/getAdminStats'],
     attachAuthenticatedUser,
-    requireRoles(['admin', 'super_admin'])
+    requireRoles(['admin'])
 )
 
 router.post('/admin/searchProperty', async (req, res) => {
@@ -3260,7 +3485,11 @@ router.post('/admin/searchProperty', async (req, res) => {
         const properties = propertyMatches || []
         const propertyIds = properties.map((p) => p._id)
 
-        const owners = await User.find({ _id: { $in: properties.map((p) => p.userIDFK) } }).select('_id userFname userLname userName userEmail userType contact profile')
+        const ownerIds = properties
+            .flatMap((p) => [p.vendorId, p.userIDFK])
+            .filter(Boolean)
+            .map((id) => id.toString())
+        const owners = await User.find({ _id: { $in: [...new Set(ownerIds)] } }).select('_id userFname userLname userName userEmail userType contact profile')
         const ownerMap = new Map(owners.map((o) => [o._id.toString(), o]))
 
         const visits = await Visit.find({
@@ -3317,7 +3546,7 @@ router.post('/admin/searchProperty', async (req, res) => {
 
         const data = {
             properties: properties.map((p) => {
-                const owner = ownerMap.get(p.userIDFK.toString())
+                const owner = ownerMap.get((p.vendorId || p.userIDFK)?.toString())
                 return {
                     property: p,
                     owner: selectUserSafe(owner),
@@ -3429,15 +3658,12 @@ router.post('/vendor/getVendorFullProfile', async (req, res) => {
 
 
 
-router.get('/getAdminUsers', async (req, res) => {
+const getAdminUsersHandler = async (req, res) => {
     const filters = {}
     if (req.query.status === 'inactive') filters.isActive = false
     else if (req.query.status !== 'all') filters.isActive = true
     const requestedRole = req.query.role && req.query.role !== 'all' ? req.query.role : ''
-    const protectedRoles = [...accountTypeVariants('Admin'), ...accountTypeVariants('Super Admin')]
-    if (req.auth?.role === 'admin' && ['admin', 'super_admin'].includes(normalizeAccountType(requestedRole))) {
-        return res.json({ result: "success", msg: "Admin users found", data: [] })
-    }
+    const protectedRoles = accountTypeVariants('Admin')
     if (requestedRole) filters.userType = { $in: accountTypeVariants(requestedRole) }
     else filters.userType = { $nin: protectedRoles }
     if (req.query.city) filters.$and = [...(filters.$and || []), { $or: [{ assignedCity: new RegExp(req.query.city, 'i') }, { city: new RegExp(req.query.city, 'i') }] }]
@@ -3474,7 +3700,10 @@ router.get('/getAdminUsers', async (req, res) => {
         Shortlisted.aggregate([{ $match: { isActive: true, userIDFK: { $in: userIds } } }, { $group: { _id: '$userIDFK', count: { $sum: 1 } } }]),
         Inquiry.aggregate([{ $match: { isActive: true, userIDFK: { $in: userIds } } }, { $group: { _id: '$userIDFK', count: { $sum: 1 } } }]),
         Visit.aggregate([{ $match: { isActive: true, userIDFK: { $in: userIds } } }, { $group: { _id: '$userIDFK', count: { $sum: 1 }, converted: { $sum: { $cond: ['$isConverted', 1, 0] } } } }]),
-        Property.aggregate([{ $match: { $or: [{ userIDFK: { $in: userIds } }, { vendorId: { $in: userIds } }] } }, { $group: { _id: '$userIDFK', count: { $sum: 1 } } }]),
+        Property.aggregate([
+            { $match: { $or: [{ userIDFK: { $in: userIds } }, { vendorId: { $in: userIds } }] } },
+            { $group: { _id: { $ifNull: ['$vendorId', '$userIDFK'] }, count: { $sum: 1 } } },
+        ]),
     ])
     const countMap = (rows, field = 'count') => new Map(rows.map((row) => [row._id?.toString(), row[field] || 0]))
     const wishlistMap = countMap(wishlistCounts)
@@ -3502,9 +3731,11 @@ router.get('/getAdminUsers', async (req, res) => {
             },
         })),
     })
-})
+}
 
-router.post('/updateUserStatus', async (req, res) => {
+router.get('/getAdminUsers', getAdminUsersHandler)
+
+const updateUserStatusHandler = async (req, res) => {
     const updateFields = {}
     if (req.body.isActive !== undefined) updateFields.isActive = req.body.isActive === true || req.body.isActive === 'true'
     if (req.body.verificationStatus !== undefined) updateFields.verificationStatus = req.body.verificationStatus
@@ -3544,7 +3775,9 @@ router.post('/updateUserStatus', async (req, res) => {
     } else {
         res.json({ result: "failure", msg: "User not found", data: 0 })
     }
-})
+}
+
+router.post('/updateUserStatus', updateUserStatusHandler)
 
 router.post('/users/:id', async (req, res) => {
     const updateFields = {}
@@ -3659,18 +3892,18 @@ router.post('/changePassword', attachAuthenticatedUser, async (req, res) => {
     res.json({ result: 'success', msg: 'Password changed. Please login again.', data: 1 })
 })
 
-router.post('/users/:id/reset-password', requireSuperAdmin, async (req, res) => {
+router.post('/users/:id/reset-password', requireAdminGovernance, async (req, res) => {
     const temporaryPassword = req.body.temporaryPassword || `StayJi${Math.floor(100000 + Math.random() * 900000)}`
     if (!strongPasswordPattern.test(temporaryPassword)) {
         return res.json({ result: 'failure', msg: 'Temporary password must be at least 8 characters and include uppercase, lowercase, and a number.', data: null })
     }
     const user = await User.findOneAndUpdate(
-        { _id: req.params.id, userType: { $nin: ['Super Admin', 'SuperAdmin', 'super_admin', 'super-admin'] } },
+        { _id: req.params.id },
         { $set: { userPassword: hashPassword(temporaryPassword), forceLogoutAt: new Date(), resetOtp: '', resetOtpExpiresAt: null } },
         { new: true }
     ).select('-userPassword -resetOtp -resetOtpExpiresAt')
     if (!user) return res.json({ result: 'failure', msg: 'User not found or cannot be reset through this workflow.', data: null })
-    await recordAudit({ performerId: req.auth.user._id, performerRole: 'Super Admin', action: 'password_reset_by_super_admin', entityType: 'user', entityId: user._id, city: user.assignedCity || user.city, state: user.assignedState || user.state })
+    await recordAudit({ performerId: req.auth.user._id, performerRole: 'Admin', action: 'password_reset_by_admin', entityType: 'user', entityId: user._id, city: user.assignedCity || user.city, state: user.assignedState || user.state })
     res.json({ result: 'success', msg: 'Temporary password generated.', data: { user, temporaryPassword } })
 })
 
@@ -3681,11 +3914,13 @@ router.get('/analytics', async (req, res) => {
         const propertyCityScope = adminCityScope(req)
         const userCityScope = adminUserCityScope(req)
         if (req.query.city) propertyCityScope.cityName = new RegExp(req.query.city, 'i')
-        const scopedPropertyIds = propertyCityScope.cityName ? await Property.find(propertyCityScope).distinct('_id') : null
+        const scopedPropertyIds = Object.keys(propertyCityScope || {}).length ? await Property.find(propertyCityScope).distinct('_id') : null
         const activeLeadScope = { isActive: true, ...dataScope }
         if (scopedPropertyIds) activeLeadScope.propertyIDFK = { $in: scopedPropertyIds }
         const activeEventScope = { isActive: true, ...dataScope }
         if (scopedPropertyIds) activeEventScope.propertyId = { $in: scopedPropertyIds }
+        const activeConversationScope = { isActive: true }
+        if (scopedPropertyIds) activeConversationScope.propertyId = { $in: scopedPropertyIds }
         const activePropertyScope = { isActive: true, approvalStatus: { $in: ['Approved', 'Verified'] }, ...dataScope, ...propertyCityScope }
         if (req.query.approvalStatus) activePropertyScope.approvalStatus = req.query.approvalStatus
         if (req.query.active === 'false') activePropertyScope.isActive = false
@@ -3711,6 +3946,19 @@ router.get('/analytics', async (req, res) => {
                 activeEventScope.addedOn.$lte = new Date(req.query.dateTo)
             }
         }
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
+        const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1)
+        const visitDateOrAddedOnScope = (startDate) => ({
+            ...activeLeadScope,
+            $or: [
+                { addedOn: { $gte: startDate } },
+                { visitDate: { $gte: startDate } },
+            ],
+        })
+        const auditScope = {}
+        const assignedCity = adminAssignedCity(req)
+        if (assignedCity) auditScope.city = new RegExp(`^${escapeRegex(assignedCity)}$`, 'i')
         const [
             users,
             activeUsers,
@@ -3720,6 +3968,10 @@ router.get('/analytics', async (req, res) => {
             realProperties,
             inactiveListings,
             pendingProperties,
+            approvedProperties,
+            rejectedProperties,
+            todayVisits,
+            monthlyVisits,
             visitLeads,
             inquiryLeads,
             convertedVisits,
@@ -3727,19 +3979,25 @@ router.get('/analytics', async (req, res) => {
             leadEvents,
             verifiedMoveIns,
             pendingMoveIns,
+            messageSummary,
             revenue,
             cityHeatmap,
             topProperties,
             trendRows,
+            latestActivities,
         ] = await Promise.all([
-            User.countDocuments({ userType: { $nin: ['Admin', 'Super Admin'] }, ...dataScope, ...userCityScope }),
-            User.countDocuments({ isActive: true, userType: { $nin: ['Admin', 'Super Admin'] }, ...dataScope, ...userCityScope }),
+            User.countDocuments({ userType: { $nin: accountTypeVariants('Admin') }, ...dataScope, ...userCityScope }),
+            User.countDocuments({ isActive: true, userType: { $nin: accountTypeVariants('Admin') }, ...dataScope, ...userCityScope }),
             User.countDocuments({ isActive: true, userType: { $in: accountTypeVariants('Owner') }, ...dataScope, ...userCityScope }),
             Property.countDocuments(activePropertyScope),
             Property.countDocuments({ isDummy: true, ...propertyCityScope }),
             Property.countDocuments({ isDummy: false, ...propertyCityScope }),
             Property.countDocuments({ isActive: false, ...dataScope, ...propertyCityScope }),
             Property.countDocuments({ approvalStatus: 'Pending', ...dataScope, ...propertyCityScope }),
+            Property.countDocuments({ approvalStatus: { $in: ['Approved', 'Verified'] }, ...dataScope, ...propertyCityScope }),
+            Property.countDocuments({ approvalStatus: 'Rejected', ...dataScope, ...propertyCityScope }),
+            Visit.countDocuments(visitDateOrAddedOnScope(todayStart)),
+            Visit.countDocuments(visitDateOrAddedOnScope(monthStart)),
             Visit.countDocuments(activeLeadScope),
             Inquiry.countDocuments(activeLeadScope),
             Visit.countDocuments({ ...activeLeadScope, isConverted: true }),
@@ -3747,6 +4005,10 @@ router.get('/analytics', async (req, res) => {
             LeadEvent.countDocuments(activeEventScope),
             MoveInConfirmation.countDocuments({ ...activeEventScope, status: 'Verified' }),
             MoveInConfirmation.countDocuments({ ...activeEventScope, status: { $in: ['Pending', 'Suspicious'] } }),
+            Conversation.aggregate([
+                { $match: activeConversationScope },
+                { $group: { _id: null, conversations: { $sum: 1 }, unreadMessages: { $sum: { $add: ['$unreadByUser', '$unreadByOwner'] } } } },
+            ]),
             Payment.aggregate([{ $match: { isActive: true } }, { $group: { _id: null, total: { $sum: { $toDouble: '$amount' } } } }]),
             Property.aggregate([{ $match: activePropertyScope }, { $group: { _id: '$cityName', listings: { $sum: 1 }, vacancies: { $sum: { $cond: ['$isAvailable', 1, 0] } } } }, { $sort: { listings: -1 } }, { $limit: 12 }]),
             Inquiry.aggregate([
@@ -3760,6 +4022,7 @@ router.get('/analytics', async (req, res) => {
                 { $project: { propertyId: '$_id', name: '$property.propertyName', city: '$property.cityName', inquiries: 1 } },
             ]),
             Inquiry.find(activeLeadScope).select('addedOn isConverted').lean(),
+            AuditLog.find(auditScope).sort({ addedOn: -1, createdAt: -1 }).limit(12).lean(),
         ])
         const leads = Math.max(visitLeads + inquiryLeads, leadEvents)
         const conversions = convertedVisits + convertedInquiries + verifiedMoveIns
@@ -3790,11 +4053,18 @@ router.get('/analytics', async (req, res) => {
                     inactiveListings,
                     liveVacancies,
                     pendingProperties,
+                    pendingVerification: pendingProperties,
+                    approvedProperties,
+                    rejectedProperties,
+                    todayVisits,
+                    monthlyVisits,
                     occupancyRate,
                     leads,
                     leadEvents,
                     verifiedMoveIns,
                     pendingMoveIns,
+                    messages: messageSummary[0]?.conversations || 0,
+                    unreadMessages: messageSummary[0]?.unreadMessages || 0,
                     commissionDue: verifiedMoveIns * 2000,
                     cashbackDue: verifiedMoveIns * 250,
                     conversionRate: leads ? Math.round((conversions / leads) * 100) : 0,
@@ -3804,6 +4074,7 @@ router.get('/analytics', async (req, res) => {
                 trends: Array.from(trendMap.values()).sort((a, b) => a.month.localeCompare(b.month)).slice(-12),
                 cityHeatmap: cityHeatmap.map((row) => ({ city: row._id || 'Unknown', listings: row.listings, vacancies: row.vacancies })),
                 topProperties,
+                latestActivities,
             },
         })
     } catch (error) {
@@ -3817,16 +4088,16 @@ router.get('/properties', async (req, res) => {
         const filters = buildAdminPropertyQuery(req.query)
         const ownerSearch = filters.__ownerSearch
         delete filters.__ownerSearch
-        Object.assign(filters, adminCityScope(req))
+        const scopedFilters = applyScope(filters, adminCityScope(req))
         const search = (req.query.q || req.query.search || '').trim()
         const ownerNeedle = ownerSearch || search
         if (ownerNeedle) {
             const regex = new RegExp(escapeRegex(normalizeText(ownerNeedle)), 'i')
             const vendorIds = await User.find({ $or: [{ userFname: regex }, { userLname: regex }, { userEmail: regex }, { contact: regex }] }).distinct('_id')
             const vendorConditions = [{ userIDFK: { $in: vendorIds } }, { vendorId: { $in: vendorIds } }]
-            if (search && filters.$and?.[0]?.$or) filters.$and[0].$or.push(...vendorConditions)
-            else if (ownerSearch) filters.$and = [...(filters.$and || []), { $or: vendorConditions }]
-            else filters.$or = [...(filters.$or || []), ...vendorConditions]
+            if (search && scopedFilters.$and?.[0]?.$and?.[0]?.$or) scopedFilters.$and[0].$and[0].$or.push(...vendorConditions)
+            else if (search && scopedFilters.$and?.[0]?.$or) scopedFilters.$and[0].$or.push(...vendorConditions)
+            else scopedFilters.$and = [...(scopedFilters.$and || []), { $or: vendorConditions }]
         }
         const sortMap = {
             newest: { addedOn: -1 },
@@ -3836,8 +4107,8 @@ router.get('/properties', async (req, res) => {
             rating: { rating: -1 },
         }
         const [total, rows] = await Promise.all([
-            Property.countDocuments(filters),
-            Property.find(filters).populate(propertyPopulate()).sort(sortMap[req.query.sort] || sortMap.newest).skip(skip).limit(limit),
+            Property.countDocuments(scopedFilters),
+            Property.find(scopedFilters).populate(propertyPopulate()).sort(sortMap[req.query.sort] || sortMap.newest).skip(skip).limit(limit),
         ])
         const analytics = await propertyAnalyticsMap(rows.map((row) => row._id))
         res.json({
@@ -4007,7 +4278,10 @@ router.get('/vendors', async (req, res) => {
         User.find(filters).select('-userPassword').sort({ addedOn: -1 }).skip(skip).limit(limit),
     ])
     const vendorIds = vendors.map((vendor) => vendor._id)
-    const propertyCounts = await Property.aggregate([{ $match: { $or: [{ userIDFK: { $in: vendorIds } }, { vendorId: { $in: vendorIds } }] } }, { $group: { _id: '$userIDFK', totalProperties: { $sum: 1 }, activeProperties: { $sum: { $cond: ['$isActive', 1, 0] } } } }])
+    const propertyCounts = await Property.aggregate([
+        { $match: { $or: [{ userIDFK: { $in: vendorIds } }, { vendorId: { $in: vendorIds } }] } },
+        { $group: { _id: { $ifNull: ['$vendorId', '$userIDFK'] }, totalProperties: { $sum: 1 }, activeProperties: { $sum: { $cond: ['$isActive', 1, 0] } } } },
+    ])
     const countMap = new Map(propertyCounts.map((item) => [item._id?.toString(), item]))
     res.json({ result: 'success', msg: 'Admin vendors found', data: { items: vendors.map((vendor) => ({ ...safeUserDto(vendor), ...(countMap.get(vendor._id.toString()) || { totalProperties: 0, activeProperties: 0 }) })), page, limit, total, pages: Math.ceil(total / limit) } })
 })
@@ -4019,23 +4293,17 @@ router.get('/vendors/:id', async (req, res) => {
 
 router.get('/users', async (req, res) => {
     req.query = { ...req.query }
-    return router.handle({ ...req, url: '/getAdminUsers' }, res)
+    return getAdminUsersHandler(req, res)
 })
 
 router.post('/users/:id/status', async (req, res) => {
     req.body = { ...req.body, id: req.params.id }
-    return router.handle({ ...req, url: '/updateUserStatus' }, res)
+    return updateUserStatusHandler(req, res)
 })
 
 router.post('/create-account', async (req, res) => {
     const role = officialRoleName(req.body.userType || req.body.role || 'User')
     const performerRole = req.auth?.role || normalizeAccountType(req.body.performerRole || 'admin')
-    if (normalizeAccountType(role) === 'admin' && performerRole !== 'super_admin') {
-        return res.json({ result: 'failure', msg: 'Only Super Admin can create Admin accounts.', data: null })
-    }
-    if (normalizeAccountType(role) === 'super_admin') {
-        return res.json({ result: 'failure', msg: 'Super Admin accounts must be provisioned outside public admin flows.', data: null })
-    }
     if (performerRole === 'admin' && (req.body.assignedCity || req.body.assignedState) && (req.body.assignedCity || '').toLowerCase() !== (req.auth.assignedCity || '').toLowerCase()) {
         return res.status(403).json({ result: 'failure', msg: 'City Admins can only create accounts in their assigned city.', data: null })
     }
@@ -4089,8 +4357,8 @@ router.get('/auditLogs', async (req, res) => {
 })
 
 router.get('/governance', async (req, res) => {
-    if (!isSuperAdminRequest(req)) {
-        return res.status(403).json({ result: 'failure', msg: 'Only Super Admin can access global governance.', data: null })
+    if (!isAdminRequest(req)) {
+        return res.status(403).json({ result: 'failure', msg: 'Only Admin can access global governance.', data: null })
     }
     const [
         realProperties,
@@ -4112,7 +4380,7 @@ router.get('/governance', async (req, res) => {
         Property.countDocuments({ isDummy: false, isActive: true, status: { $nin: ['archived', 'suspended'] }, approvalStatus: { $in: ['Approved', 'Verified'] } }),
         Property.countDocuments({ $or: [{ isActive: false }, { status: 'archived' }] }),
         Property.countDocuments({ approvalStatus: 'Pending' }),
-        User.countDocuments({ isDummy: false, userType: { $nin: ['Admin', 'Super Admin'] } }),
+        User.countDocuments({ isDummy: false, userType: { $nin: accountTypeVariants('Admin') } }),
         User.countDocuments({ isDummy: true }),
         User.countDocuments({ userType: { $in: accountTypeVariants('Admin') } }),
         User.countDocuments({ userType: { $in: accountTypeVariants('Owner') }, approvalStatus: 'Pending' }),
@@ -4153,36 +4421,14 @@ router.get('/governance', async (req, res) => {
 })
 
 router.post('/dummy-transition', async (req, res) => {
-    if (!isSuperAdminRequest(req)) {
-        return res.status(403).json({ result: 'failure', msg: 'Only Super Admin can control dummy/live visibility.', data: null })
+    if (!isAdminRequest(req)) {
+        return res.status(403).json({ result: 'failure', msg: 'Only Admin can control dummy/live visibility.', data: null })
     }
-    const filters = {}
-    if (req.body.city) filters.cityName = new RegExp(req.body.city, 'i')
-    if (req.body.locality) filters.areaName = new RegExp(req.body.locality, 'i')
-    if (req.body.scope === 'users') {
-        const update = { isDummy: toBoolean(req.body.isDummy), status: req.body.status || (toBoolean(req.body.visible) ? 'demo' : 'archived') }
-        const result = await User.updateMany(filters.cityName ? { city: filters.cityName } : {}, { $set: update })
-        await recordAudit({ performerId: req.body.performerId || req.body.adminId, performerRole: req.body.performerRole || 'Super Admin', action: 'dummy_user_transition', entityType: 'user', updatedValue: update, city: req.body.city })
-        return res.json({ result: 'success', msg: 'Dummy user transition updated.', data: result })
-    }
-    const update = { isDummy: toBoolean(req.body.isDummy), status: req.body.status || (toBoolean(req.body.visible) ? 'demo' : 'archived'), isActive: req.body.visible === undefined ? undefined : toBoolean(req.body.visible) }
-    Object.keys(update).forEach((key) => update[key] === undefined && delete update[key])
-    const result = await Property.updateMany(filters, { $set: update })
-    if (req.body.city) {
-        const city = await CityState.findOne({ isActive: true, cityName: new RegExp(`^${escapeRegex(req.body.city)}$`, 'i') })
-        if (city) {
-            await CityState.updateOne(
-                { _id: city._id },
-                { $set: { dummyVisible: req.body.visible === undefined ? city.dummyVisible : toBoolean(req.body.visible), status: city.status === 'live' ? 'live' : 'demo', updatedOn: new Date() } }
-            )
-        }
-    }
-    await recordAudit({ performerId: req.body.performerId || req.body.adminId, performerRole: req.body.performerRole || 'Super Admin', action: 'dummy_property_transition', entityType: 'property', updatedValue: { filters, update }, city: req.body.city })
-    res.json({ result: 'success', msg: 'Dummy property transition updated.', data: result })
+    return res.status(410).json({ result: 'failure', msg: 'Demo inventory transitions are disabled for the Bangalore-only MVP launch.', data: null })
 })
 
-router.get('/city-states', requireSuperAdmin, async (req, res) => {
-    const filters = {}
+router.get('/city-states', requireAdminGovernance, async (req, res) => {
+    const filters = { cityName: MVP_CITY_REGEX }
     if (req.query.active !== undefined) filters.isActive = req.query.active === 'true'
     if (req.query.state) filters.stateName = new RegExp(req.query.state, 'i')
     if (req.query.city) filters.cityName = new RegExp(req.query.city, 'i')
@@ -4190,16 +4436,16 @@ router.get('/city-states', requireSuperAdmin, async (req, res) => {
     res.json({ result: 'success', msg: 'City/state list found.', data: { items } })
 })
 
-router.post('/city-states', requireSuperAdmin, async (req, res) => {
+router.post('/city-states', requireAdminGovernance, async (req, res) => {
     if (!req.body.stateName || !req.body.cityName) {
         return res.json({ result: 'failure', msg: 'State and city are required.', data: null })
     }
     const payload = {
-        stateName: normalizeText(req.body.stateName),
-        cityName: canonicalLocationName(req.body.cityName),
+        stateName: MVP_STATE,
+        cityName: MVP_CITY,
         isActive: req.body.isActive === undefined ? true : toBoolean(req.body.isActive),
-        dummyVisible: toBoolean(req.body.dummyVisible),
-        status: ['demo', 'live', 'paused', 'archived'].includes(req.body.status) ? req.body.status : 'demo',
+        dummyVisible: false,
+        status: ['live', 'paused'].includes(req.body.status) ? req.body.status : 'live',
         localities: Array.isArray(req.body.localities)
             ? req.body.localities.map((item) => ({ ...item, name: normalizeText(item.name || item) }))
             : parseStringList(req.body.localities).map((name) => ({ name: normalizeText(name), isActive: true, dummyVisible: false })),
@@ -4216,26 +4462,28 @@ router.post('/city-states', requireSuperAdmin, async (req, res) => {
     if (payload.assignedAdmins.length) {
         await User.updateMany({ _id: { $in: payload.assignedAdmins }, userType: { $in: accountTypeVariants('Admin') } }, { $set: { assignedCity: payload.cityName, assignedState: payload.stateName, city: payload.cityName, state: payload.stateName } })
     }
-    await recordAudit({ performerId: req.auth.user._id, performerRole: 'Super Admin', action: 'city_state_upserted', entityType: 'city_state', entityId: city._id, updatedValue: payload, city: payload.cityName, state: payload.stateName })
+    await recordAudit({ performerId: req.auth.user._id, performerRole: 'Admin', action: 'city_state_upserted', entityType: 'city_state', entityId: city._id, updatedValue: payload, city: payload.cityName, state: payload.stateName })
     res.json({ result: 'success', msg: 'City/state saved.', data: city })
 })
 
-router.post('/city-states/:id/assign-admins', requireSuperAdmin, async (req, res) => {
+router.post('/city-states/:id/assign-admins', requireAdminGovernance, async (req, res) => {
     const adminIds = (req.body.adminIds || req.body.assignedAdmins || []).filter((id) => mongoose.Types.ObjectId.isValid(id))
     const city = await CityState.findOne({ _id: req.params.id })
     if (!city) return res.json({ result: 'failure', msg: 'City/state not found.', data: null })
+    if (!isBangaloreValue(city.cityName)) return res.status(403).json({ result: 'failure', msg: 'StayJi MVP only supports Bangalore admin assignment.', data: null })
     await CityState.updateMany({ assignedAdmins: { $in: adminIds }, _id: { $ne: city._id } }, { $pull: { assignedAdmins: { $in: adminIds } }, updatedOn: new Date() })
     city.assignedAdmins = adminIds
     city.updatedOn = new Date()
     await city.save()
     await User.updateMany({ _id: { $in: adminIds }, userType: { $in: accountTypeVariants('Admin') } }, { $set: { assignedCity: city.cityName, assignedState: city.stateName, city: city.cityName, state: city.stateName } })
-    await recordAudit({ performerId: req.auth.user._id, performerRole: 'Super Admin', action: 'city_admins_assigned', entityType: 'city_state', entityId: city._id, updatedValue: { adminIds }, city: city.cityName, state: city.stateName })
+    await recordAudit({ performerId: req.auth.user._id, performerRole: 'Admin', action: 'city_admins_assigned', entityType: 'city_state', entityId: city._id, updatedValue: { adminIds }, city: city.cityName, state: city.stateName })
     res.json({ result: 'success', msg: 'Admins assigned.', data: city })
 })
 
-router.post('/city-states/:id/launch', requireSuperAdmin, async (req, res) => {
+router.post('/city-states/:id/launch', requireAdminGovernance, async (req, res) => {
     const city = await CityState.findOne({ _id: req.params.id })
     if (!city) return res.json({ result: 'failure', msg: 'City/state not found.', data: null })
+    if (!isBangaloreValue(city.cityName)) return res.status(403).json({ result: 'failure', msg: 'StayJi MVP only supports Bangalore launch controls.', data: null })
 
     const cityFilter = { cityName: new RegExp(`^${city.cityName}$`, 'i') }
     const [realListings, demoListings] = await Promise.all([
@@ -4257,7 +4505,7 @@ router.post('/city-states/:id/launch', requireSuperAdmin, async (req, res) => {
 
     await recordAudit({
         performerId: req.auth.user._id,
-        performerRole: 'Super Admin',
+        performerRole: 'Admin',
         action: 'city_launched',
         entityType: 'city_state',
         entityId: city._id,
@@ -4285,9 +4533,11 @@ router.get('/leads', async (req, res) => {
         if (req.query.dateTo) match.addedOn.$lte = new Date(req.query.dateTo)
     }
     const cityScope = adminCityScope(req)
-    if (cityScope.cityName) {
+    if (cityScope && Object.keys(cityScope).length) {
         const propertyIds = await Property.find(cityScope).distinct('_id')
-        match.propertyIDFK = match.propertyIDFK ? match.propertyIDFK : { $in: propertyIds }
+        match.propertyIDFK = match.propertyIDFK
+            ? { $in: propertyIds.filter((id) => id.toString() === match.propertyIDFK.toString()) }
+            : { $in: propertyIds }
     }
     const [visits, inquiries] = await Promise.all([
         Visit.find(match).populate('userIDFK', ['userFname', 'userLname', 'userEmail', 'contact']).populate({ path: 'propertyIDFK', populate: { path: 'userIDFK', select: ['userFname', 'userLname', 'userEmail', 'contact'] } }).sort({ addedOn: -1 }).skip(skip).limit(limit),

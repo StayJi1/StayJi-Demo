@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FiBarChart2, FiEdit2, FiEye, FiTrash2 } from 'react-icons/fi'
+import { FiBarChart2, FiEdit2, FiTrash2 } from 'react-icons/fi'
 import Card from '../../../components/common/Card'
-import AdvancedDataTable from '../../../components/admin/AdvancedDataTable'
+import PropertyCard from '../../../components/property/PropertyCard'
 import dashboardService from '../../../services/dashboardService'
 import propertyService from '../../../services/propertyService'
 import { useAuth } from '../../../context/AuthContext'
@@ -13,7 +13,6 @@ function ManagePropertiesPage() {
   const ownerId = user?._id || user?.id
   const [properties, setProperties] = useState([])
   const [filters, setFilters] = useState({ search: '', approvalStatus: '', category: '', sortBy: 'newest' })
-  const [selectedProperty, setSelectedProperty] = useState(null)
   const [quickEdit, setQuickEdit] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -101,71 +100,6 @@ function ManagePropertiesPage() {
       })
   }, [filters, properties])
 
-  const columns = [
-    {
-      key: 'property',
-      label: 'Property',
-      value: (property) => `${property.name || ''} ${property.city || ''} ${property.areaName || ''}`,
-      render: (property) => (
-        <div className="flex min-w-[280px] items-center gap-3">
-          <img src={property.image} alt={property.name || 'Owner property'} className="h-16 w-20 flex-none rounded-2xl object-cover" />
-          <div className="min-w-0">
-            <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}`)} className="font-semibold text-white hover:text-accent-300">{property.name}</button>
-            <p className="mt-1 max-w-[240px] truncate text-xs text-slate-500">{property.description || 'No description available.'}</p>
-          </div>
-        </div>
-      ),
-    },
-    { key: 'city', label: 'Locality', value: (property) => `${property.city || '-'} ${property.areaName || ''}` },
-    { key: 'rent', label: 'Rent', value: (property) => property.rent || 0, sortValue: (property) => Number(property.rent) || 0, render: (property) => `₹${property.rent || '0'}` },
-    { key: 'vacancy', label: 'Vacancy', value: (property) => `${property.vacancyStatus || 'Available'} ${property.availableBeds || 0}` },
-    {
-      key: 'status',
-      label: 'Status',
-      value: (property) => property.status || property.vacancyStatus || 'Available',
-      render: (property) => (
-        <span className={`rounded-full px-3 py-2 text-xs ${
-          property.status === 'Booked' || property.vacancyStatus === 'Fully occupied'
-            ? 'bg-rose-500/10 text-rose-300'
-            : 'bg-emerald-500/10 text-emerald-300'
-        }`}>
-          {property.status || property.vacancyStatus || 'Available'}
-        </span>
-      ),
-    },
-    {
-      key: 'approval',
-      label: 'Approval',
-      value: (property) => property.approvalStatus || 'Pending',
-      render: (property) => (
-        <span className={`rounded-full px-3 py-2 text-xs ${
-          property.approvalStatus === 'Approved'
-            ? 'bg-emerald-500/10 text-emerald-300'
-            : property.approvalStatus === 'Rejected'
-              ? 'bg-rose-500/10 text-rose-300'
-              : 'bg-amber-500/10 text-amber-200'
-        }`}>
-          {property.approvalStatus || 'Pending'}
-        </span>
-      ),
-    },
-    {
-      key: 'actions',
-      label: 'Actions',
-      sortable: false,
-      value: (property) => property.id || property._id,
-      render: (property) => (
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEye /> View</button>
-          <button type="button" onClick={() => navigate(`/dashboard/owner/leads?propertyId=${property.id || property._id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiBarChart2 /> Analytics</button>
-          <button type="button" onClick={() => openQuickEdit(property)} className="inline-flex items-center gap-2 rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200 hover:bg-emerald-500/10">Quick edit</button>
-          <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}/edit`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEdit2 /> Edit</button>
-          <button type="button" onClick={() => handleDelete(property.id || property._id)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-rose-400"><FiTrash2 /> Delete</button>
-        </div>
-      ),
-    },
-  ]
-
   return (
     <div className="space-y-8">
       <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
@@ -214,15 +148,27 @@ function ManagePropertiesPage() {
       ) : filteredProperties.length ? (
         <>
         {notice ? <Card className="border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">{notice}</Card> : null}
-        <AdvancedDataTable
-          title="Owner properties and occupancy controls"
-          eyebrow="Owner listing table"
-          rows={filteredProperties}
-          columns={columns}
-          rowId={(property) => property.id || property._id}
-          searchPlaceholder="Search property, locality, status, rent"
-          minWidth="1180px"
-        />
+        <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+          {filteredProperties.map((property) => (
+            <div key={property.id || property._id} className="space-y-3">
+              <PropertyCard property={property} hideSave />
+              <Card className="p-4">
+                <div className="mb-3 flex flex-wrap gap-2 text-xs">
+                  <span className={`rounded-full px-3 py-2 ${property.approvalStatus === 'Rejected' ? 'bg-rose-500/10 text-rose-300' : property.approvalStatus === 'Approved' || property.approvalStatus === 'Verified' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-200'}`}>
+                    {property.approvalStatus || 'Pending'}
+                  </span>
+                  <span className="rounded-full bg-slate-900 px-3 py-2 text-slate-300">{property.vacancyStatus || property.status || 'Available'}</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => navigate(`/dashboard/owner/leads?propertyId=${property.id || property._id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiBarChart2 /> Analytics</button>
+                  <button type="button" onClick={() => openQuickEdit(property)} className="inline-flex items-center gap-2 rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200 hover:bg-emerald-500/10">Availability</button>
+                  <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}/edit`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEdit2 /> Edit</button>
+                  <button type="button" onClick={() => handleDelete(property.id || property._id)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-rose-400"><FiTrash2 /> Delete</button>
+                </div>
+              </Card>
+            </div>
+          ))}
+        </div>
         </>
       ) : error ? (
         <Card className="p-8 text-center text-rose-300">{error}</Card>
@@ -231,37 +177,6 @@ function ManagePropertiesPage() {
           No properties found. Add your first property to start receiving inquiries.
         </Card>
       )}
-      {selectedProperty ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4">
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[2rem] border border-slate-800 bg-surface-900 p-6 shadow-card">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm uppercase tracking-[0.24em] text-accent-400">{selectedProperty.category || selectedProperty.type || 'PG'} • {selectedProperty.approvalStatus || 'Pending'}</p>
-                <h2 className="mt-2 text-3xl font-semibold text-white">{selectedProperty.name}</h2>
-              </div>
-              <button type="button" onClick={() => setSelectedProperty(null)} className="rounded-full border border-slate-700 px-3 py-2 text-slate-300 hover:border-accent-500">Close</button>
-            </div>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <p className="text-slate-300">City: {selectedProperty.city || '-'}</p>
-              <p className="text-slate-300">Address: {selectedProperty.address || selectedProperty.locationLabel || '-'}</p>
-              <p className="text-slate-300">Latitude: {selectedProperty.location?.lat ?? selectedProperty.latitude ?? '-'}</p>
-              <p className="text-slate-300">Longitude: {selectedProperty.location?.lng ?? selectedProperty.longitude ?? '-'}</p>
-              <p className="text-slate-300">Rent: ₹{selectedProperty.rent || '0'}</p>
-              <p className="text-slate-300">Deposit: ₹{selectedProperty.depositAmount || '0'}</p>
-              <p className="text-slate-300">Beds available: {selectedProperty.availableBeds || 0}</p>
-              <p className="text-slate-300">Vacancy: {selectedProperty.vacancyStatus || 'Available'}</p>
-              <p className="text-slate-300">Available from: {selectedProperty.availableFrom || 'Immediately'}</p>
-              <p className="text-slate-300">Parking: {selectedProperty.parkingAvailable ? 'Yes' : 'No'}</p>
-            </div>
-            <p className="mt-5 text-slate-300">{selectedProperty.description || 'No description available.'}</p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              {(selectedProperty.images || [selectedProperty.image]).filter(Boolean).slice(0, 6).map((image) => (
-                <img key={image} src={image} alt={selectedProperty.name} className="h-40 w-full rounded-2xl object-cover" />
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : null}
       {quickEdit ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4">
           <form onSubmit={submitQuickEdit} className="w-full max-w-2xl rounded-[2rem] border border-slate-800 bg-surface-900 p-6 shadow-card">

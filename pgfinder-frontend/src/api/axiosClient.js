@@ -27,6 +27,12 @@ axiosClient.interceptors.request.use((config) => {
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      sessionStorage.removeItem('stayji-auth')
+      localStorage.removeItem('stayji-auth')
+      delete axiosClient.defaults.headers.common.Authorization
+      window.dispatchEvent(new Event('stayji-auth-expired'))
+    }
     if (!error.response) {
       return Promise.reject({
         message: `Backend is not reachable at ${baseURL}. Start the Node server on port 3000 and check CORS/API URL settings.`,

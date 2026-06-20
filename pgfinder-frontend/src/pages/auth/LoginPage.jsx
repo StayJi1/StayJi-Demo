@@ -11,8 +11,7 @@ function LoginPage({ portal = 'public' }) {
   const navigate = useNavigate()
   const { login, status, error, isAuthenticated, role } = useAuth()
   const isAdminPortal = portal === 'admin'
-  const isSuperAdminPortal = portal === 'super-admin'
-  const [form, setForm] = useState({ email: '', password: '', role: isSuperAdminPortal ? 'super-admin' : isAdminPortal ? 'admin' : 'user', acceptPolicy: false })
+  const [form, setForm] = useState({ email: '', password: '', role: isAdminPortal ? 'admin' : 'user', acceptPolicy: false })
   const [resetOpen, setResetOpen] = useState(false)
   const [resetForm, setResetForm] = useState({ email: '', otp: '', password: '' })
   const [resetStep, setResetStep] = useState('email')
@@ -32,7 +31,6 @@ function LoginPage({ portal = 'public' }) {
   const normalizeRole = (value) => {
     const rawRole = value?.toString().toLowerCase() || 'user'
     if (['owner', 'host', 'hostel', 'vendor'].includes(rawRole)) return 'owner'
-    if (['super admin', 'super_admin', 'superadmin'].includes(rawRole)) return 'super-admin'
     if (['personal', 'student'].includes(rawRole)) return 'user'
     return rawRole
   }
@@ -75,18 +73,18 @@ function LoginPage({ portal = 'public' }) {
 
   return (
     <div className="mx-auto flex min-h-[calc(100vh-108px)] items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
-      {isAdminPortal || isSuperAdminPortal ? <SEO noindex title={isSuperAdminPortal ? 'Super Admin Login' : 'Admin Login'} description="Restricted StayJi governance login." path={isSuperAdminPortal ? '/super-admin-login' : '/admin-login'} schema={{ '@context': 'https://schema.org', '@type': 'WebPage', name: 'Restricted Login' }} /> : null}
+      {isAdminPortal ? <SEO noindex title="Admin Login" description="Restricted StayJi governance login." path="/admin-login" schema={{ '@context': 'https://schema.org', '@type': 'WebPage', name: 'Restricted Login' }} /> : null}
       <Card className="w-full max-w-xl">
         <div className="space-y-4">
-          <p className="text-sm uppercase tracking-[0.28em] text-accent-400">{isSuperAdminPortal ? 'Super Admin portal' : isAdminPortal ? 'Admin portal' : 'Welcome back'}</p>
-          <h1 className="text-3xl font-semibold text-white">{isSuperAdminPortal ? 'Super Admin login' : isAdminPortal ? 'Admin login' : 'Login to your account'}</h1>
-          <p className="text-slate-400">{isSuperAdminPortal || isAdminPortal ? 'Restricted StayJi governance access. This route is hidden from public navigation and SEO.' : 'Access your dashboard, manage properties, and book visits in one place.'}</p>
+          <p className="text-sm uppercase tracking-[0.28em] text-accent-400">{isAdminPortal ? 'Admin portal' : 'Welcome back'}</p>
+          <h1 className="text-3xl font-semibold text-white">{isAdminPortal ? 'Admin login' : 'Login to your account'}</h1>
+          <p className="text-slate-400">{isAdminPortal ? 'Restricted StayJi governance access. This route is hidden from public navigation and SEO.' : 'Access your dashboard, manage properties, and book visits in one place.'}</p>
         </div>
         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
           <div className="grid gap-4">
             <Input label="Email" type="email" name="email" value={form.email} onChange={handleChange} required />
             <Input label="Password" type="password" name="password" value={form.password} onChange={handleChange} required />
-            {!isAdminPortal && !isSuperAdminPortal ? <label className="block text-sm font-medium text-slate-200">
+            {!isAdminPortal ? <label className="block text-sm font-medium text-slate-200">
               Account type
               <select
                 name="role"

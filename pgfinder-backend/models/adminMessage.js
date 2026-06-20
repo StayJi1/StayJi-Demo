@@ -15,7 +15,7 @@ adminMessageSchema = mongoose.Schema({
     },
     senderRole:{
         type:String,
-        enum:["admin","owner","super_admin","vendor"],
+        enum:["admin","owner","vendor"],
         default:"admin"
     },
     message:{

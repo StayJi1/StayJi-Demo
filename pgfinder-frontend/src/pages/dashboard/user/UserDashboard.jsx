@@ -37,7 +37,6 @@ function UserDashboard() {
   const [overview, setOverview] = useState(null)
   const [loading, setLoading] = useState(true)
   const [actionError, setActionError] = useState('')
-  const [compareCount, setCompareCount] = useState(0)
   const [viewedCount, setViewedCount] = useState(0)
   const [moveIns, setMoveIns] = useState([])
   const [payout, setPayout] = useState({ upiId: '', bankDetails: '', upiQr: null })
@@ -58,7 +57,6 @@ function UserDashboard() {
     }
     load()
     window.setTimeout(() => {
-      setCompareCount(JSON.parse(localStorage.getItem('stayjiCompare') || '[]').length)
       setViewedCount(JSON.parse(localStorage.getItem('stayjiViewed') || '[]').length)
     }, 0)
   }, [user?._id])
@@ -70,7 +68,7 @@ function UserDashboard() {
     try {
       await propertyService.removeShortlistProperty({ userIDFK: user._id, propertyIDFK })
       setOverview((current) => {
-        const shortlistItems = (current?.shortlistItems || []).filter((item) => item.property._id !== propertyIDFK && item.property.id !== propertyIDFK)
+        const shortlistItems = (current?.shortlistItems || []).filter((item) => item.property?._id !== propertyIDFK && item.property?.id !== propertyIDFK)
         return { ...current, shortlistItems, shortlist: shortlistItems.length }
       })
     } catch (err) {
@@ -124,6 +122,7 @@ function UserDashboard() {
   const savedSearches = overview?.savedSearches || []
   const viewedProperties = overview?.viewedProperties || []
   const notifications = overview?.notifications || []
+  const conversations = overview?.chats || []
   const approvedRewards = moveIns.filter((item) => item.status === 'Verified' && item.ownerConfirmed)
   const pendingRewards = moveIns.filter((item) => ['Pending', 'Suspicious'].includes(item.status))
   const totalCoins = overview?.wallet?.totalCoins ?? approvedRewards.reduce((sum, item) => sum + (Number(item.rewardCoins || item.cashbackAmount) || 0), 0)
@@ -150,13 +149,13 @@ function UserDashboard() {
           [
             { label: 'Shortlist', value: overview.shortlist, icon: <FiBookmark /> },
             { label: 'Visits', value: visits.length, icon: <FiCalendar /> },
-            { label: 'Messages', value: overview.chats?.length || 0, icon: <FiMessageSquare /> },
+            { label: 'Messages', value: conversations.length, icon: <FiMessageSquare /> },
             { label: 'Saved searches', value: savedSearches.length, icon: <FiMapPin /> },
           ].map((item) => (
             <button
               key={item.label}
               type="button"
-              onClick={() => document.getElementById(item.label === 'Shortlist' ? 'user-wishlist' : item.label === 'Visits' ? 'visit-bookings' : item.label === 'Saved searches' ? 'saved-searches' : 'user-support')?.scrollIntoView({ behavior: 'smooth' })}
+              onClick={() => document.getElementById(item.label === 'Shortlist' ? 'user-wishlist' : item.label === 'Visits' ? 'visit-bookings' : item.label === 'Saved searches' ? 'saved-searches' : 'user-messages')?.scrollIntoView({ behavior: 'smooth' })}
               className="text-left"
             >
               <Card className="h-full p-6 transition hover:border-accent-500">
@@ -187,14 +186,14 @@ function UserDashboard() {
                   key={id}
                   className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4"
                 >
-                  <Link to={`/properties/${property.id}`} className="block transition hover:text-accent-300">
+                  <Link to={property?.id ? `/properties/${property.id}` : '/properties'} className="block transition hover:text-accent-300">
                     <p className="font-semibold text-white">{property.name || 'PG listing'}</p>
                   </Link>
                   <p className="mt-2 text-sm text-slate-400">{property.address || property.city || 'Location available in listing'}</p>
                   <p className="mt-2 text-sm text-accent-300">₹{property.rent || 'Contact owner'}/mo</p>
                   <button
                     type="button"
-                    onClick={(event) => handleRemoveWishlist(event, property._id || property.id)}
+                    onClick={(event) => handleRemoveWishlist(event, property?._id || property?.id)}
                     className="mt-4 rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200 hover:bg-rose-500/10"
                   >
                     Remove from wishlist
@@ -207,17 +206,22 @@ function UserDashboard() {
           </div>
         </Card>
 
-        <Card id="user-support">
+        <Card id="user-messages">
           <div>
-            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Support</p>
-            <h2 className="mt-3 text-2xl font-semibold text-white">Contact support</h2>
+            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Messages</p>
+            <h2 className="mt-3 text-2xl font-semibold text-white">Owner conversations</h2>
           </div>
-          <p className="mt-6 text-slate-300">
-            Need help with a booking or owner query? Reach the StayJi team at{' '}
-            <a href="mailto:hello.stayji@gmail.com" className="text-accent-300 underline-offset-4 hover:underline">hello.stayji@gmail.com</a>
-            {' '}or{' '}
-            <a href="tel:1234567899" className="text-accent-300 underline-offset-4 hover:underline">1234567899</a>.
-          </p>
+          <div className="mt-6 space-y-3">
+            {conversations.slice(0, 5).map((conversation) => (
+              <Link key={conversation.id || conversation._id} to={`/dashboard/user/messages?conversationId=${conversation.id || conversation._id}`} className="block rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300 hover:border-accent-500">
+                <p className="font-semibold text-white">{conversation.propertyId?.propertyName || conversation.propertyId?.name || 'Property conversation'}</p>
+                <p className="mt-1 line-clamp-2">{conversation.lastMessagePreview || 'Open conversation history'}</p>
+                <p className="mt-2 text-xs text-slate-500">{conversation.lastMessageAt ? new Date(conversation.lastMessageAt).toLocaleString() : ''}</p>
+              </Link>
+            ))}
+            {!conversations.length ? <p className="text-sm text-slate-400">No owner conversations yet. Use Message Owner on a property page to start one.</p> : null}
+            <Link to="/dashboard/user/messages" className="inline-flex rounded-full border border-accent-500/60 px-4 py-2 text-sm text-accent-200">Open messages</Link>
+          </div>
         </Card>
       </div>
 
@@ -225,7 +229,6 @@ function UserDashboard() {
         {[
           { title: 'Visit bookings', text: `${visits.length} visits across pending, approved, rejected, cancelled, and completed states.`, target: 'visit-bookings' },
           { title: 'Inquiry history', text: `${inquiries.length} inquiries with owner replies and lead timeline context.`, target: 'inquiry-history' },
-          { title: 'Comparison history', text: `${compareCount} properties currently saved for side-by-side comparison.`, href: '/compare' },
           { title: 'Viewed properties', text: `${Math.max(viewedCount, viewedProperties.length)} recently viewed stays are remembered.`, target: 'viewed-properties' },
           { title: 'Saved searches', text: `${savedSearches.length} city, budget, sharing, and nearby preference searches saved.`, target: 'saved-searches' },
           { title: 'Rental history', text: `${moveIns.length} move-in and reward verification records.`, target: 'rental-history' },

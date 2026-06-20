@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { FiArrowLeft, FiClock, FiMessageSquare, FiShield, FiShuffle, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome, FiStar } from 'react-icons/fi'
+import { FiArrowLeft, FiClock, FiMessageSquare, FiShield, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome, FiStar, FiShare2, FiFlag } from 'react-icons/fi'
 import Loader from '../components/common/Loader'
 import Button from '../components/common/Button'
 import PropertyMap from '../components/map/PropertyMap'
+import GalleryTrigger from '../components/gallery/GalleryTrigger'
 import propertyService from '../services/propertyService'
 import { useAuth } from '../context/AuthContext'
 import useCurrentLocation from '../hooks/useCurrentLocation'
@@ -77,14 +78,19 @@ function PropertyDetailPage() {
   const [reviews, setReviews] = useState([])
   const [reviewForm, setReviewForm] = useState({ rating: '5', details: '', tags: '' })
   const [reviewMessage, setReviewMessage] = useState('')
+  const [actionMessage, setActionMessage] = useState('')
   const { user, role } = useAuth()
   const { position, loading: locationLoading, error: locationError, hasUserLocation, requestLocation } = useCurrentLocation()
 
   useEffect(() => {
     const loadProperty = async () => {
       try {
-        const includePrivate = ['owner', 'admin', 'super-admin'].includes(role)
-        const data = await propertyService.fetchPropertyById(activePropertyId, { includePrivate })
+        const includePrivate = ['owner', 'admin'].includes(role)
+      const data = await propertyService.fetchPropertyById(activePropertyId, { includePrivate })
+      if (!data?.id && !data?._id) {
+        setError('This property is unavailable or has been removed.')
+        return
+      }
         setProperty(data)
         const viewed = JSON.parse(localStorage.getItem('stayjiViewed') || '[]')
         localStorage.setItem('stayjiViewed', JSON.stringify([activePropertyId, ...viewed.filter((item) => item !== activePropertyId)].slice(0, 20)))
@@ -109,7 +115,7 @@ function PropertyDetailPage() {
     loadProperty()
   }, [activePropertyId, role, user?._id])
 
-  const isAdmin = role === 'admin' || role === 'super-admin'
+  const isAdmin = role === 'admin'
   const isOwnerView = role === 'owner'
   const isConsumerView = !isAdmin && !isOwnerView
 
@@ -123,48 +129,49 @@ function PropertyDetailPage() {
   }, [navigate, property, role, user?._id])
 
   const handleShortlist = async () => {
+    setActionMessage('')
     if (!user || !user._id) {
       navigate('/login', { replace: true })
       return
     }
     try {
-      await propertyService.shortlistProperty({ userIDFK: user._id, propertyIDFK: property._id })
-      alert('Property saved to your shortlist.')
+      await propertyService.shortlistProperty({ userIDFK: user._id, propertyIDFK: property._id || property.id })
+      setActionMessage('Property saved to your shortlist.')
     } catch (err) {
-      console.error(err)
-      alert('Unable to save shortlist.')
+      setActionMessage(err?.message || 'Unable to save this property right now.')
     }
   }
 
   const handleExpressInterest = async () => {
+    setActionMessage('')
     if (!user || !user._id) {
       navigate('/login', { replace: true })
       return
     }
     try {
       const ownerId = property.ownerId || property.vendorId?._id || property.vendorId || property.userIDFK?._id || property.userIDFK
-      await propertyService.sendChat({
+      const chat = await propertyService.sendChat({
         fromUserId: user._id,
         ownerId,
-        propertyId: property._id,
+        propertyId: property._id || property.id,
         message: 'I am interested in this property and would like to know the next steps.',
       })
       await propertyService.expressInterest({
         userIDFK: user._id,
-        propertyIDFK: property._id,
+        propertyIDFK: property._id || property.id,
         subject: 'Interested in this property',
         description: 'I am interested in this property and would like to know the next steps.',
         preferredVisitTime: leadPrefs.preferredVisitTime,
         moveInPreference: leadPrefs.moveInPreference,
       })
-      alert('Your interest has been sent to the host.')
+      navigate(`/dashboard/user/messages?conversationId=${chat?.conversation?.id || chat?.conversation?._id || ''}`)
     } catch (err) {
-      console.error(err)
-      alert('Unable to send your interest.')
+      setActionMessage(err?.message || 'Unable to message the owner right now.')
     }
   }
 
   const handleRequestCallback = async () => {
+    setActionMessage('')
     if (!user || !user._id) {
       navigate('/login', { replace: true })
       return
@@ -172,36 +179,61 @@ function PropertyDetailPage() {
     try {
       await propertyService.expressInterest({
         userIDFK: user._id,
-        propertyIDFK: property._id,
+        propertyIDFK: property._id || property.id,
         subject: 'Callback requested',
         description: 'User requested an owner callback from the property page.',
         preferredVisitTime: leadPrefs.preferredVisitTime,
         moveInPreference: leadPrefs.moveInPreference,
       })
-      alert('Callback request sent. The owner and StayJi admin can now track this lead.')
+      setActionMessage('Callback request sent. The owner and StayJi admin can now track this lead.')
     } catch (err) {
-      console.error(err)
-      alert('Unable to request callback.')
+      setActionMessage(err?.message || 'Unable to request callback right now.')
     }
   }
 
   const handleBookVisit = async () => {
+    setActionMessage('')
     if (!user || !user._id) {
       navigate('/login', { replace: true })
       return
     }
+    if (!leadPrefs.preferredVisitTime) {
+      setActionMessage('Select a visit date and time before booking.')
+      return
+    }
+    const [visitDate, visitTime] = leadPrefs.preferredVisitTime.split('T')
     try {
       await propertyService.bookVisit({
         userIDFK: user._id,
-        propertyIDFK: property._id,
-        visitDate: leadPrefs.preferredVisitTime || new Date(),
+        propertyIDFK: property._id || property.id,
+        visitDate,
+        visitTime: visitTime || '',
         moveInPreference: leadPrefs.moveInPreference,
       })
-      alert('Visit request submitted.')
+      setActionMessage('Visit request submitted.')
     } catch (err) {
-      console.error(err)
-      alert('Unable to book visit.')
+      setActionMessage(err?.message || 'Unable to book visit right now.')
     }
+  }
+
+  const handleShare = async () => {
+    const shareUrl = window.location.href
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: property.name || 'StayJi property', text: 'Check this StayJi property', url: shareUrl })
+      } else {
+        await navigator.clipboard.writeText(shareUrl)
+        setActionMessage('Property link copied.')
+      }
+    } catch {
+      setActionMessage('Unable to share this property right now.')
+    }
+  }
+
+  const handleReport = () => {
+    const subject = encodeURIComponent(`Report property ${property._id || property.id}`)
+    const body = encodeURIComponent(`Please review this StayJi property:\n${window.location.href}\n\nReason:`)
+    window.location.href = `mailto:hello.stayji@gmail.com?subject=${subject}&body=${body}`
   }
 
   const handleSubmitMoveIn = async (event) => {
@@ -227,14 +259,6 @@ function PropertyDetailPage() {
     }
   }
 
-  const handleCompare = () => {
-    const current = JSON.parse(localStorage.getItem('stayjiCompare') || '[]')
-    const propertyId = property._id || property.id
-    const next = [propertyId, ...current.filter((item) => item !== propertyId)].slice(0, 3)
-    localStorage.setItem('stayjiCompare', JSON.stringify(next))
-    alert('Added to comparison. You can compare up to 3 properties while browsing.')
-  }
-
   const handleSubmitReview = async (event) => {
     event.preventDefault()
     if (!user || !user._id) {
@@ -245,12 +269,12 @@ function PropertyDetailPage() {
     try {
       await propertyService.submitReview({
         userIDFK: user._id,
-        propertyIDFK: property._id,
+        propertyIDFK: property._id || property.id,
         rating: reviewForm.rating,
         details: reviewForm.details,
         tags: reviewForm.tags,
       })
-      const nextReviews = await propertyService.fetchReviews({ propertyId: property._id, limit: 8 })
+      const nextReviews = await propertyService.fetchReviews({ propertyId: property._id || property.id, limit: 8 })
       setReviews(nextReviews)
       setReviewForm({ rating: '5', details: '', tags: '' })
       setReviewMessage('Review saved. Admins can use it for rating quality and ranking decisions.')
@@ -260,8 +284,8 @@ function PropertyDetailPage() {
   }
 
   const getMapsUrl = (provider = 'google') => {
-    const lat = property.location?.lat || property.latitude || 19.07598
-    const lng = property.location?.lng || property.longitude || 72.87766
+    const lat = property.location?.lat || property.latitude || 12.9716
+    const lng = property.location?.lng || property.longitude || 77.5946
     if (provider === 'apple') return `https://maps.apple.com/?daddr=${lat},${lng}`
     return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
   }
@@ -282,8 +306,8 @@ function PropertyDetailPage() {
   }
 
   const coordinates = {
-    lat: property.location?.lat || 19.07598,
-    lng: property.location?.lng || 72.87766,
+    lat: property.location?.lat || 12.9716,
+    lng: property.location?.lng || 77.5946,
   }
   const distanceKm = hasUserLocation ? getDistanceKm(position, coordinates) : null
   const positiveReviews = reviews.filter((review) => Number(review.rating) >= 4)
@@ -310,18 +334,7 @@ function PropertyDetailPage() {
       <div className="grid gap-8 lg:grid-cols-[1.25fr_0.75fr]">
         <section className="space-y-8">
           <div className="overflow-hidden rounded-[2rem] bg-slate-950/90 shadow-card">
-            <img
-              src={property.image || 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1200&q=80'}
-              alt={property.name}
-              className="h-96 w-full object-cover"
-            />
-            {(property.images || []).length > 1 ? (
-              <div className="grid grid-cols-3 gap-2 bg-slate-950 p-2 sm:grid-cols-4">
-                {property.images.slice(1, 5).map((image) => (
-                  <img key={image} src={image} alt={property.name} className="h-24 w-full rounded-2xl object-cover" />
-                ))}
-              </div>
-            ) : null}
+            <GalleryTrigger property={property} />
           </div>
 
           {property.videoUrl ? (
@@ -445,9 +458,10 @@ function PropertyDetailPage() {
                   <Button onClick={handleExpressInterest} variant="secondary" className="w-full sm:w-auto">Message owner</Button>
                   <Button onClick={handleRequestCallback} className="w-full sm:w-auto">Request callback</Button>
                   <Button onClick={handleBookVisit} variant="secondary" className="w-full sm:w-auto">Book visit</Button>
-                  <Button onClick={handleCompare} variant="secondary" className="w-full sm:w-auto"><FiShuffle className="mr-2" /> Compare</Button>
-                  <a href="/compare" className="inline-flex w-full items-center justify-center rounded-3xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cyan-300/60 hover:bg-white/15 sm:w-auto">Open comparison</a>
+                  <Button onClick={handleShare} variant="secondary" className="w-full sm:w-auto"><FiShare2 /> Share</Button>
+                  <Button onClick={handleReport} variant="secondary" className="w-full sm:w-auto"><FiFlag /> Report</Button>
                 </div>
+                {actionMessage ? <p className={`mt-4 text-sm ${actionMessage.startsWith('Unable') || actionMessage.startsWith('Select') ? 'text-rose-300' : 'text-emerald-300'}`}>{actionMessage}</p> : null}
               </>
             )}
           </div>

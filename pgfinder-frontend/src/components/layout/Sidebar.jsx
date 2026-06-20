@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { FiHome, FiLayers, FiUsers, FiPlusCircle, FiShield, FiUser, FiLogOut } from 'react-icons/fi'
+import { FiHome, FiLayers, FiUsers, FiPlusCircle, FiShield, FiUser, FiLogOut, FiMessageSquare } from 'react-icons/fi'
 import NotificationBell from '../notifications/NotificationBell'
 
 function Sidebar() {
@@ -8,8 +8,6 @@ function Sidebar() {
   const { role, user, logout } = useAuth()
   const normalizedRole = ['owner', 'host', 'hostel', 'vendor'].includes(role)
     ? 'owner'
-    : ['super admin', 'super_admin', 'superadmin'].includes(role)
-      ? 'super-admin'
     : role || 'user'
   const dashboardRole = normalizedRole
 
@@ -18,23 +16,21 @@ function Sidebar() {
     { label: 'Browse stays', to: '/properties', icon: <FiLayers /> },
   ]
 
-  if (normalizedRole === 'admin' || normalizedRole === 'super-admin') {
+  if (normalizedRole === 'admin') {
     links.push({ label: 'Manage users', to: '/dashboard/admin/users', icon: <FiUsers /> })
     links.push({ label: 'Manage properties', to: '/dashboard/admin', icon: <FiShield /> })
-  }
-
-  if (normalizedRole === 'super-admin') {
-    links.push({ label: 'Governance', to: '/dashboard/super-admin', icon: <FiShield /> })
   }
 
   if (normalizedRole === 'owner') {
     links.push({ label: 'My properties', to: '/dashboard/owner/properties', icon: <FiLayers /> })
     links.push({ label: 'My leads', to: '/dashboard/owner/leads', icon: <FiUsers /> })
+    links.push({ label: 'Messages', to: '/dashboard/owner/messages', icon: <FiMessageSquare /> })
     links.push({ label: 'Add property', to: '/dashboard/owner/add-property', icon: <FiPlusCircle /> })
   }
 
   if (role === 'user') {
     links.push({ label: 'My bookings', to: '/dashboard/user', icon: <FiLayers /> })
+    links.push({ label: 'Messages', to: '/dashboard/user/messages', icon: <FiMessageSquare /> })
   }
 
   if (role) {

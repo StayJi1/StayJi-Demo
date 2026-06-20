@@ -7,8 +7,6 @@ import NotificationBell from '../notifications/NotificationBell'
 const navItems = [
   { label: 'Home', to: '/' },
   { label: 'Bangalore PGs', to: '/bangalore' },
-  { label: 'Explore stays', to: '/properties?search=Bangalore' },
-  { label: 'Compare', to: '/compare' },
   { label: 'FAQs', to: '/faq' },
   { label: 'Login', to: '/login' },
   { label: 'Signup', to: '/signup' },

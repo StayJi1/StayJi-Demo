@@ -8,6 +8,7 @@ import { useAuth } from '../../../context/AuthContext'
 import propertyService from '../../../services/propertyService'
 import { bangaloreLocalities } from '../../../data/seoContent'
 import axiosClient from '../../../api/axiosClient'
+import { MVP_CITY, MVP_STATE } from '../../../config/mvp'
 
 const slugify = (value = '') => value
   .toString()
@@ -18,9 +19,7 @@ const slugify = (value = '') => value
   .replace(/^-+|-+$/g, '')
 
 const CITY_OPTIONS = {
-  Karnataka: ['Bangalore'],
-  Maharashtra: ['Mumbai', 'Pune'],
-  Telangana: ['Hyderabad'],
+  [MVP_STATE]: [MVP_CITY],
 }
 
 const predefinedAmenities = ['WiFi', 'Meals', 'Laundry', 'Security', 'Attached balcony', 'Study table', 'Private fridge', 'Washing machine', 'Rooftop access', 'Biometric entry']
@@ -39,8 +38,8 @@ function AddPropertyPage() {
   const [form, setForm] = useState({
     name: '',
     propertyCategory: 'PG',
-    state: user?.assignedState || user?.state || 'Karnataka',
-    city: '',
+    state: MVP_STATE,
+    city: MVP_CITY,
     area: '',
     address: '',
     latitude: '',
@@ -95,8 +94,8 @@ function AddPropertyPage() {
         setForm({
           name: property.name || '',
           propertyCategory: property.category || property.type || 'PG',
-          state: property.stateName || property.state || user?.assignedState || user?.state || 'Karnataka',
-          city: property.city || '',
+          state: MVP_STATE,
+          city: MVP_CITY,
           area: property.area || '',
           address: property.address || '',
           latitude: property.location?.lat || property.latitude || '',
@@ -198,6 +197,21 @@ function AddPropertyPage() {
 
   const handleImageFiles = (event) => {
     setImageFiles(Array.from(event.target.files || []).slice(0, 10))
+  }
+
+  const removeExistingImage = (imageUrl) => {
+    setForm((current) => ({
+      ...current,
+      imageUrls: current.imageUrls
+        .split(/[\n,]+/)
+        .map((item) => item.trim())
+        .filter((item) => item && item !== imageUrl)
+        .join('\n'),
+    }))
+  }
+
+  const removeSelectedImage = (imageFile) => {
+    setImageFiles((current) => current.filter((file) => file !== imageFile))
   }
 
   const handleVideoFile = (event) => {
@@ -324,49 +338,13 @@ function AddPropertyPage() {
     setMessage('')
     try {
       if (isEditMode && propertyId) {
-        await propertyService.updateProperty(propertyId, {
-          userIDFK: user._id,
-          ownerId: user._id,
-          propertyName: form.name,
-          description: form.description,
-          address: form.address,
-          latitude: form.latitude,
-          longitude: form.longitude,
-          rent: form.rent,
-          depositAmount: form.depositAmount,
-          availableBeds: form.availableBeds,
-          vacancyStatus: form.vacancyStatus,
-          availableFrom: form.availableFrom,
-          sharingAvailability: form.sharingAvailability,
-          parkingAvailable: form.parkingAvailable,
-          acAvailable: form.acAvailable,
-          dailyRate: form.dailyRate,
-          perDayCheckIn: form.perDayCheckIn,
-          propertyCategory: form.propertyCategory,
-          pricingUnit: form.perDayCheckIn ? 'month-day' : 'month',
-          sharing: form.sharing,
-          genderType: form.gender,
-          areaName: form.area,
-          localitySlug: slugify(form.area),
-          cityName: form.city,
-          stateName: form.state,
-          aminityFeatures: form.amenities.join(', '),
-          mealsAvailable: form.mealsAvailable,
-          menuPhotoUrls: form.menuPhotoUrls,
-          menuPhoto: form.menuPhotoUrls.split(/\n|,/).map((item) => item.trim()).filter(Boolean)[0] || '',
-          propertyImageUrls: form.imageUrls,
-          propertyImage: form.imageUrls.split(/\n|,/).map((item) => item.trim()).filter(Boolean)[0] || '',
-          videoUrl: form.videoUrl,
-          isAvailable: form.isAvailable,
-          propertyTypeIDFK: form.propertyTypeIDFK,
-          roomInventory: form.roomInventory,
-          roomTypes: roomTypesPayload,
-          customFeatures: form.customFeatures,
-          referralAgreementAccepted: form.referralAgreementAccepted,
-          leadPricingAccepted: form.leadPricingAccepted,
-          ownerTermsAccepted: form.ownerTermsAccepted,
-          ...(role === 'admin' ? { adminId: user?._id, performerRole: 'Admin' } : {}),
-          })
+        if (role === 'admin') {
+          payload.append('adminId', user?._id)
+          payload.append('performerRole', 'Admin')
+        } else {
+          payload.append('ownerId', user._id)
+        }
+        await propertyService.updateProperty(propertyId, payload)
         setMessage('Property updated. Availability, rent, and room details are live; protected fields such as name, address, coordinates, and images wait for admin approval.')
       } else {
         await propertyService.createProperty(payload)
@@ -374,8 +352,8 @@ function AddPropertyPage() {
         setForm({
           name: '',
           propertyCategory: 'PG',
-          state: user?.assignedState || user?.state || 'Karnataka',
-          city: '',
+          state: MVP_STATE,
+          city: MVP_CITY,
           area: '',
           address: '',
           latitude: '',
@@ -443,9 +421,8 @@ function AddPropertyPage() {
                 className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
               >
                 <option value="PG">PG</option>
-                <option value="Flat">Flat</option>
-                <option value="Hotel">Hotel</option>
                 <option value="Hostel">Hostel</option>
+                <option value="Co-living">Co-living</option>
               </select>
             </label>
           </div>
@@ -693,7 +670,24 @@ function AddPropertyPage() {
               {imageFiles.length ? (
                 <div className="grid gap-3 sm:grid-cols-4">
                   {imageFiles.map((file) => (
-                    <img key={`${file.name}-${file.size}`} src={URL.createObjectURL(file)} alt={file.name} className="h-28 w-full rounded-2xl object-cover" />
+                    <div key={`${file.name}-${file.size}`} className="relative">
+                      <img src={URL.createObjectURL(file)} alt={file.name} className="h-28 w-full rounded-2xl object-cover" />
+                      <button type="button" onClick={() => removeSelectedImage(file)} className="absolute right-2 top-2 rounded-full bg-slate-950/80 px-2 py-1 text-xs text-white">
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {form.imageUrls.trim() ? (
+                <div className="grid gap-3 sm:grid-cols-4">
+                  {form.imageUrls.split(/[\n,]+/).map((item) => item.trim()).filter(Boolean).map((imageUrl) => (
+                    <div key={imageUrl} className="relative">
+                      <img src={imageUrl} alt="Existing property" className="h-28 w-full rounded-2xl object-cover" />
+                      <button type="button" onClick={() => removeExistingImage(imageUrl)} className="absolute right-2 top-2 rounded-full bg-slate-950/80 px-2 py-1 text-xs text-white">
+                        Remove
+                      </button>
+                    </div>
                   ))}
                 </div>
               ) : null}

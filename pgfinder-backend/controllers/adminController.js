@@ -48,28 +48,9 @@ const defaultAdmin = {
   userType: 'Admin',
   assignedCity: 'Bangalore',
   assignedState: 'Karnataka',
-  permissions: ['manage_users', 'manage_properties', 'manage_moderation', 'manage_seo', 'view_city_analytics'],
+  permissions: ['manage_users', 'manage_properties', 'manage_finance', 'manage_admins', 'manage_dummy_data', 'manage_seo', 'manage_moderation', 'view_global_analytics', 'view_city_analytics'],
   accountStatus: 'active',
   approvalStatus: 'Approved',
-  isVerified: true,
-  profile: '',
-  addedOn: new Date().toISOString(),
-  isActive: true,
-};
-const defaultSuperAdmin = {
-  userName: 'Super Admin',
-  userFname: 'Super',
-  userLname: 'Admin',
-  userEmail: process.env.SUPER_ADMIN_EMAIL || 'superadmin@stayji.com',
-  userPassword: hashPassword(process.env.SUPER_ADMIN_PASSWORD || 'StayJi@12345'),
-  dob: '',
-  gender: '',
-  contact: process.env.SUPER_ADMIN_PHONE || '9999999999',
-  occupation: 'Platform governance',
-  userType: 'Super Admin',
-  permissions: ['manage_users', 'manage_properties', 'manage_finance', 'manage_admins', 'manage_dummy_data', 'manage_seo', 'manage_moderation', 'view_global_analytics'],
-  approvalStatus: 'Approved',
-  accountStatus: 'active',
   isVerified: true,
   profile: '',
   addedOn: new Date().toISOString(),
@@ -82,11 +63,6 @@ async function ensureDefaultAdmin() {
     if (!adminExists) {
       await new User(defaultAdmin).save()
       console.log('Default admin user created.')
-    }
-    const superAdminExists = await User.findOne({ userType: { $in: ['Super Admin', 'SuperAdmin', 'super_admin'] } })
-    if (!superAdminExists) {
-      await new User(defaultSuperAdmin).save()
-      console.log('Default super admin user created.')
     }
   } catch (error) {
     console.error('Error ensuring default admin user:', error)
@@ -443,7 +419,22 @@ router.post('/reactivateProperty', async (req, res) => {
 });
 
 router.post('/updatePropertyStatus', async (req, res) => {
-    const objProperty = await Property.updateOne({ _id: req.body.id }, { approvalStatus: req.body.status });
+    const property = await Property.findOne({ _id: req.body.id }).lean()
+    if (!property) {
+        console.warn('Admin attempted to update status for missing property', req.body.id)
+        return res.redirect('showProperty')
+    }
+    const desiredStatus = req.body.status
+    // Enforce minimal real-photo requirement: at least 3 images before approving
+    const images = [].concat(property.propertyImage || [], property.propertyImageUrls || [])
+    const uniqueImages = Array.from(new Set(images.filter(Boolean)))
+    if ((desiredStatus === 'Approved' || desiredStatus === 'Verified') && uniqueImages.length < 3) {
+        // Do not approve; keep pending and log
+        await Property.updateOne({ _id: req.body.id }, { approvalStatus: 'Pending', isVerified: false })
+        console.warn(`Property ${req.body.id} not approved: requires at least 3 images; found ${uniqueImages.length}`)
+        return res.redirect("showProperty")
+    }
+    const objProperty = await Property.updateOne({ _id: req.body.id }, { approvalStatus: desiredStatus, isVerified: desiredStatus === 'Verified' || desiredStatus === 'Approved' })
     res.redirect("showProperty");
 });
 

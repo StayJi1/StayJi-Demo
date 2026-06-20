@@ -19,7 +19,7 @@ function ManageUsersPage() {
   const [editUser, setEditUser] = useState(null)
   const [error, setError] = useState('')
   const debouncedSearch = useDebouncedValue(filters.search)
-  const isSuperAdmin = currentRole === 'super-admin'
+  const canManageAdminScope = currentRole === 'admin'
 
   const queryFilters = {
     ...filters,
@@ -57,7 +57,7 @@ function ManageUsersPage() {
 
   const handleOwnerVerification = async (user) => {
     try {
-      statusMutation.mutate({ user, payload: { verificationStatus: 'Verified', isActive: true } })
+      statusMutation.mutate({ user, payload: { verificationStatus: 'Verified', approvalStatus: 'Approved', accountStatus: 'active', isActive: true, isVerified: true } })
     } catch (err) {
       setError(err?.message || 'Unable to verify owner.')
     }
@@ -289,7 +289,7 @@ function ManageUsersPage() {
                 businessName: editUser.businessName || '',
                 vendorType: editUser.vendorType || '',
               }
-              if (isSuperAdmin) {
+              if (canManageAdminScope) {
                 payload.assignedCity = editUser.assignedCity || ''
                 payload.assignedState = editUser.assignedState || ''
                 payload.userType = editUser.userType || editUser.role
@@ -314,7 +314,7 @@ function ManageUsersPage() {
               <input value={editUser.dob || ''} onChange={(event) => setEditUser((current) => ({ ...current, dob: event.target.value }))} placeholder="DOB" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
               <input value={editUser.city || ''} onChange={(event) => setEditUser((current) => ({ ...current, city: event.target.value }))} placeholder="City/locality" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
               <input value={editUser.state || ''} onChange={(event) => setEditUser((current) => ({ ...current, state: event.target.value }))} placeholder="State" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
-              {isSuperAdmin ? (
+              {canManageAdminScope ? (
                 <>
                   <input value={editUser.assignedCity || ''} onChange={(event) => setEditUser((current) => ({ ...current, assignedCity: event.target.value }))} placeholder="Assigned city" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
                   <input value={editUser.assignedState || ''} onChange={(event) => setEditUser((current) => ({ ...current, assignedState: event.target.value }))} placeholder="Assigned state" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />

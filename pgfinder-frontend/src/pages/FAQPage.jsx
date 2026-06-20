@@ -42,7 +42,7 @@ export default function FAQPage() {
               {article.related.recommendations.slice(0, 2).map((post) => <Link key={post.slug} to={`/recommendations/${post.slug}`} className="rounded-xl border border-slate-200 p-4 font-semibold text-slate-700 hover:text-blue-700">{post.title}</Link>)}
             </div>
           </div>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="mt-5 flex flex-wrap gap-3">
             <Link to="/bangalore" className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white">Explore Bangalore</Link>
             <Link to="/blogs" className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700">Read guides</Link>
           </div>
@@ -95,8 +95,8 @@ export default function FAQPage() {
           <p className="mt-3 text-sm leading-6 text-slate-300">
             Search verified stays by locality, rent, sharing, food, and visit availability, or contact {siteConfig.email}.
           </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <Link to="/properties?search=Bangalore" className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950">Explore Bangalore PGs</Link>
+            <div className="mt-5 flex flex-wrap gap-3">
+            <Link to="/bangalore" className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950">Explore Bangalore PGs</Link>
             <Link to="/bangalore" className="rounded-full border border-white/20 px-5 py-3 text-sm font-semibold text-white">Bangalore guide</Link>
           </div>
         </section>

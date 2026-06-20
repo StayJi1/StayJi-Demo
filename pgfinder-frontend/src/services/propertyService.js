@@ -2,6 +2,7 @@ import propertyApi from '../api/propertyApi'
 
 const propertyService = {
   fetchProperties: (filters) => propertyApi.list(filters),
+  fetchPropertyPage: (filters) => propertyApi.page(filters),
   fetchAllProperties: (filters) => propertyApi.all(filters),
   fetchPropertyById: (id, options) => propertyApi.detail(id, options),
   fetchPopularProperties: () => propertyApi.popular(),

@@ -40,10 +40,6 @@ const normalizeRole = (rawRole) => {
     hostel: 'owner',
     vendor: 'owner',
     admin: 'admin',
-    'super admin': 'super-admin',
-    superadmin: 'super-admin',
-    super_admin: 'super-admin',
-    'super-admin': 'super-admin',
   }
   return roleMap[normalized] || normalized
 }
@@ -151,11 +147,11 @@ export const AuthProvider = ({ children }) => {
     setError(null)
     try {
       // backend expects { userEmail, userPassword }
-      const payload = { userEmail: email, userPassword: password, accountType: userRole === 'super-admin' ? 'super_admin' : userRole, authPortal: userRole === 'super-admin' ? 'super_admin' : userRole === 'admin' ? 'admin' : 'public' }
+      const requestedRole = normalizeRole(userRole)
+      const payload = { userEmail: email, userPassword: password, accountType: requestedRole, authPortal: requestedRole === 'admin' ? 'admin' : 'public' }
       const response = await authService.login(payload)
       const normalizedUser = normalizeUser(response.user)
       const nextRole = normalizeRole(response.role || normalizedUser.role || userRole || 'user')
-      const requestedRole = normalizeRole(userRole)
       if (requestedRole && requestedRole !== nextRole) {
         throw new Error('Account type mismatch. Select the correct account type to continue.')
       }
