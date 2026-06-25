@@ -226,7 +226,7 @@ const normalizeAccountType = (value) => {
     const normalized = (value || '').toString().trim().toLowerCase()
     if (['owner', 'host', 'hostel', 'vendor', 'pg owner', 'flat owner'].includes(normalized)) return 'owner'
     if (['personal', 'student', 'user'].includes(normalized)) return 'user'
-    if (normalized === 'admin') return 'admin'
+    if (['admin', 'super_admin', 'super admin', 'super-admin', 'superadmin'].includes(normalized)) return 'admin'
     return normalized
 }
 
@@ -234,7 +234,7 @@ const accountTypeVariants = (value) => {
     const normalized = normalizeAccountType(value)
     if (normalized === 'owner') return ['Owner', 'owner', 'Vendor', 'vendor']
     if (normalized === 'user') return ['User', 'Personal', 'Student', 'user', 'personal', 'student']
-    if (normalized === 'admin') return ['Admin', 'admin']
+    if (normalized === 'admin') return ['Admin', 'admin', 'Super Admin', 'super admin', 'super_admin', 'super-admin', 'superadmin']
     return [value]
 }
 
@@ -331,37 +331,13 @@ const requireAdminGovernance = (req, res, next) => {
 }
 
 const adminCityScope = (req) => {
-    if (req.auth?.role !== 'admin' || !req.auth.assignedCity) return bangalorePropertyScope()
-    const cityRegex = new RegExp(`^${escapeRegex(req.auth.assignedCity)}$`, 'i')
-    const conditions = [
-        { cityName: cityRegex },
-        { city: cityRegex },
-    ]
-    if (req.auth.assignedState) {
-        const stateRegex = new RegExp(`^${escapeRegex(req.auth.assignedState)}$`, 'i')
-        conditions[0].stateName = stateRegex
-        conditions[1].state = stateRegex
-    }
-    return { $or: conditions }
+    return bangalorePropertyScope()
 }
 
-const adminAssignedCity = (req) => (req.auth?.role === 'admin' && req.auth.assignedCity ? req.auth.assignedCity : '')
+const adminAssignedCity = () => MVP_CITY
 
 const adminUserCityScope = (req) => {
-    if (req.auth?.role !== 'admin' || !req.auth.assignedCity) return bangaloreUserScope()
-    const cityRegex = new RegExp(`^${escapeRegex(req.auth.assignedCity)}$`, 'i')
-    const userScope = [
-        { assignedCity: cityRegex },
-        { city: cityRegex },
-        { cityName: cityRegex },
-    ]
-    if (req.auth.assignedState) {
-        const stateRegex = new RegExp(`^${escapeRegex(req.auth.assignedState)}$`, 'i')
-        userScope[0].assignedState = stateRegex
-        userScope[1].state = stateRegex
-        userScope[2].stateName = stateRegex
-    }
-    return { $or: [...userScope, ...blankLegacyCityScope] }
+    return bangaloreUserScope()
 }
 
 const applyScope = (filters = {}, scope = {}) => {
@@ -398,17 +374,6 @@ const syncAdminCityAssignment = async (adminId, targetCityName, targetStateName)
 
 const assertAdminCanManageUser = (req, targetUser) => {
     if (!targetUser) return { ok: false, status: 404, msg: 'User not found.' }
-    const targetRole = normalizeAccountType(targetUser.userType)
-    if (req.auth?.role === 'admin') {
-        if (targetRole === 'admin' && targetUser._id?.toString() !== req.auth.user._id.toString()) {
-            return { ok: false, status: 403, msg: 'Admins cannot manage other Admin accounts through this user workflow.' }
-        }
-        const assignedCity = (req.auth.assignedCity || '').toString().toLowerCase()
-        const targetCity = (targetUser.assignedCity || targetUser.city || '').toString().toLowerCase()
-        if (assignedCity && targetCity && assignedCity !== targetCity) {
-            return { ok: false, status: 403, msg: 'City Admins can only manage accounts in their assigned city.' }
-        }
-    }
     return { ok: true }
 }
 
@@ -2639,13 +2604,11 @@ router.post('/updateProperty', attachAuthenticatedUser, requireRoles(['owner', '
     if (!existingForGovernance) return res.json({ result: "failure", msg: "Property not found or access denied.", data: null })
 
     if (req.auth?.role === 'admin') {
-        const assignedCity = (req.auth.assignedCity || '').toString().trim().toLowerCase()
-        const assignedState = (req.auth.assignedState || '').toString().trim().toLowerCase()
-        if (updateFields.cityName && updateFields.cityName.toString().trim().toLowerCase() !== assignedCity) {
-            return res.status(403).json({ result: "failure", msg: "Admin may only update properties in their assigned city.", data: null })
+        if (updateFields.cityName && !isBangaloreValue(updateFields.cityName)) {
+            return res.status(403).json({ result: "failure", msg: "StayJi MVP only supports Bangalore properties.", data: null })
         }
-        if (updateFields.stateName && assignedState && updateFields.stateName.toString().trim().toLowerCase() !== assignedState) {
-            return res.status(403).json({ result: "failure", msg: "Admin may only update properties in their assigned state.", data: null })
+        if (updateFields.stateName && normalizeText(updateFields.stateName).toLowerCase() !== MVP_STATE.toLowerCase()) {
+            return res.status(403).json({ result: "failure", msg: "StayJi MVP only supports Bangalore, Karnataka.", data: null })
         }
     }
 
@@ -3419,7 +3382,7 @@ router.post('/property-update-requests/:id/review', attachAuthenticatedUser, req
     if (!request) return res.json({ result: 'failure', msg: 'Update request not found.', data: null })
     if (req.auth?.role === 'admin') {
         const property = await Property.findOne({ _id: request.propertyId, ...adminCityScope(req) }).select('_id')
-        if (!property) return res.status(403).json({ result: 'failure', msg: 'City Admins can only review update requests in their assigned city.', data: null })
+        if (!property) return res.status(403).json({ result: 'failure', msg: 'Admins can only review Bangalore property update requests during the MVP launch.', data: null })
     }
     if (status === 'Approved') await Property.updateOne({ _id: request.propertyId }, { $set: request.requestedChanges })
     const updated = await PropertyUpdateRequest.findOneAndUpdate({ _id: request._id }, { $set: { status, adminId: req.body.adminId, adminNote: req.body.adminNote || '', reviewedOn: new Date() } }, { new: true })
@@ -3835,9 +3798,6 @@ router.post('/users/:id', async (req, res) => {
     const previous = await User.findOne({ _id: req.params.id }).select('-userPassword')
     const access = assertAdminCanManageUser(req, previous)
     if (!access.ok) return res.status(access.status).json({ result: 'failure', msg: access.msg, data: null })
-    if (req.auth?.role === 'admin' && (updateFields.userType || updateFields.permissions || updateFields.assignedCity || updateFields.assignedState)) {
-        return res.status(403).json({ result: 'failure', msg: 'City Admins cannot change roles, permissions, or admin scope.', data: null })
-    }
     const previousRole = normalizeAccountType(previous?.userType)
     const nextRole = updateFields.userType ? normalizeAccountType(updateFields.userType) : previousRole
     if (previousRole === 'admin' && nextRole !== 'admin') {
@@ -4304,17 +4264,15 @@ router.post('/users/:id/status', async (req, res) => {
 router.post('/create-account', async (req, res) => {
     const role = officialRoleName(req.body.userType || req.body.role || 'User')
     const performerRole = req.auth?.role || normalizeAccountType(req.body.performerRole || 'admin')
-    if (performerRole === 'admin' && (req.body.assignedCity || req.body.assignedState) && (req.body.assignedCity || '').toLowerCase() !== (req.auth.assignedCity || '').toLowerCase()) {
-        return res.status(403).json({ result: 'failure', msg: 'City Admins can only create accounts in their assigned city.', data: null })
-    }
     const existing = await User.findOne({ userEmail: new RegExp(`^${req.body.userEmail || req.body.email}$`, 'i'), userType: { $in: accountTypeVariants(role) } })
     if (existing) return res.json({ result: 'failure', msg: 'Account already exists.', data: null })
     const tempPassword = req.body.temporaryPassword || req.body.password || `StayJi${Math.floor(100000 + Math.random() * 900000)}`
     if (!strongPasswordPattern.test(tempPassword)) {
         return res.json({ result: 'failure', msg: 'Temporary password must be at least 8 characters and include uppercase, lowercase, and a number.', data: null })
     }
-    const scopedCity = performerRole === 'admin' ? req.auth.assignedCity : (req.body.assignedCity || req.body.city || '')
-    const scopedState = performerRole === 'admin' ? req.auth.assignedState : (req.body.assignedState || req.body.state || '')
+    const scopedCity = canonicalLocationName(req.body.assignedCity || req.body.city || MVP_CITY)
+    const scopedState = normalizeText(req.body.assignedState || req.body.state || MVP_STATE)
+    if (!assertBangaloreRequest(res, scopedCity, scopedState)) return
     const user = await User.create({
         userName: req.body.name || '',
         userFname: req.body.firstName || req.body.userFname || (req.body.name || '').split(' ')[0] || '',

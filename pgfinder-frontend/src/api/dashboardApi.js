@@ -6,7 +6,13 @@ const normalizeUser = (user) => ({
   id: user._id || user.id,
   name: user.name || [user.userFname, user.userLname].filter(Boolean).join(' ') || user.userEmail,
   email: user.userEmail || user.email,
-  role: (user.role || user.userType || 'user').toString().toLowerCase(),
+  role: (() => {
+    const raw = (user.role || user.userType || 'user').toString().toLowerCase()
+    if (['vendor', 'owner'].includes(raw)) return 'owner'
+    if (['admin', 'super_admin', 'super admin', 'super-admin', 'superadmin'].includes(raw)) return 'admin'
+    if (['personal', 'student'].includes(raw)) return 'user'
+    return raw
+  })(),
 })
 
 const normalizeProperty = (property) => ({

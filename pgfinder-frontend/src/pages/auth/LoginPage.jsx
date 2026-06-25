@@ -32,6 +32,7 @@ function LoginPage({ portal = 'public' }) {
     const rawRole = value?.toString().toLowerCase() || 'user'
     if (['owner', 'host', 'hostel', 'vendor'].includes(rawRole)) return 'owner'
     if (['personal', 'student'].includes(rawRole)) return 'user'
+    if (['admin', 'super_admin', 'super admin', 'super-admin', 'superadmin'].includes(rawRole)) return 'admin'
     return rawRole
   }
 

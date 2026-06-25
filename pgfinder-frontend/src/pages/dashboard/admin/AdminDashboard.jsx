@@ -189,7 +189,7 @@ function AdminDashboard() {
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-accent-400 sm:text-sm sm:tracking-[0.28em]">StayJi command center</p>
             <h1 className="mt-3 text-2xl font-semibold text-white sm:text-4xl">Live platform management</h1>
-            {user?.assignedCity ? <p className="mt-2 text-sm text-slate-400">City scope: {[user.assignedCity, user.assignedState].filter(Boolean).join(', ')}. This dashboard automatically applies your assigned-city filter across users, owners, properties, leads, reviews, and analytics.</p> : null}
+            <p className="mt-2 text-sm text-slate-400">Launch scope: Bangalore, Karnataka. Admin has full launch controls across users, owners, properties, leads, reviews, and analytics.</p>
             <p className="mt-1 text-xs text-slate-500">Admin ID: {user?._id ? `SJ-${user._id.toString().slice(-6).toUpperCase()}` : user?.id || '-'}</p>
           </div>
           <Button onClick={refreshAdmin} variant="secondary"><FiRefreshCw /> Refresh live data</Button>
@@ -397,7 +397,7 @@ function AdminDashboard() {
           <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-surface-800 p-6 shadow-card">
             <p className="text-xs uppercase tracking-[0.24em] text-accent-400">Confirm bulk workflow</p>
             <h2 className="mt-3 text-2xl font-semibold text-white">{bulkRequest.title}</h2>
-            <p className="mt-2 text-sm text-slate-400">{bulkRequest.ids.length} selected listings will be updated in {user?.assignedCity || 'your visible scope'}.</p>
+            <p className="mt-2 text-sm text-slate-400">{bulkRequest.ids.length} selected listings will be updated in the Bangalore launch scope.</p>
             <div className="mt-4 rounded-2xl border border-slate-700 bg-slate-950/70 p-4">
               <p className="text-sm font-semibold text-white">This will:</p>
               <ul className="mt-3 space-y-2 text-sm text-slate-300">

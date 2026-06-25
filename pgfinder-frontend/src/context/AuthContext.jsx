@@ -10,20 +10,23 @@ const sessionDurationMs = 7 * 24 * 60 * 60 * 1000
 const inactivityTimeoutMs = 30 * 60 * 1000
 
 const readStoredAuth = () => {
+  // Prefer sessionStorage (normal app flow), but allow localStorage fallback
+  // because some deployments/refresh flows may store there.
   try {
-    localStorage.removeItem(storageKey)
-    const saved = sessionStorage.getItem(storageKey)
-    if (!saved) return null
+    const savedRaw = sessionStorage.getItem(storageKey) || localStorage.getItem(storageKey)
+    if (!savedRaw) return null
 
-    const parsed = JSON.parse(saved)
+    const parsed = JSON.parse(savedRaw)
     if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
       sessionStorage.removeItem(storageKey)
+      localStorage.removeItem(storageKey)
       return null
     }
 
     return parsed
   } catch {
     sessionStorage.removeItem(storageKey)
+    localStorage.removeItem(storageKey)
     return null
   }
 }
@@ -40,6 +43,10 @@ const normalizeRole = (rawRole) => {
     hostel: 'owner',
     vendor: 'owner',
     admin: 'admin',
+    'super_admin': 'admin',
+    'super admin': 'admin',
+    'super-admin': 'admin',
+    superadmin: 'admin',
   }
   return roleMap[normalized] || normalized
 }

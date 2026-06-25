@@ -11,14 +11,23 @@ const axiosClient = axios.create({
 })
 
 axiosClient.interceptors.request.use((config) => {
-  if (!config.headers?.Authorization && typeof window !== 'undefined') {
+  // Always prefer axios instance default Authorization (set by AuthContext when token changes)
+  // Otherwise fall back to persisted token (legacy/refresh scenario)
+  const defaultAuth = axiosClient.defaults?.headers?.common?.Authorization
+  if (!config.headers) config.headers = {}
+
+  if (!config.headers.Authorization && defaultAuth) {
+    config.headers.Authorization = defaultAuth
+    return config
+  }
+
+  if (!config.headers.Authorization && typeof window !== 'undefined') {
     try {
-      const saved = JSON.parse(sessionStorage.getItem('stayji-auth') || localStorage.getItem('stayji-auth') || '{}')
-      if (saved?.token) {
-        config.headers.Authorization = `Bearer ${saved.token}`
-      }
+      const savedRaw = sessionStorage.getItem('stayji-auth') || localStorage.getItem('stayji-auth')
+      const saved = savedRaw ? JSON.parse(savedRaw) : null
+      if (saved?.token) config.headers.Authorization = `Bearer ${saved.token}`
     } catch {
-      // Keep the request unchanged when auth storage is unavailable.
+      // keep request unchanged
     }
   }
   return config
