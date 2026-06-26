@@ -66,12 +66,10 @@ function AppRoutes() {
           <Route path="/community-guidelines" element={<LegalPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/admin-login" element={<LoginPage portal="admin" />} />
-          <Route path="/super-admin-login" element={<Navigate to="/admin-login" replace />} />
           <Route path="/signup" element={<SignupPage />} />
         </Route>
 
       <Route path="/admin" element={<Navigate to="/dashboard/admin" replace />} />
-      <Route path="/dashboard/super-admin/*" element={<Navigate to="/dashboard/admin" replace />} />
       <Route path="/vendor" element={<Navigate to="/dashboard/owner" replace />} />
       <Route path="/owner" element={<Navigate to="/dashboard/owner" replace />} />
 

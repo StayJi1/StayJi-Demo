@@ -158,8 +158,7 @@ function PropertiesPage() {
             .filter(Boolean),
         )
         setSavedPropertyIds(savedIds)
-      } catch (error) {
-        console.error('Unable to load wishlist state', error)
+      } catch {
         setSavedPropertyIds(new Set())
       }
     }
@@ -200,8 +199,7 @@ function PropertiesPage() {
           return next
         })
       }
-    } catch (error) {
-      console.error(error)
+    } catch {
       alert('Unable to update this PG in your wishlist.')
     }
   }
@@ -289,16 +287,6 @@ function PropertiesPage() {
     }
     load()
   }, [backendFilterParams, page, pageSize])
-
-  useEffect(() => {
-    if (loading) return
-    const savedScroll = Number(sessionStorage.getItem('stayji-properties-scroll') || 0)
-    if (!savedScroll) return
-    window.requestAnimationFrame(() => {
-      window.scrollTo({ top: savedScroll, behavior: 'auto' })
-      sessionStorage.removeItem('stayji-properties-scroll')
-    })
-  }, [loading])
 
   useEffect(() => {
     if (hasUserLocation && nearbyMode) {

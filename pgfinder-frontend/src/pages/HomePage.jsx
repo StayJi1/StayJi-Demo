@@ -91,8 +91,7 @@ function HomePage() {
               .filter(Boolean),
           ),
         )
-      } catch (error) {
-        console.error('Unable to load wishlist state', error)
+      } catch {
         setSavedPropertyIds(new Set())
       }
     }
@@ -120,8 +119,7 @@ function HomePage() {
           return next
         })
       }
-    } catch (error) {
-      console.error(error)
+    } catch {
       alert('Unable to update this PG in your wishlist.')
     }
   }

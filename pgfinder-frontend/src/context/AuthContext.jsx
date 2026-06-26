@@ -43,10 +43,6 @@ const normalizeRole = (rawRole) => {
     hostel: 'owner',
     vendor: 'owner',
     admin: 'admin',
-    'super_admin': 'admin',
-    'super admin': 'admin',
-    'super-admin': 'admin',
-    superadmin: 'admin',
   }
   return roleMap[normalized] || normalized
 }

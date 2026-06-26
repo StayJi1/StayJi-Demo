@@ -226,7 +226,7 @@ const normalizeAccountType = (value) => {
     const normalized = (value || '').toString().trim().toLowerCase()
     if (['owner', 'host', 'hostel', 'vendor', 'pg owner', 'flat owner'].includes(normalized)) return 'owner'
     if (['personal', 'student', 'user'].includes(normalized)) return 'user'
-    if (['admin', 'super_admin', 'super admin', 'super-admin', 'superadmin'].includes(normalized)) return 'admin'
+    if (normalized === 'admin') return 'admin'
     return normalized
 }
 
@@ -234,7 +234,7 @@ const accountTypeVariants = (value) => {
     const normalized = normalizeAccountType(value)
     if (normalized === 'owner') return ['Owner', 'owner', 'Vendor', 'vendor']
     if (normalized === 'user') return ['User', 'Personal', 'Student', 'user', 'personal', 'student']
-    if (normalized === 'admin') return ['Admin', 'admin', 'Super Admin', 'super admin', 'super_admin', 'super-admin', 'superadmin']
+    if (normalized === 'admin') return ['Admin', 'admin']
     return [value]
 }
 
@@ -2313,7 +2313,7 @@ router.get('/getAllPropertyList', async (req, res) => {
     }
 });
 
-router.post('/reviewProperty', async (req, res) => {
+router.post('/reviewProperty', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
     const allowedStatuses = ["Pending", "Approved", "Rejected"]
     if (!allowedStatuses.includes(req.body.approvalStatus)) {
         return res.json({ result: "failure", msg: "Invalid approval status", data: 0 })
@@ -2333,9 +2333,10 @@ router.post('/reviewProperty', async (req, res) => {
     }
 })
 
-router.post('/moveIns', upload.fields([{ name: 'paymentScreenshot', maxCount: 1 }, { name: 'roomImage', maxCount: 1 }]), async (req, res) => {
+router.post('/moveIns', attachAuthenticatedUser, requireRoles(['user']), upload.fields([{ name: 'paymentScreenshot', maxCount: 1 }, { name: 'roomImage', maxCount: 1 }]), async (req, res) => {
     const userId = asObjectId(req.body.userId || req.body.userIDFK)
     const propertyId = asObjectId(req.body.propertyId || req.body.propertyIDFK)
+    if (!assertSelfOrRoles(req, res, userId, [])) return
     if (!userId || !propertyId || !req.body.ownerName || !req.body.joiningDate) {
         return res.json({ result: 'failure', msg: 'User, property, owner name, and joining date are required.', data: null })
     }
@@ -2388,7 +2389,7 @@ router.post('/moveIns', upload.fields([{ name: 'paymentScreenshot', maxCount: 1 
     res.json({ result: 'success', msg: 'Move-in submitted for admin verification.', data: moveIn })
 })
 
-router.get('/moveIns', async (req, res) => {
+router.get('/moveIns', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
     const filters = { isActive: true }
     if (req.query.userId && mongoose.Types.ObjectId.isValid(req.query.userId)) filters.userId = new mongoose.Types.ObjectId(req.query.userId)
     if (req.query.vendorId && mongoose.Types.ObjectId.isValid(req.query.vendorId)) filters.vendorId = new mongoose.Types.ObjectId(req.query.vendorId)
@@ -2406,7 +2407,7 @@ router.get('/moveIns', async (req, res) => {
     res.json({ result: 'success', msg: 'Move-ins found', data: items })
 })
 
-router.post('/moveIns/:id/owner-confirm', async (req, res) => {
+router.post('/moveIns/:id/owner-confirm', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
     const ownerId = asObjectId(req.body.ownerId || req.body.vendorId)
     if (!ownerId) return res.json({ result: 'failure', msg: 'Owner ID is required.', data: null })
     const moveIn = await MoveInConfirmation.findOneAndUpdate(
@@ -2426,7 +2427,7 @@ router.post('/moveIns/:id/owner-confirm', async (req, res) => {
     res.json({ result: 'success', msg: 'Tenant joined confirmation saved.', data: moveIn })
 })
 
-router.post('/moveIns/:id/review', async (req, res) => {
+router.post('/moveIns/:id/review', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
     const adminId = asObjectId(req.body.adminId)
     const admin = adminId ? await User.findOne({ _id: adminId, userType: { $in: accountTypeVariants('Admin') }, isActive: true }).select('_id userType') : null
     if (!admin) return res.json({ result: 'failure', msg: 'Only StayJi admin can verify move-ins.', data: null })
@@ -2475,12 +2476,12 @@ router.post('/moveIns/:id/review', async (req, res) => {
     res.json({ result: 'success', msg: 'Move-in reviewed.', data: moveIn })
 })
 
-router.get('/payment-requests', async (req, res) => {
+router.get('/payment-requests', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
     req.url = '/moveIns'
     return router.handle(req, res)
 })
 
-router.post('/payment-requests/:id/review', async (req, res) => {
+router.post('/payment-requests/:id/review', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
     req.url = `/moveIns/${req.params.id}/review`
     return router.handle(req, res)
 })
@@ -2750,7 +2751,7 @@ router.get('/getAdminStats', attachAuthenticatedUser, requireRoles(['admin']), a
     })
 })
 
-router.get('/getAdminVendorLeadSummary', async (req, res) => {
+router.get('/getAdminVendorLeadSummary', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
     const [visitSummary, inquirySummary] = await Promise.all([
         Visit.aggregate([
             { $match: { isActive: true } },
@@ -3288,9 +3289,10 @@ router.post('/visits/:id/status', attachAuthenticatedUser, requireRoles(['user',
     res.json({ result: 'success', msg: 'Visit updated.', data: normalizeVisitDto(visit) })
 })
 
-router.post('/wallet/payouts', upload.single('upiQr'), async (req, res) => {
+router.post('/wallet/payouts', attachAuthenticatedUser, requireRoles(['user']), upload.single('upiQr'), async (req, res) => {
     const userId = asObjectId(req.body.userId || req.body.userIDFK)
     const moveInId = asObjectId(req.body.moveInId)
+    if (!assertSelfOrRoles(req, res, userId, [])) return
     if (!userId || !req.body.upiId && !req.file && !req.body.upiQr) return res.json({ result: 'failure', msg: 'User and UPI payout details are required.', data: null })
     const verifiedMoveIns = await MoveInConfirmation.find({ userId, isActive: true, status: 'Verified', ownerConfirmed: true })
     const earned = verifiedMoveIns.reduce((sum, item) => sum + (Number(item.rewardCoins || item.cashbackAmount) || 0), 0)
@@ -4508,7 +4510,10 @@ router.get('/leads', async (req, res) => {
     res.json({ result: 'success', msg: 'Admin leads found', data: { items, page, limit, total: items.length } })
 })
 
-router.get('/vendors/:id/messages', async (req, res) => {
+router.get('/vendors/:id/messages', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
+    if (req.auth.role === 'owner' && req.params.id !== req.auth.user._id.toString()) {
+        return res.status(403).json({ result: 'failure', msg: 'Owners can only view their own admin messages.', data: null })
+    }
     const viewer = ['owner', 'vendor'].includes(req.query.viewer) ? 'owner' : 'admin'
     const deleteFilter = viewer === 'owner' ? { deletedForOwner: { $ne: true }, deletedForVendor: { $ne: true } } : { deletedForAdmin: { $ne: true } }
     const messages = await AdminMessage.find({ vendorId: req.params.id, isActive: true, ...deleteFilter })
@@ -4519,7 +4524,10 @@ router.get('/vendors/:id/messages', async (req, res) => {
     res.json({ result: 'success', msg: 'Vendor messages found', data: messages.map((item) => ({ ...item.toObject(), message: decryptMessage(item.message) })) })
 })
 
-router.post('/vendors/:id/messages', async (req, res) => {
+router.post('/vendors/:id/messages', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
+    if (req.auth.role === 'owner' && req.params.id !== req.auth.user._id.toString()) {
+        return res.status(403).json({ result: 'failure', msg: 'Owners can only reply from their own account.', data: null })
+    }
     if (!req.body.message || !req.body.message.trim()) {
         return res.json({ result: 'failure', msg: 'Message is required.', data: null })
     }
@@ -4537,12 +4545,12 @@ router.post('/vendors/:id/messages', async (req, res) => {
     }
     const message = await AdminMessage.create({
         vendorId: req.params.id,
-        adminId: req.body.adminId,
+        adminId: req.auth.role === 'admin' ? req.auth.user._id : req.body.adminId,
         propertyId: req.body.propertyId || null,
-        senderRole: req.body.senderRole || 'admin',
+        senderRole: req.auth.role === 'owner' ? 'owner' : 'admin',
         message: encryptMessage(cleanMessage),
     })
-    if (['vendor', 'owner'].includes(req.body.senderRole || 'admin')) {
+    if (req.auth.role === 'owner') {
         await notifyAdmins({
             actorId: req.params.id,
             propertyId: req.body.propertyId,
@@ -4555,24 +4563,26 @@ router.post('/vendors/:id/messages', async (req, res) => {
         await createNotification({
             recipientId: req.params.id,
             recipientRole: 'vendor',
-            actorId: req.body.adminId,
+            actorId: req.auth.user._id,
             propertyId: req.body.propertyId,
             type: 'message',
             title: 'New admin message',
             message: 'StayJi admin sent you a private message.',
-            link: '/dashboard/vendor',
+            link: '/dashboard/owner/messages',
         })
     }
     res.json({ result: 'success', msg: 'Message sent.', data: { ...message.toObject(), message: cleanMessage } })
 })
 
-router.post('/vendors/:id/messages/:messageId/delete', async (req, res) => {
+router.post('/vendors/:id/messages/:messageId/delete', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
+    if (req.auth.role === 'owner' && req.params.id !== req.auth.user._id.toString()) {
+        return res.status(403).json({ result: 'failure', msg: 'Owners can only delete their own admin messages.', data: null })
+    }
     const scope = req.body.scope || 'self'
-    const viewer = ['owner', 'vendor'].includes(req.body.viewer) ? 'owner' : 'admin'
+    const viewer = req.auth.role === 'owner' ? 'owner' : 'admin'
     const update = {}
     if (scope === 'both') {
-        const admin = req.body.adminId && await User.findOne({ _id: req.body.adminId, userType: { $in: ['Admin', 'admin'] }, isActive: true }).select('_id')
-        if (!admin) {
+        if (req.auth.role !== 'admin') {
             return res.json({ result: 'failure', msg: 'Only StayJi admin can permanently delete messages.', data: null })
         }
         update.isActive = false

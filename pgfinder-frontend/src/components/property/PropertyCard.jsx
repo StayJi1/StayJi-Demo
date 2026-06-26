@@ -16,7 +16,6 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSa
   const propertyPath = `/properties/${property.id || property._id || 'detail'}`
 
   const openProperty = () => {
-    sessionStorage.setItem('stayji-properties-scroll', String(window.scrollY || 0))
     navigate(propertyPath)
   }
 
