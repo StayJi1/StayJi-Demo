@@ -3023,7 +3023,7 @@ router.get('/user/overview', attachAuthenticatedUser, requireRoles(['user', 'adm
         Visit.find({ userIDFK: userId, isActive: true }).populate('propertyIDFK').sort({ addedOn: -1 }).limit(50),
         Inquiry.find({ userIDFK: userId, isActive: true }).populate('propertyIDFK').sort({ addedOn: -1 }).limit(50),
         MoveInConfirmation.find({ userId, isActive: true }).populate('propertyId').sort({ addedOn: -1 }).limit(30),
-        Notification.find({ isActive: true, $or: [{ recipientId: userId }, { recipientRole: 'user' }, { recipientRole: 'all' }] }).sort({ addedOn: -1 }).limit(30),
+        Notification.find({ isActive: true, recipientId: userId }).sort({ addedOn: -1 }).limit(30),
         Conversation.find({ userId, isActive: true }).populate('ownerId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType']).populate('propertyId', ['propertyName cityName areaName']).sort({ lastMessageAt: -1 }).limit(60),
         LeadEvent.find({ userId, isActive: true }).populate('propertyId').sort({ addedOn: -1 }).limit(60),
         UserReview.find({ userIDFK: userId, isActive: true }).populate('propertyIDFK').sort({ addedOn: -1 }).limit(20),
@@ -4593,15 +4593,10 @@ router.post('/vendors/:id/messages/:messageId/delete', attachAuthenticatedUser, 
     res.json({ result: message ? 'success' : 'failure', msg: message ? 'Message deleted.' : 'Message not found.', data: message })
 })
 
-router.get('/notifications', async (req, res) => {
-    const userId = asObjectId(req.query.userId || req.query.recipientId)
-    const role = normalizeAccountType(req.query.role || req.query.recipientRole || 'user')
+router.get('/notifications', attachAuthenticatedUser, requireRoles(['user', 'owner', 'admin']), async (req, res) => {
+    const userId = req.auth.user._id
     const limit = Math.min(50, Math.max(1, Number(req.query.limit || 20)))
-    const filters = { isActive: true }
-    const recipients = [{ recipientRole: 'all' }]
-    if (userId) recipients.push({ recipientId: userId })
-    if (role) recipients.push({ recipientRole: role })
-    filters.$or = recipients
+    const filters = { isActive: true, recipientId: userId }
     if (req.query.unreadOnly === 'true') filters.readAt = { $exists: false }
 
     const [items, unreadCount] = await Promise.all([
@@ -4611,22 +4606,21 @@ router.get('/notifications', async (req, res) => {
     res.json({ result: 'success', msg: 'Notifications found', data: { items, unreadCount } })
 })
 
-router.post('/notifications/:id/read', async (req, res) => {
+router.post('/notifications/:id/read', attachAuthenticatedUser, requireRoles(['user', 'owner', 'admin']), async (req, res) => {
     const notification = await Notification.findOneAndUpdate(
-        { _id: req.params.id },
+        {
+            _id: req.params.id,
+            isActive: true,
+            recipientId: req.auth.user._id,
+        },
         { $set: { readAt: new Date() } },
         { new: true },
     )
     res.json({ result: notification ? 'success' : 'failure', msg: notification ? 'Notification read' : 'Notification not found', data: notification })
 })
 
-router.post('/notifications/mark-read', async (req, res) => {
-    const userId = asObjectId(req.body.userId || req.body.recipientId)
-    const role = normalizeAccountType(req.body.role || req.body.recipientRole || 'user')
-    const recipients = [{ recipientRole: 'all' }]
-    if (userId) recipients.push({ recipientId: userId })
-    if (role) recipients.push({ recipientRole: role })
-    const result = await Notification.updateMany({ isActive: true, readAt: { $exists: false }, $or: recipients }, { $set: { readAt: new Date() } })
+router.post('/notifications/mark-read', attachAuthenticatedUser, requireRoles(['user', 'owner', 'admin']), async (req, res) => {
+    const result = await Notification.updateMany({ isActive: true, readAt: { $exists: false }, recipientId: req.auth.user._id }, { $set: { readAt: new Date() } })
     res.json({ result: 'success', msg: 'Notifications marked as read', data: { modifiedCount: result.modifiedCount || 0 } })
 })
 

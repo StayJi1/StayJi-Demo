@@ -23,11 +23,15 @@ const CITY_OPTIONS = {
 }
 
 const predefinedAmenities = ['WiFi', 'Meals', 'Laundry', 'Security', 'Attached balcony', 'Study table', 'Private fridge', 'Washing machine', 'Rooftop access', 'Biometric entry']
+const propertyCategoryOptions = ['PG', 'Hostel', 'Flat', 'House', 'Apartment', 'Villa', 'Co-living']
 const defaultSharingRows = [
   { sharingType: 'Single sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 1, vacantBeds: '', monthlyRent: '' },
   { sharingType: 'Double sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 2, vacantBeds: '', monthlyRent: '' },
   { sharingType: 'Triple sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 3, vacantBeds: '', monthlyRent: '' },
   { sharingType: 'Four sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 4, vacantBeds: '', monthlyRent: '' },
+  { sharingType: 'Five sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 5, vacantBeds: '', monthlyRent: '' },
+  { sharingType: 'Dormitory', totalRooms: '', vacantRooms: '', bedsPerRoom: 6, vacantBeds: '', monthlyRent: '' },
+  { sharingType: 'Other', totalRooms: '', vacantRooms: '', bedsPerRoom: 1, vacantBeds: '', monthlyRent: '' },
 ]
 
 function AddPropertyPage() {
@@ -420,9 +424,7 @@ function AddPropertyPage() {
                 onChange={handleChange}
                 className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
               >
-                <option value="PG">PG</option>
-                <option value="Hostel">Hostel</option>
-                <option value="Co-living">Co-living</option>
+                {propertyCategoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
               </select>
             </label>
           </div>

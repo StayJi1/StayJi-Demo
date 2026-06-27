@@ -1,105 +1,57 @@
 # StayJi Bangalore MVP QA Report
 
-Audit date: 2026-06-27
+Date: 2026-06-28
 
-Scope: final release QA and stabilization for the Bangalore-only MVP. This audit was completed before code changes, per the release brief.
+## Scope
+
+Final pre-launch audit and stabilization pass for the Bangalore-only StayJi MVP across active frontend/backend launch paths: authentication, routing, role access, search/listing, property categories, compare, notifications, visits, messaging, owner property forms, and startup/build checks.
 
 ## Executive Summary
 
-The application is close to the Bangalore MVP shape: public property search is scoped to Bangalore, JWT login exists, owner/user/admin dashboards are wired, and the main dashboard route tree exposes only User, Owner, and Admin roles.
+The active source now uses three live roles only: User, Owner, and Admin. No active Super Admin routes, guards, dashboard imports, or source-level role checks were found in `pgfinder-frontend/src`, `pgfinder-backend/controllers`, `pgfinder-backend/models`, `app.js`, or `server.js`.
 
-The highest-risk launch blockers are remaining Super Admin route/role references in active code, lack of centralized scroll restoration, unsecured legacy admin-owner message endpoints, and several legacy endpoints that still expose mutation or data access without modern auth guards. Search filtering is backend-side before pagination for the primary public and admin list APIs, but admin search has a narrower field set than public search.
+This pass fixed four launch-impacting issues:
 
-## P0 Findings
+- Compare was implemented but unreachable because `/compare` redirected to listings.
+- Listing cards had no compare action, so the compare list could not be built from browsing.
+- Notification APIs were publicly query-scoped and could expose or mark another account's notifications.
+- Login/signup form state was lost when users opened Terms or Privacy during entry.
 
-| Area | Finding | Evidence | Impact |
+## Findings And Fixes
+
+| Area | Finding | Fix | Status |
 | --- | --- | --- | --- |
-| Roles / Routing | Super Admin routes still exist as redirect aliases. | `pgfinder-frontend/src/routes/AppRoutes.jsx` has `/super-admin-login` and `/dashboard/super-admin/*`. | Violates the launch requirement to completely remove Super Admin routes and references. |
-| Roles / Auth | Active auth normalization still accepts Super Admin aliases and maps them to Admin. | `AuthContext.jsx`, `LoginPage.jsx`, `adminApi.js`, `dashboardApi.js`, and `clientController.js` include `super_admin`, `super admin`, `super-admin`, `superadmin`. | Leaves a fourth legacy role path in active auth/RBAC logic. |
-| Admin / Messaging | Admin-vendor messaging endpoints depend on the broad `/api/admin` guard but are still reachable under `/client/vendors/:id/messages` without an admin/owner route guard. | `clientController.js` defines `/vendors/:id/messages`, `/vendors/:id/messages/:messageId/delete`; `dashboardApi` and `adminApi` call API variants inconsistently. | Data leakage and unauthorized message creation/deletion risk through legacy `/client` paths. |
-| Visits / Move-ins / Wallet | Some legacy payment/move-in routes are unauthenticated even though they affect launch workflows. | `clientController.js` has `/moveIns`, `/moveIns/:id/owner-confirm`, `/moveIns/:id/review`, `/payment-requests`, `/wallet/payouts` without full role guards. | Users can hit sensitive workflow APIs outside the protected dashboard path. |
+| Compare | `/compare` redirected to `/properties`. | Restored the route to `ComparePage`. | Fixed |
+| Compare | No listing-card control populated `stayjiCompare`. | Added 3-property compare selection, persistent local storage, visible selected count, and link to Compare. | Fixed |
+| Compare | Compare table did not explicitly include Property Type and used Occupancy wording. | Added Property Type and Availability rows. | Fixed |
+| Notifications | `/client/notifications` and `/api/notifications` accepted arbitrary `userId`/`role` query params. | Added JWT auth and account-bound filtering on list/read/mark-read. | Fixed |
+| User dashboard notifications | Overview mixed user-role/global notifications into every user history. | Restricted overview notifications to the logged-in user. | Fixed |
+| Registration/Login | Terms/Privacy navigation unmounted form pages and lost typed state. | Added session-scoped form state persistence until successful submission. | Fixed |
+| Owner categories | Owner property form only exposed PG, Hostel, Co-living. | Added PG, Hostel, Flat, House, Apartment, Villa, Co-living. | Fixed |
+| Sharing options | Owner defaults stopped at Four sharing. | Added Five sharing, Dormitory, and Other rows while preserving custom sharing rows. | Fixed |
+| Search filters | Listing filters did not expose all launch categories/sharing options. | Added category and sharing filters and forwarded them to backend filtering before pagination. | Fixed |
 
-## P1 Findings
+## Verification
 
-| Area | Finding | Evidence | Impact |
-| --- | --- | --- | --- |
-| Scroll / Navigation | No centralized scroll restoration exists. Listing cards manually save scroll, and `PropertiesPage` manually restores it. | `PropertyCard.jsx` writes `stayji-properties-scroll`; `PropertiesPage.jsx` calls `window.scrollTo`. | Property detail pages can open mid-scroll; behavior is duplicated and inconsistent. |
-| Admin Data | `getAdminVendorLeadSummary` is public under `/client`. | `dashboardApi.adminVendorLeadSummary` calls `/client/getAdminVendorLeadSummary`; route lacks auth. | Admin summary data can be fetched without a token. |
-| Search | Public search supports partial/case-insensitive matching before pagination, but admin quick search covers fewer fields. | `buildPropertyQuery` searches amenities, sharing, gender, meals, room inventory; `/admin/searchProperty` only searches core text fields. | Admin search may miss properties that public search can find. |
-| Error Handling | Frontend pages still log avoidable console errors for expected API failures. | `HomePage.jsx`, `PropertiesPage.jsx` contain `console.error` in user-facing fallback flows. | Produces noisy release console output. |
-| Legacy Admin UI | `/admin` EJS controller remains mounted with many unguarded legacy admin routes and console logs. | `app.js` mounts `adminController` at `/admin`; `adminController.js` exposes many EJS routes. | Legacy surface is outside MVP React app and may confuse release hardening. |
+- `node --check pgfinder-backend/controllers/clientController.js` passed.
+- `npm run lint` in `pgfinder-frontend` passed.
+- `npm run build` in `pgfinder-frontend` passed.
+- `git diff --check` passed.
+- Frontend startup verified with Vite at `http://127.0.0.1:5173/`.
+- Backend startup outside sandbox connected to MongoDB, but the attempted process could not bind because port `3000` was already in use by local `node` process PID `4804`.
 
-## P2 Findings
+## Remaining Manual QA
 
-| Area | Finding | Evidence | Impact |
-| --- | --- | --- | --- |
-| Documentation | User-facing docs still mention Super Admin. | `docs/SUPER_ADMIN_MANUAL.md`, `docs/SECURITY_AND_PASSWORDS.md`, `docs/USER_MANUAL.md`, `docs/OWNER_MANUAL.md`, `docs/ADMIN_MANUAL.md`. | Launch documentation conflicts with the three-role MVP. |
-| Navigation | Blog and recommendation pages are implemented but app routes redirect them to Bangalore/properties. | `AppRoutes.jsx` redirects `/blog`, `/blogs`, `/recommendations`. | Dead code exists, but redirects prevent blank pages. |
-| Console Logging | Backend seed/admin legacy scripts log operational data. | `seedData.js`, `adminController.js`, `clientController.js`. | Not critical for production API if legacy routes remain unused, but release logs are noisy. |
+These require browser sessions with seeded User, Owner, and Admin accounts:
 
-## Feature Audit
+- User: register, login, search, open property, gallery, save, compare, message owner, book visit, dashboard, logout.
+- Owner: login, dashboard counts, add/edit property, images, categories, sharing rows, leads, visits, messages, logout.
+- Admin: login, dashboard cards, users, owners, properties, approvals, reject/restore/edit/delete, messages, visits, analytics.
+- Notifications: confirm User, Owner, and Admin only see their own account notifications.
+- Responsive: desktop, laptop, tablet, and mobile visual pass for listing cards, compare table, auth forms, owner forms, dashboards, and notification menu.
 
-### Authentication
+## Launch Readiness Score
 
-- Register: present through `/api/auth/signup` and `/client/addUser`.
-- Login: present through `/api/auth/login` and `/client/loginByUser`; JWT is signed with `JWT_SECRET` or session fallback.
-- Logout: frontend clears session/local storage and Axios default auth header.
-- Token storage: `sessionStorage` primary, `localStorage` fallback.
-- Axios Authorization header: request interceptor restores bearer token from storage.
-- Protected routes: dashboard routes are wrapped in `ProtectedRoute` and `RoleProtectedRoute`.
-- Admin authentication: `/admin-login` uses Admin portal and blocks public Admin login.
+Source/build readiness: 87/100.
 
-### Admin
-
-- Dashboard, users, owners, properties, analytics, governance, city-state, leads, and messages are present.
-- Admin statistics come from database counts.
-- Several admin APIs are protected through the `/api/admin` router prefix, but some legacy `/client` aliases remain public or inconsistently guarded.
-
-### User
-
-- Search, property detail, gallery, save, message owner, book visit, dashboard, and logout flows are present.
-- Save/message/visit actions require user auth and redirect unauthenticated users to login.
-
-### Owner
-
-- Dashboard, add/edit/delete property, image upload, own properties, messages, visits/leads, and logout are present.
-- Dedicated image deletion is not clearly exposed as an owner control.
-
-### Search
-
-- Primary public search filters before pagination in `buildPropertyQuery`.
-- Case-insensitive partial matching is used through regular expressions.
-- Public property API is scoped to Bangalore via `MVP_CITY`.
-- Search covers property name, category, area/locality, budget, gender, sharing, food, amenities, and availability.
-
-### Property Details
-
-- Gallery, images, amenities, food/rent/availability, owner, map-related coordinates, save, message, visit, share, and report UI surfaces exist.
-- Missing/deleted property states are handled with a fallback not-found panel.
-
-### Messaging
-
-- User-owner conversation storage uses `Conversation` and `Message`.
-- Duplicate user-owner conversations are prevented by `findOneAndUpdate` with user, owner, property, type, and active status.
-- Unread counts and read status are updated when opening a conversation.
-- Legacy admin-owner messaging needs stricter role checks.
-
-### Visits
-
-- Booking is available through `/client/addVisit`.
-- Approve/reject/reschedule/cancel status updates exist through `/client/visits/:id/status`.
-- Owner/admin role checks exist for the modern status route.
-
-### Responsive / Navigation
-
-- Navbar/sidebar use responsive Tailwind patterns.
-- Dashboard tables and dense admin sections need final viewport testing after fixes.
-- Centralized scroll restoration is missing and must be added.
-
-## Recommended Stabilization Order
-
-1. Remove active Super Admin route aliases and role aliases from live code.
-2. Add centralized scroll restoration while preserving listing back-position behavior.
-3. Add role guards to legacy admin-vendor messaging and admin summary endpoints.
-4. Remove avoidable frontend console noise in expected API fallback paths.
-5. Run frontend build/lint and backend syntax/start checks.
+The score is held below 90 because full role-by-role manual browser QA and backend port ownership validation still need to be completed on the actual launch machine.

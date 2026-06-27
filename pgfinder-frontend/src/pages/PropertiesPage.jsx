@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { FiMapPin, FiSearch } from 'react-icons/fi'
+import { FiColumns, FiMapPin, FiSearch } from 'react-icons/fi'
 import SectionHeading from '../components/common/SectionHeading'
 import Button from '../components/common/Button'
 import Loader from '../components/common/Loader'
@@ -18,6 +18,10 @@ import { MVP_CITY } from '../config/mvp'
 const filterOptions = [
   'PG',
   'Hostel',
+  'Flat',
+  'House',
+  'Apartment',
+  'Villa',
   'Co-living',
   'Boys',
   'Girls',
@@ -32,11 +36,17 @@ const filterOptions = [
   'Single sharing',
   'Double sharing',
   'Triple sharing',
+  'Four sharing',
+  'Five sharing',
+  'Dormitory',
   'Attached bathroom',
 ]
 
 const defaultNearbyRadiusKm = 5
 const expandedNearbyRadiusKm = 25
+const compareStorageKey = 'stayjiCompare'
+const propertyCategories = ['PG', 'Hostel', 'Flat', 'House', 'Apartment', 'Villa', 'Co-living']
+const sharingFilters = ['Single sharing', 'Double sharing', 'Triple sharing', 'Four sharing', 'Five sharing', 'Dormitory']
 const ignoredSearchWords = new Set(['near', 'nearby', 'me', 'my', 'location', 'around'])
 const normalizeSearchToken = (token) => {
   const singularMap = {
@@ -133,6 +143,14 @@ function PropertiesPage() {
   const [mapSearchMessage, setMapSearchMessage] = useState('')
   const { user, isAuthenticated, role } = useAuth()
   const [savedPropertyIds, setSavedPropertyIds] = useState(new Set())
+  const [compareIds, setCompareIds] = useState(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(compareStorageKey) || '[]').filter(Boolean))
+    } catch {
+      return new Set()
+    }
+  })
+  const [compareMessage, setCompareMessage] = useState('')
   const [saveSearchMessage, setSaveSearchMessage] = useState('')
   const {
     position,
@@ -241,12 +259,31 @@ function PropertiesPage() {
     }
   }
 
+  const toggleCompare = (property) => {
+    const propertyId = property.id || property._id
+    if (!propertyId) return
+    setCompareMessage('')
+    setCompareIds((current) => {
+      const next = new Set(current)
+      if (next.has(propertyId)) {
+        next.delete(propertyId)
+      } else if (next.size >= 3) {
+        setCompareMessage('You can compare up to 3 properties at once.')
+        return current
+      } else {
+        next.add(propertyId)
+      }
+      localStorage.setItem(compareStorageKey, JSON.stringify([...next]))
+      return next
+    })
+  }
+
   const backendFilterParams = useMemo(() => {
     const gender = activeFilters.filter((filter) => ['Boys', 'Girls', 'Co-ed'].includes(filter)).join(',')
-    const categories = activeFilters.filter((filter) => ['PG', 'Hostel', 'Co-living'].includes(filter)).join(',')
+    const categories = activeFilters.filter((filter) => propertyCategories.includes(filter)).join(',')
     const amenities = activeFilters.filter((filter) => ['AC', 'Parking', 'Attached bathroom'].includes(filter)).join(',')
     const sharingType = activeFilters
-      .filter((filter) => ['Single sharing', 'Double sharing', 'Triple sharing'].includes(filter))
+      .filter((filter) => sharingFilters.includes(filter))
       .map((filter) => filter.replace(' sharing', ''))
       .join(',')
 
@@ -342,7 +379,7 @@ function PropertiesPage() {
       .filter((token) => token && !ignoredSearchWords.has(token))
       .map(normalizeSearchToken)
 
-    const categoryFilters = activeFilters.filter((filter) => ['PG', 'Hostel', 'Co-living'].includes(filter))
+    const categoryFilters = activeFilters.filter((filter) => propertyCategories.includes(filter))
     const genderFilters = activeFilters.filter((filter) => ['Boys', 'Girls', 'Co-ed'].includes(filter))
     const utilityFilters = activeFilters.filter((filter) => !categoryFilters.includes(filter) && !genderFilters.includes(filter))
 
@@ -381,7 +418,7 @@ function PropertiesPage() {
         }
 
         return utilityFilters.every((filter) => {
-          if (['PG', 'Hostel', 'Co-living'].includes(filter)) {
+          if (propertyCategories.includes(filter)) {
             if (filter === 'Co-living') {
               return ['Co-ed', 'Boys', 'Girls'].includes(item.gender) || /co.?living|co.?ed/i.test(`${item.category} ${item.type} ${item.description}`)
             }
@@ -628,7 +665,17 @@ function PropertiesPage() {
                 )
               })}
             </div>
+            {compareMessage ? <p className="mt-3 text-sm text-amber-200">{compareMessage}</p> : null}
           </motion.div>
+
+          {compareIds.size ? (
+            <div className="mt-6 flex flex-col gap-3 rounded-[1.5rem] border border-cyan-400/30 bg-cyan-500/10 p-4 text-sm text-cyan-100 sm:flex-row sm:items-center sm:justify-between">
+              <span>{compareIds.size}/3 properties selected for comparison.</span>
+              <Button variant="secondary" className="w-full sm:w-auto" onClick={() => navigate('/compare')}>
+                <FiColumns className="mr-2" /> Open compare
+              </Button>
+            </div>
+          ) : null}
 
           <div className="mt-10 grid gap-6 lg:grid-cols-2">
             {loading ? (
@@ -640,6 +687,8 @@ function PropertiesPage() {
                   property={property}
                   saved={savedPropertyIds.has(property.id || property._id)}
                   onToggleSave={handleToggleSave}
+                  compareSelected={compareIds.has(property.id || property._id)}
+                  onToggleCompare={toggleCompare}
                 />
               ))
             ) : (
@@ -659,6 +708,8 @@ function PropertiesPage() {
                           property={property}
                           saved={savedPropertyIds.has(property.id || property._id)}
                           onToggleSave={handleToggleSave}
+                          compareSelected={compareIds.has(property.id || property._id)}
+                          onToggleCompare={toggleCompare}
                         />
                       ))}
                     </div>

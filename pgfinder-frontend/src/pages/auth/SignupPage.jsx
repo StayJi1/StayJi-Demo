@@ -11,6 +11,25 @@ const CITY_OPTIONS = {
   [MVP_STATE]: [MVP_CITY],
 }
 
+const formStorageKey = 'stayji-signup-form'
+
+const readStoredSignupForm = (requestedRole) => {
+  const fallback = { name: '', contact: '', email: '', password: '', role: requestedRole || 'user', state: MVP_STATE, city: MVP_CITY, acceptTerms: false, acceptPrivacy: false }
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(formStorageKey) || '{}')
+    if (!saved || typeof saved !== 'object') return fallback
+    return {
+      ...fallback,
+      ...saved,
+      role: requestedRole || saved.role || fallback.role,
+      acceptTerms: Boolean(saved.acceptTerms),
+      acceptPrivacy: Boolean(saved.acceptPrivacy),
+    }
+  } catch {
+    return fallback
+  }
+}
+
 function SignupPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -18,7 +37,7 @@ function SignupPage() {
   const { signup, googleSignup, status, error, isAuthenticated, role } = useAuth()
   const googleButtonRef = useRef(null)
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-  const [form, setForm] = useState({ name: '', contact: '', email: '', password: '', role: requestedRole || 'user', state: MVP_STATE, city: MVP_CITY, acceptTerms: false, acceptPrivacy: false })
+  const [form, setForm] = useState(() => readStoredSignupForm(requestedRole))
   const [localError, setLocalError] = useState('')
   const [cityOptions, setCityOptions] = useState(CITY_OPTIONS)
 
@@ -43,6 +62,10 @@ function SignupPage() {
       navigate(`/dashboard/${role || 'user'}`, { replace: true })
     }
   }, [isAuthenticated, navigate, role])
+
+  useEffect(() => {
+    sessionStorage.setItem(formStorageKey, JSON.stringify(form))
+  }, [form])
 
   useEffect(() => {
     if (!googleClientId || !googleButtonRef.current) return undefined
@@ -124,6 +147,7 @@ function SignupPage() {
     }
     try {
       const response = await signup(form)
+      sessionStorage.removeItem(formStorageKey)
       navigate(`/dashboard/${response.user?.role || form.role}`)
     } catch {
       // handled in context

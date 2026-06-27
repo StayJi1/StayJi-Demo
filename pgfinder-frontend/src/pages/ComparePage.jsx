@@ -11,8 +11,9 @@ const rows = [
   { label: 'Distance', value: (item) => item.distanceKm ? `${item.distanceKm.toFixed(1)} km` : item.locationLabel || item.city || '-' },
   { label: 'Food', value: (item) => item.mealsAvailable?.length ? item.mealsAvailable.join(', ') : item.foodIncluded ? 'Included' : 'Optional' },
   { label: 'Sharing', value: (item) => item.sharingAvailability || item.sharing || '-' },
-  { label: 'Occupancy', value: (item) => item.vacancyStatus || `${item.availableBeds || 0} beds available` },
+  { label: 'Availability', value: (item) => item.vacancyStatus || `${item.availableBeds || 0} beds available` },
   { label: 'Amenities', value: (item) => item.amenities?.slice(0, 5).join(', ') || '-' },
+  { label: 'Property Type', value: (item) => item.category || item.type || 'PG' },
   { label: 'Reviews', value: (item) => `${item.rating || 4.6}/5 resident score` },
 ]
 
@@ -23,7 +24,7 @@ function ComparePage() {
 
   useEffect(() => {
     const load = async () => {
-      const ids = JSON.parse(localStorage.getItem('stayjiCompare') || '[]')
+      const ids = JSON.parse(localStorage.getItem('stayjiCompare') || '[]').slice(0, 3)
       if (!ids.length) {
         setLoading(false)
         return

@@ -10,6 +10,7 @@ import RoleProtectedRoute from '../components/common/RoleProtectedRoute'
 const HomePage = lazy(() => import('../pages/HomePage'))
 const PropertiesPage = lazy(() => import('../pages/PropertiesPage'))
 const PropertyDetailPage = lazy(() => import('../pages/PropertyDetailPage'))
+const ComparePage = lazy(() => import('../pages/ComparePage'))
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'))
 const SignupPage = lazy(() => import('../pages/auth/SignupPage'))
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage'))
@@ -47,7 +48,7 @@ function AppRoutes() {
           <Route path="/properties" element={<PropertiesPage />} />
           <Route path="/properties/:id" element={<PropertyDetailPage />} />
           <Route path="/property/:id" element={<PropertyDetailPage />} />
-          <Route path="/compare" element={<Navigate to="/properties" replace />} />
+          <Route path="/compare" element={<ComparePage />} />
           <Route path="/bangalore" element={<LocalityPage />} />
           <Route path="/bangalore/:localitySlug" element={<LocalityPage />} />
           <Route path="/faq" element={<FAQPage />} />

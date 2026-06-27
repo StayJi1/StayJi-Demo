@@ -7,11 +7,28 @@ import Card from '../../components/common/Card'
 import authService from '../../services/authService'
 import SEO from '../../components/SEO'
 
+const formStorageKey = 'stayji-login-form'
+
+const readStoredLoginForm = (isAdminPortal) => {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(formStorageKey) || '{}')
+    if (!saved || typeof saved !== 'object') throw new Error('Invalid saved login form')
+    return {
+      email: saved.email || '',
+      password: saved.password || '',
+      role: isAdminPortal ? 'admin' : saved.role || 'user',
+      acceptPolicy: Boolean(saved.acceptPolicy),
+    }
+  } catch {
+    return { email: '', password: '', role: isAdminPortal ? 'admin' : 'user', acceptPolicy: false }
+  }
+}
+
 function LoginPage({ portal = 'public' }) {
   const navigate = useNavigate()
   const { login, status, error, isAuthenticated, role } = useAuth()
   const isAdminPortal = portal === 'admin'
-  const [form, setForm] = useState({ email: '', password: '', role: isAdminPortal ? 'admin' : 'user', acceptPolicy: false })
+  const [form, setForm] = useState(() => readStoredLoginForm(isAdminPortal))
   const [resetOpen, setResetOpen] = useState(false)
   const [resetForm, setResetForm] = useState({ email: '', otp: '', password: '' })
   const [resetStep, setResetStep] = useState('email')
@@ -22,6 +39,10 @@ function LoginPage({ portal = 'public' }) {
       navigate(`/dashboard/${role || 'user'}`, { replace: true })
     }
   }, [isAuthenticated, navigate, role])
+
+  useEffect(() => {
+    sessionStorage.setItem(formStorageKey, JSON.stringify(form))
+  }, [form])
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target
@@ -41,6 +62,7 @@ function LoginPage({ portal = 'public' }) {
     if (!form.acceptPolicy) return
     try {
       const response = await login(form)
+      sessionStorage.removeItem(formStorageKey)
       const rawRole = response.user?.role || response.user?.userType?.toLowerCase() || form.role
       const actualRole = normalizeRole(rawRole)
       navigate(`/dashboard/${actualRole}`, { replace: true })

@@ -1,12 +1,12 @@
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { FiHeart, FiMapPin, FiStar } from 'react-icons/fi'
+import { FiColumns, FiHeart, FiMapPin, FiStar } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import propertyService from '../../services/propertyService'
 import { formatDistance } from '../../utils/distance'
 
-function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSave = false }) {
+function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSave = false, compareSelected = false, onToggleCompare }) {
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
   const [internalSaved, setInternalSaved] = useState(Boolean(savedProp))
@@ -45,6 +45,11 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSa
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleCompare = (event) => {
+    event.stopPropagation()
+    if (onToggleCompare) onToggleCompare(property)
   }
 
   return (
@@ -128,11 +133,24 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSa
             Food: {property.mealsAvailable.join(', ')}
           </p>
         ) : null}
-        <div className="flex items-center justify-between gap-3 text-slate-300">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-slate-300">
           <div className="inline-flex items-center gap-2 text-sm">
             <FiStar className="text-amber-400" />
             {property.rating || 4.8}
           </div>
+          {onToggleCompare ? (
+            <button
+              type="button"
+              onClick={handleCompare}
+              className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                compareSelected
+                  ? 'border-cyan-300 bg-cyan-400/10 text-cyan-100'
+                  : 'border-slate-700 text-slate-300 hover:border-cyan-300 hover:text-white'
+              }`}
+            >
+              <FiColumns /> {compareSelected ? 'Comparing' : 'Compare'}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={(event) => {

@@ -32,3 +32,14 @@
 - Real image upload.
 - Real user-owner message exchange.
 - Real visit request accept/reject flow.
+# 2026-06-28 - Bangalore MVP Final Pre-Launch Stabilization
+
+- Restored Compare by routing `/compare` to the existing Compare page.
+- Added listing-card compare controls with 3-property persistence while browsing.
+- Added Compare rows for Availability and Property Type.
+- Locked notification list/read/mark-read APIs to the authenticated account.
+- Restricted user dashboard notification history to the logged-in user.
+- Preserved login/signup form state when opening Terms or Privacy before submission.
+- Added launch property categories across owner property creation and listing filters: PG, Hostel, Flat, House, Apartment, Villa, Co-living.
+- Added Five sharing, Dormitory, and Other sharing defaults for owner property inventory.
+- Verified backend syntax, frontend lint, frontend production build, diff whitespace, frontend startup, and backend MongoDB connectivity.
