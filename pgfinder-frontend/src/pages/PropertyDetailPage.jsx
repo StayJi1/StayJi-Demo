@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { FiArrowLeft, FiClock, FiMessageSquare, FiShield, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome, FiStar, FiShare2, FiFlag } from 'react-icons/fi'
+import { FiArrowLeft, FiClock, FiColumns, FiMessageSquare, FiShield, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome, FiStar, FiShare2, FiFlag } from 'react-icons/fi'
 import Loader from '../components/common/Loader'
 import Button from '../components/common/Button'
 import PropertyMap from '../components/map/PropertyMap'
@@ -9,6 +9,7 @@ import propertyService from '../services/propertyService'
 import { useAuth } from '../context/AuthContext'
 import useCurrentLocation from '../hooks/useCurrentLocation'
 import { formatDistance, getDistanceKm } from '../utils/distance'
+import { readCompareIds, writeCompareIds } from '../utils/compareStorage'
 
 const getAmenityIcon = (amenity) => {
   const value = amenity.toLowerCase()
@@ -79,8 +80,13 @@ function PropertyDetailPage() {
   const [reviewForm, setReviewForm] = useState({ rating: '5', details: '', tags: '' })
   const [reviewMessage, setReviewMessage] = useState('')
   const [actionMessage, setActionMessage] = useState('')
-  const { user, role } = useAuth()
+  const [compareIds, setCompareIds] = useState([])
+  const { user, role, isAuthenticated } = useAuth()
   const { position, loading: locationLoading, error: locationError, hasUserLocation, requestLocation } = useCurrentLocation()
+
+  useEffect(() => {
+    setCompareIds(readCompareIds(user))
+  }, [isAuthenticated, user?._id])
 
   useEffect(() => {
     const loadProperty = async () => {
@@ -127,6 +133,36 @@ function PropertyDetailPage() {
       navigate('/dashboard/owner/properties', { replace: true })
     }
   }, [navigate, property, role, user?._id])
+
+  const handleToggleCompare = () => {
+    setActionMessage('')
+    if (!user || !user._id) {
+      navigate('/login', { replace: true })
+      return
+    }
+
+    const propertyId = property?._id || property?.id
+    if (!propertyId) return
+
+    setCompareIds((current) => {
+      if (current.includes(propertyId)) {
+        const next = current.filter((item) => item !== propertyId)
+        writeCompareIds(user, next)
+        setActionMessage('Removed from your comparison list.')
+        return next
+      }
+
+      if (current.length >= 3) {
+        setActionMessage('You can compare up to 3 properties at once.')
+        return current
+      }
+
+      const next = [...current, propertyId]
+      writeCompareIds(user, next)
+      setActionMessage('Added to your comparison list.')
+      return next
+    })
+  }
 
   const handleShortlist = async () => {
     setActionMessage('')
@@ -328,7 +364,10 @@ function PropertyDetailPage() {
         <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-accent-500">
           <FiArrowLeft /> Back
         </button>
-        <span className="rounded-full bg-slate-900/80 px-4 py-2 text-sm text-accent-400">Premium stay</span>
+        <div className="flex flex-wrap gap-2">
+          {property.isPremium ? <span className="rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-950">Premium</span> : null}
+          {property.isVerified || ['Approved', 'Verified'].includes(property.approvalStatus) ? <span className="rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-200">Verified</span> : null}
+        </div>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[1.25fr_0.75fr]">
@@ -346,12 +385,17 @@ function PropertyDetailPage() {
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm uppercase tracking-[0.28em] text-accent-400">{property.category || property.type || 'PG'}</p>
+                <p className="text-sm uppercase tracking-[0.28em] text-accent-400">{property.propertyType || property.category || property.type || 'PG'}</p>
                 <h1 className="mt-3 text-4xl font-semibold text-white">{property.name}</h1>
+                <p className="mt-3 text-sm text-slate-400">{property.locationLabel || property.area || property.city}</p>
               </div>
               <p className="rounded-3xl bg-brand-500/10 px-5 py-3 text-2xl font-semibold text-brand-100">₹{property.rent || '8,500'}/mo</p>
             </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
+                <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Property type</p>
+                <p className="mt-2 text-base text-white">{property.propertyType || property.category || property.type || 'PG'}</p>
+              </div>
               <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
                 <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Gender type</p>
                 <p className="mt-2 text-base text-white">{property.gender || 'Co-ed'}</p>
@@ -363,6 +407,30 @@ function PropertyDetailPage() {
               <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
                 <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Deposit</p>
                 <p className="mt-2 text-base text-white">₹{property.depositAmount || '0'}</p>
+              </div>
+              <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300 sm:col-span-2">
+                <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Sharing options</p>
+                <p className="mt-2 text-base text-white">{property.sharingAvailability || property.sharing || 'Sharing availability will be confirmed by owner.'}</p>
+                {property.roomInventory?.length ? (
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    {property.roomInventory.map((row) => (
+                      <div key={`${row.sharingType}-${row.monthlyRent}`} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3 text-sm text-slate-300">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold text-white">{row.sharingType || 'Shared room'}</p>
+                          {row.monthlyRent ? <span className="text-brand-100">₹{row.monthlyRent}</span> : null}
+                        </div>
+                        <p className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+                          {row.vacantRooms || row.vacantBeds ? `${row.vacantRooms || 0} rooms · ${row.vacantBeds || 0} beds vacant` : `${row.totalRooms || 0} rooms listed`}
+                        </p>
+                        {(row.bathroom || row.gender || row.foodPreference || row.ac) ? (
+                          <p className="mt-2 text-slate-400">
+                            {[row.gender, row.foodPreference, row.bathroom, row.ac ? 'AC' : ''].filter(Boolean).join(' · ')}
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
                 <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Daily stay</p>
@@ -397,13 +465,14 @@ function PropertyDetailPage() {
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               <div className="rounded-3xl bg-slate-950/80 p-5">
                 <FiMessageSquare className="text-accent-400" />
-                <p className="mt-3 text-sm text-slate-400">Owner contact</p>
-                <p className="mt-2 text-white">Hidden until StayJi verifies the lead</p>
+                <p className="mt-3 text-sm text-slate-400">Owner</p>
+                <p className="mt-2 text-white">{property.ownerName || property.owner?.name || 'StayJi owner'}</p>
+                <p className="mt-1 text-xs text-slate-500">{property.contact ? 'Contact available after verified lead' : 'Contact hidden until StayJi verifies the lead'}</p>
               </div>
               <div className="rounded-3xl bg-slate-950/80 p-5">
                 <FiClock className="text-accent-400" />
-                <p className="mt-3 text-sm text-slate-400">Next available visit</p>
-                <p className="mt-2 text-white">{property.nextVisit || 'Tomorrow 3:00 PM'}</p>
+                <p className="mt-3 text-sm text-slate-400">Verification</p>
+                <p className="mt-2 text-white">{property.isVerified || ['Approved', 'Verified'].includes(property.approvalStatus) ? 'Verified listing' : property.approvalStatus || 'Pending review'}</p>
               </div>
             </div>
             {isAdmin ? (
@@ -455,6 +524,7 @@ function PropertyDetailPage() {
                 </div>
                 <div className="mt-8 flex flex-wrap gap-4">
                   <Button onClick={handleShortlist} className="w-full sm:w-auto">Shortlist</Button>
+                  <Button onClick={handleToggleCompare} variant="secondary" className="w-full sm:w-auto"><FiColumns className="mr-2" /> {compareIds.includes(property?._id || property?.id) ? 'Added to compare' : 'Compare'}</Button>
                   <Button onClick={handleExpressInterest} variant="secondary" className="w-full sm:w-auto">Message owner</Button>
                   <Button onClick={handleRequestCallback} className="w-full sm:w-auto">Request callback</Button>
                   <Button onClick={handleBookVisit} variant="secondary" className="w-full sm:w-auto">Book visit</Button>

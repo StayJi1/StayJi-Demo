@@ -19,9 +19,12 @@ function Navbar() {
     ? 'owner'
     : role || 'user'
   const visibleNavItems = isAuthenticated
-    ? navItems
-      .filter((item) => !['/login', '/signup'].includes(item.to))
-      .map((item) => (dashboardRole === 'owner' && item.to === '/properties' ? { ...item, label: 'My stays', to: '/dashboard/owner/properties' } : item))
+    ? [
+        ...navItems
+          .filter((item) => !['/login', '/signup'].includes(item.to))
+          .map((item) => (dashboardRole === 'owner' && item.to === '/properties' ? { ...item, label: 'My stays', to: '/dashboard/owner/properties' } : item)),
+        { label: 'Compare', to: '/compare' },
+      ]
     : navItems
 
   return (

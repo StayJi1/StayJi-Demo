@@ -32,6 +32,58 @@ export const parseAssetList = (value) => {
     .filter(Boolean)
 }
 
+const normalizeRoomInventory = (property) => {
+  const directInventory = Array.isArray(property.roomInventory) ? property.roomInventory : []
+  if (directInventory.length) {
+    return directInventory.map((row) => ({
+      sharingType: row.sharingType || row.label || '',
+      totalRooms: Number(row.totalRooms) || 0,
+      occupiedRooms: Number(row.occupiedRooms) || 0,
+      vacantRooms: Number(row.vacantRooms) || 0,
+      bedsPerRoom: Number(row.bedsPerRoom) || 1,
+      vacantBeds: Number(row.vacantBeds || row.availableBeds || 0) || 0,
+      waitingList: Number(row.waitingList) || 0,
+      bathroom: row.bathroom || '',
+      balcony: Boolean(row.balcony),
+      ac: Boolean(row.ac),
+      furnishing: row.furnishing || '',
+      foodPreference: row.foodPreference || '',
+      gender: row.gender || '',
+      monthlyRent: row.monthlyRent || '',
+    })).filter((row) => row.sharingType)
+  }
+
+  if (!Array.isArray(property.roomTypes)) return []
+  return property.roomTypes.map((row) => ({
+    sharingType: row.sharingType || row.label || '',
+    totalRooms: Number(row.totalRooms) || 0,
+    occupiedRooms: Number(row.occupiedRooms) || 0,
+    vacantRooms: Number(row.vacantRooms) || 0,
+    bedsPerRoom: Number(row.bedsPerRoom) || 1,
+    vacantBeds: Number(row.vacantBeds || row.availableBeds || 0) || 0,
+    waitingList: Number(row.waitingList) || 0,
+    bathroom: row.bathroom || '',
+    balcony: Boolean(row.balcony),
+    ac: Boolean(row.ac),
+    furnishing: row.furnishing || '',
+    foodPreference: row.foodPreference || '',
+    gender: row.gender || '',
+    monthlyRent: row.monthlyRent || '',
+  })).filter((row) => row.sharingType)
+}
+
+const buildSharingSummary = (roomInventory, fallback = '') => {
+  if (!roomInventory?.length) return fallback
+  const summary = roomInventory
+    .filter((row) => row.sharingType)
+    .map((row) => {
+      const rentSuffix = row.monthlyRent ? ` · ₹${row.monthlyRent}` : ''
+      const vacancySuffix = row.vacantBeds || row.vacantRooms ? ` · ${row.vacantBeds || row.vacantRooms} vacant` : ''
+      return `${row.sharingType}${rentSuffix}${vacancySuffix}`
+    })
+  return summary.join(' · ')
+}
+
 export const normalizeProperty = (property) => {
   if (!property) return property
 
@@ -40,6 +92,10 @@ export const normalizeProperty = (property) => {
     : property.amenities || []
   const customFeatures = Array.isArray(property.customFeatures) ? property.customFeatures : []
   const mealsAvailable = Array.isArray(property.mealsAvailable) ? property.mealsAvailable : []
+  const premiumExpired = property.premiumEndDate && new Date(property.premiumEndDate).getTime() < Date.now()
+  const isPremium = Boolean(property.isPremium) && !premiumExpired
+  const roomInventory = normalizeRoomInventory(property)
+  const sharingSummary = buildSharingSummary(roomInventory, property.sharingAvailability || property.sharing || '')
 
   const cityName = (property.cityName || property.city || '').toString()
   const stateName = (property.stateName || property.state || '').toString()
@@ -87,8 +143,9 @@ export const normalizeProperty = (property) => {
     area: property.areaName || property.area || '',
     localitySlug: property.localitySlug || '',
     contact: property.contact || property.userIDFK?.contact || '',
-    ownerName: [property.userIDFK?.userFname, property.userIDFK?.userLname].filter(Boolean).join(' '),
+    ownerName: property.owner?.name || [property.vendorId?.userFname || property.userIDFK?.userFname, property.vendorId?.userLname || property.userIDFK?.userLname].filter(Boolean).join(' '),
     type: inferredCategory,
+    propertyType: property.propertyType || inferredCategory,
     propertyTypeName: property.propertyTypeIDFK?.typeName || property.type || '',
     category: inferredCategory,
     rent: Number(property.rent) || property.rent || 0,
@@ -97,10 +154,10 @@ export const normalizeProperty = (property) => {
     perDayCheckIn: Boolean(property.perDayCheckIn),
     depositAmount: Number(property.depositAmount) || property.depositAmount || 0,
     availableBeds: Number(property.availableBeds) || 0,
-    roomInventory: Array.isArray(property.roomInventory) ? property.roomInventory : [],
+    roomInventory,
     vacancyStatus: property.vacancyStatus || (property.isAvailable === false ? 'Fully occupied' : 'Available now'),
     availableFrom: property.availableFrom || '',
-    sharingAvailability: property.sharingAvailability || property.sharing || '',
+    sharingAvailability: sharingSummary,
     parkingAvailable: Boolean(property.parkingAvailable) || amenities.some((item) => /parking/i.test(item)),
     acAvailable: Boolean(property.acAvailable) || amenities.some((item) => /ac|air conditioning/i.test(item)),
     sharing: property.sharing || property.roomType || '',
@@ -114,6 +171,11 @@ export const normalizeProperty = (property) => {
     videoUrl: toUploadUrl(property.videoUrl || ''),
     status: property.isAvailable === false ? 'Booked' : 'Available',
     approvalStatus: property.approvalStatus || 'Approved',
+    isPremium,
+    premiumStartDate: property.premiumStartDate,
+    premiumEndDate: property.premiumEndDate,
+    priority: Number(property.priority) || 0,
+    isVerified: Boolean(property.isVerified) || ['Approved', 'Verified'].includes(property.approvalStatus || ''),
     rating: Number(property.rating) || property.rating || 4.6,
     amenities,
     customFeatures,
@@ -121,6 +183,8 @@ export const normalizeProperty = (property) => {
       property.isDummy ? 'Demo Property' : '',
       property.status === 'demo' ? 'Sample Listing' : '',
       property.isDummy && property.isActive !== false ? 'Coming Soon Area' : '',
+      isPremium ? 'Premium' : '',
+      property.isVerified ? 'Verified' : '',
     ].filter(Boolean),
     isDummy: Boolean(property.isDummy),
   }
@@ -233,6 +297,10 @@ const propertyApi = {
     return res.data?.data
   }),
   recordViewed: (payload) => axiosClient.post('/client/user/viewed-properties', payload).then((res) => res.data?.data || []),
+  recordComparison: (payload) => axiosClient.post('/client/user/comparison-history', payload).then((res) => {
+    if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Comparison history could not be saved')
+    return res.data?.data || []
+  }),
   updateOccupancy: (id, payload) => axiosClient.post(`/client/properties/${id}/occupancy`, payload).then((res) => {
     if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Occupancy could not be updated')
     return normalizeProperty(res.data?.data)

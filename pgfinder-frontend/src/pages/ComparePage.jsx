@@ -1,38 +1,89 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { FiCheckCircle, FiHome, FiMapPin, FiStar, FiTrash2 } from 'react-icons/fi'
 import Button from '../components/common/Button'
 import Loader from '../components/common/Loader'
 import propertyService from '../services/propertyService'
+import { useAuth } from '../context/AuthContext'
+import { readCompareIds, writeCompareIds } from '../utils/compareStorage'
+
+const hasAmenity = (item, pattern) => [
+  ...(item.amenities || []),
+  ...(item.customFeatures || []),
+  ...(item.securityFeatures || []),
+  item.aminityFeatures,
+].filter(Boolean).some((value) => pattern.test(value.toString()))
+
+const yesNo = (item, pattern) => hasAmenity(item, pattern) ? 'Yes' : 'No'
 
 const rows = [
+  { label: 'Owner', value: (item) => item.ownerName || item.owner?.name || 'StayJi owner' },
   { label: 'Rent', value: (item) => (item.rent ? `₹${item.rent}/mo` : 'Contact owner') },
+  { label: 'Deposit', value: (item) => item.depositAmount ? `₹${item.depositAmount}` : 'No deposit' },
+  { label: 'Sharing', value: (item) => item.sharingAvailability || item.sharing || '-' },
+  { label: 'Property Type', value: (item) => item.propertyType || item.category || item.type || 'PG' },
+  { label: 'Gender', value: (item) => item.gender || 'Co-ed' },
   { label: 'Rating', value: (item) => item.rating || '4.6' },
   { label: 'Distance', value: (item) => item.distanceKm ? `${item.distanceKm.toFixed(1)} km` : item.locationLabel || item.city || '-' },
   { label: 'Food', value: (item) => item.mealsAvailable?.length ? item.mealsAvailable.join(', ') : item.foodIncluded ? 'Included' : 'Optional' },
-  { label: 'Sharing', value: (item) => item.sharingAvailability || item.sharing || '-' },
+  { label: 'Available Beds', value: (item) => item.availableBeds || 0 },
   { label: 'Availability', value: (item) => item.vacancyStatus || `${item.availableBeds || 0} beds available` },
   { label: 'Amenities', value: (item) => item.amenities?.slice(0, 5).join(', ') || '-' },
-  { label: 'Property Type', value: (item) => item.category || item.type || 'PG' },
+  { label: 'WiFi', value: (item) => yesNo(item, /wifi|internet/i) },
+  { label: 'AC', value: (item) => item.acAvailable || hasAmenity(item, /ac|air conditioning/i) ? 'Yes' : 'No' },
+  { label: 'Parking', value: (item) => item.parkingAvailable || hasAmenity(item, /parking/i) ? 'Yes' : 'No' },
+  { label: 'Security', value: (item) => hasAmenity(item, /security|guard|biometric/i) ? 'Yes' : 'No' },
+  { label: 'CCTV', value: (item) => hasAmenity(item, /cctv|camera/i) ? 'Yes' : 'No' },
+  { label: 'Power Backup', value: (item) => hasAmenity(item, /power|backup|electric/i) ? 'Yes' : 'No' },
+  { label: 'Curfew', value: (item) => hasAmenity(item, /curfew|24.?7|no restriction/i) ? 'Listed' : '-' },
+  { label: 'Verification', value: (item) => item.isVerified || ['Approved', 'Verified'].includes(item.approvalStatus) ? 'Verified' : item.approvalStatus || 'Pending' },
   { label: 'Reviews', value: (item) => `${item.rating || 4.6}/5 resident score` },
 ]
 
 function ComparePage() {
+  const { user, isAuthenticated } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [properties, setProperties] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     const load = async () => {
-      const ids = JSON.parse(localStorage.getItem('stayjiCompare') || '[]').slice(0, 3)
+      const idsFromQuery = (searchParams.get('ids') || '').split(',').map((item) => item.trim()).filter(Boolean)
+      const storedIds = readCompareIds(user)
+      const ids = Array.from(new Set([...(idsFromQuery.length ? idsFromQuery : storedIds)]))
+        .slice(0, 3)
+
       if (!ids.length) {
+        setProperties([])
         setLoading(false)
         return
       }
 
       try {
-        const results = await Promise.all(ids.map((id) => propertyService.fetchPropertyById(id)))
-        setProperties(results.filter(Boolean))
+        const results = await Promise.allSettled(ids.map((id) => propertyService.fetchPropertyById(id)))
+        const loaded = results
+          .filter((result) => result.status === 'fulfilled' && result.value)
+          .map((result) => result.value)
+          .slice(0, 3)
+
+        setProperties(loaded)
+        if (loaded.length) {
+          const nextIds = loaded.map((item) => item.id || item._id).filter(Boolean)
+          writeCompareIds(user, nextIds)
+          setSearchParams((current) => {
+            const next = new URLSearchParams(current)
+            next.set('ids', nextIds.join(','))
+            return next
+          }, { replace: true })
+        }
+
+        if (isAuthenticated && user?._id && loaded.length >= 2) {
+          propertyService.recordComparison({
+            userId: user._id,
+            propertyIds: loaded.map((item) => item.id || item._id).filter(Boolean),
+          }).catch(() => {})
+        }
       } catch {
         setError('Unable to load comparison properties.')
       } finally {
@@ -40,14 +91,24 @@ function ComparePage() {
       }
     }
     load()
-  }, [])
+  }, [isAuthenticated, searchParams, setSearchParams, user?._id])
 
   const bestRent = useMemo(() => Math.min(...properties.map((item) => Number(item.rent) || Infinity)), [properties])
 
   const removeProperty = (id) => {
     const next = properties.filter((item) => (item.id || item._id) !== id)
+    const nextIds = next.map((item) => item.id || item._id).filter(Boolean)
     setProperties(next)
-    localStorage.setItem('stayjiCompare', JSON.stringify(next.map((item) => item.id || item._id)))
+    writeCompareIds(user, nextIds)
+    setSearchParams((current) => {
+      const nextParams = new URLSearchParams(current)
+      if (nextIds.length) {
+        nextParams.set('ids', nextIds.join(','))
+      } else {
+        nextParams.delete('ids')
+      }
+      return nextParams
+    }, { replace: true })
   }
 
   if (loading) return <div className="mx-auto max-w-7xl px-4 py-10"><Loader message="Building comparison..." /></div>
@@ -78,10 +139,13 @@ function ComparePage() {
               const id = property.id || property._id
               return (
                 <div key={id} className="border-b border-l border-slate-800 p-5">
-                  <img src={property.image} alt={property.name} loading="lazy" className="h-40 w-full rounded-[1.5rem] object-cover" />
+                  <div className="relative">
+                    <img src={property.image} alt={property.name} loading="lazy" className="h-40 w-full rounded-[1.5rem] object-cover" />
+                    {property.isPremium ? <span className="absolute left-3 top-3 rounded-full bg-amber-400 px-3 py-1 text-xs font-semibold text-slate-950">Premium</span> : null}
+                  </div>
                   <div className="mt-4 flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-accent-400">{property.category || 'PG'}</p>
+                      <p className="text-xs uppercase tracking-[0.22em] text-accent-400">{property.propertyType || property.category || 'PG'}</p>
                       <h2 className="mt-2 text-xl font-semibold text-white">{property.name}</h2>
                       <p className="mt-2 flex items-center gap-2 text-sm text-slate-400"><FiMapPin /> {property.locationLabel || property.city}</p>
                     </div>

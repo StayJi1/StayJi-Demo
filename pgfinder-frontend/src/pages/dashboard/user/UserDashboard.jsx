@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FiBookmark, FiCalendar, FiMapPin, FiMessageSquare } from 'react-icons/fi'
+import { FiBookmark, FiCalendar, FiClock, FiColumns, FiMapPin, FiMessageSquare, FiSearch } from 'react-icons/fi'
 import Button from '../../../components/common/Button'
 import Card from '../../../components/common/Card'
 import dashboardService from '../../../services/dashboardService'
@@ -50,7 +50,7 @@ function UserDashboard() {
         setOverview(data)
         setMoveIns(data?.moveIns || [])
       } catch {
-        setOverview({ shortlist: 0, shortlistItems: [], visits: [], inquiries: [], chats: [], savedSearches: [], viewedProperties: [], notifications: [], wallet: {} })
+        setOverview({ shortlist: 0, shortlistItems: [], visits: [], inquiries: [], chats: [], savedSearches: [], viewedProperties: [], comparisonHistory: [], loginHistory: [], notifications: [], wallet: {} })
       } finally {
         setLoading(false)
       }
@@ -123,6 +123,8 @@ function UserDashboard() {
   const viewedProperties = overview?.viewedProperties || []
   const notifications = overview?.notifications || []
   const conversations = overview?.chats || []
+  const comparisonHistory = overview?.comparisonHistory || []
+  const loginHistory = overview?.loginHistory || user?.loginHistory || []
   const approvedRewards = moveIns.filter((item) => item.status === 'Verified' && item.ownerConfirmed)
   const pendingRewards = moveIns.filter((item) => ['Pending', 'Suspicious'].includes(item.status))
   const totalCoins = overview?.wallet?.totalCoins ?? approvedRewards.reduce((sum, item) => sum + (Number(item.rewardCoins || item.cashbackAmount) || 0), 0)
@@ -147,15 +149,15 @@ function UserDashboard() {
           <Card className="p-8">Loading overview…</Card>
         ) : (
           [
-            { label: 'Shortlist', value: overview.shortlist, icon: <FiBookmark /> },
-            { label: 'Visits', value: visits.length, icon: <FiCalendar /> },
-            { label: 'Messages', value: conversations.length, icon: <FiMessageSquare /> },
-            { label: 'Saved searches', value: savedSearches.length, icon: <FiMapPin /> },
+            { label: 'Saved Properties', value: overview.shortlist, icon: <FiBookmark />, target: 'user-wishlist' },
+            { label: 'Visit Bookings', value: visits.length, icon: <FiCalendar />, target: 'visit-bookings' },
+            { label: 'Comparison History', value: comparisonHistory.length, icon: <FiColumns />, target: 'comparison-history' },
+            { label: 'Login History', value: loginHistory.length, icon: <FiClock />, target: 'login-history' },
           ].map((item) => (
             <button
               key={item.label}
               type="button"
-              onClick={() => document.getElementById(item.label === 'Shortlist' ? 'user-wishlist' : item.label === 'Visits' ? 'visit-bookings' : item.label === 'Saved searches' ? 'saved-searches' : 'user-messages')?.scrollIntoView({ behavior: 'smooth' })}
+              onClick={() => document.getElementById(item.target)?.scrollIntoView({ behavior: 'smooth' })}
               className="text-left"
             >
               <Card className="h-full p-6 transition hover:border-accent-500">
@@ -225,12 +227,13 @@ function UserDashboard() {
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid gap-6 xl:grid-cols-4">
         {[
           { title: 'Visit bookings', text: `${visits.length} visits across pending, approved, rejected, cancelled, and completed states.`, target: 'visit-bookings' },
           { title: 'Inquiry history', text: `${inquiries.length} inquiries with owner replies and lead timeline context.`, target: 'inquiry-history' },
-          { title: 'Viewed properties', text: `${Math.max(viewedCount, viewedProperties.length)} recently viewed stays are remembered.`, target: 'viewed-properties' },
+          { title: 'Recently viewed', text: `${Math.max(viewedCount, viewedProperties.length)} recently viewed stays are remembered.`, target: 'viewed-properties' },
           { title: 'Saved searches', text: `${savedSearches.length} city, budget, sharing, and nearby preference searches saved.`, target: 'saved-searches' },
+          { title: 'Comparison history', text: `${comparisonHistory.length} previous property comparisons stored.`, target: 'comparison-history' },
           { title: 'Rental history', text: `${moveIns.length} move-in and reward verification records.`, target: 'rental-history' },
           { title: 'Notifications', text: `${notifications.length} visit, reply, cashback, admin, property, and vacancy updates.`, target: 'notifications' },
         ].map((item) => (
@@ -311,7 +314,7 @@ function UserDashboard() {
           </div>
         </Card>
         <Card id="saved-searches">
-          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Saved searches</p>
+          <p className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.24em] text-accent-400"><FiSearch /> Saved searches</p>
           <div className="mt-5 space-y-3">
             {savedSearches.slice(0, 6).map((item) => (
               <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
@@ -335,6 +338,23 @@ function UserDashboard() {
             {!savedSearches.length ? <p className="text-sm text-slate-400">Saved searches will appear after you save filters.</p> : null}
           </div>
         </Card>
+        <Card id="comparison-history">
+          <p className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.24em] text-accent-400"><FiColumns /> Comparison history</p>
+          <div className="mt-5 space-y-3">
+            {comparisonHistory.slice(0, 6).map((item) => {
+              const ids = (item.propertyIds || item.properties?.map((property) => property.propertyId)).filter(Boolean)
+              const href = ids.length ? `/compare?ids=${ids.join(',')}` : '/compare'
+              return (
+                <div key={item.id || item.comparedOn} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+                  <p className="font-semibold text-white">{item.properties?.map((property) => property.propertyName).filter(Boolean).join(' vs ') || `${ids.length} properties compared`}</p>
+                  <p className="mt-1 text-slate-500">{item.comparedOn ? new Date(item.comparedOn).toLocaleString() : ''}</p>
+                  <Link to={href} className="mt-3 inline-flex rounded-full border border-accent-500/60 px-3 py-2 text-xs text-accent-200">Reopen</Link>
+                </div>
+              )
+            })}
+            {!comparisonHistory.length ? <p className="text-sm text-slate-400">Compare two or three properties to save comparison history.</p> : null}
+          </div>
+        </Card>
         <Card id="notifications">
           <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Notifications</p>
           <div className="mt-5 space-y-3">
@@ -348,6 +368,44 @@ function UserDashboard() {
           </div>
         </Card>
       </div>
+
+      <Card id="login-history">
+        <p className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.24em] text-accent-400"><FiClock /> Login history</p>
+        <div className="mt-5 overflow-x-auto">
+          {loginHistory.length ? (
+            <table className="min-w-[760px] w-full text-left text-sm text-slate-300">
+              <thead className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                <tr>
+                  <th className="border-b border-slate-800 p-3">Browser</th>
+                  <th className="border-b border-slate-800 p-3">Device</th>
+                  <th className="border-b border-slate-800 p-3">OS</th>
+                  <th className="border-b border-slate-800 p-3">IP</th>
+                  <th className="border-b border-slate-800 p-3">Date</th>
+                  <th className="border-b border-slate-800 p-3">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loginHistory.slice(0, 10).map((item, index) => {
+                  const date = item.loginAt || item.date || item.addedOn || item.time
+                  const parsedDate = date ? new Date(date) : null
+                  return (
+                    <tr key={`${item.ip || 'login'}-${date || index}`}>
+                      <td className="border-b border-slate-800 p-3">{item.browser || '-'}</td>
+                      <td className="border-b border-slate-800 p-3">{item.device || '-'}</td>
+                      <td className="border-b border-slate-800 p-3">{item.os || '-'}</td>
+                      <td className="border-b border-slate-800 p-3">{item.ip || '-'}</td>
+                      <td className="border-b border-slate-800 p-3">{parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toLocaleDateString() : '-'}</td>
+                      <td className="border-b border-slate-800 p-3">{parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toLocaleTimeString() : '-'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <p className="text-sm text-slate-400">Login history will appear after your next successful login.</p>
+          )}
+        </div>
+      </Card>
 
       <Card id="rental-history">
         <p className="text-sm uppercase tracking-[0.24em] text-accent-400">StayJi Coins wallet</p>

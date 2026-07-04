@@ -17,6 +17,7 @@ const propertyService = {
   submitReview: (payload) => propertyApi.addReview(payload),
   sendChat: (payload) => propertyApi.sendChat(payload),
   recordViewed: (payload) => propertyApi.recordViewed(payload),
+  recordComparison: (payload) => propertyApi.recordComparison(payload),
   submitMoveIn: (payload) => propertyApi.submitMoveIn(payload),
   createProperty: (payload) => propertyApi.create(payload),
   updateProperty: (id, payload) => propertyApi.update(id, payload),

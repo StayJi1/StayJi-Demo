@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { FiMessageSquare, FiSend } from 'react-icons/fi'
 import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
 import dashboardService from '../../services/dashboardService'
 import { useAuth } from '../../context/AuthContext'
+import { toAssetUrl } from '../../api/propertyApi'
 
 const personName = (person = {}) => person.name || [person.userFname, person.userLname].filter(Boolean).join(' ') || person.userEmail || 'StayJi user'
 const propertyName = (property = {}) => property.propertyName || property.name || 'Property conversation'
+const propertyImage = (conversation = {}) => toAssetUrl(conversation.property?.image || conversation.property?.propertyImage || conversation.propertyId?.image || conversation.propertyId?.propertyImage || conversation.propertyId?.propertyImageUrls?.[0]) || 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=300&q=80'
+const propertyIdFor = (conversation = {}) => conversation.property?.id || conversation.property?._id || conversation.propertyId?._id || conversation.propertyId || ''
 
 function MessagesPage() {
   const { role } = useAuth()
@@ -130,12 +133,15 @@ function MessagesPage() {
                   key={id}
                   type="button"
                   onClick={() => openConversation(id)}
-                  className={`block w-full border-b border-slate-800 p-4 text-left transition hover:bg-slate-900/70 ${activeId === id ? 'bg-slate-900/80' : ''}`}
+                  className={`block w-full border-b border-slate-800 p-4 text-left transition hover:bg-slate-900/70 ${activeId === id?.toString() ? 'bg-slate-900/80' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    <div className="flex min-w-0 gap-3">
+                      <img src={propertyImage(conversation)} alt={propertyName(conversation.property || conversation.propertyId)} className="h-14 w-14 rounded-2xl object-cover" />
+                      <div className="min-w-0">
                       <p className="truncate font-semibold text-white">{personName(otherPerson)}</p>
-                      <p className="mt-1 truncate text-xs text-slate-500">{propertyName(conversation.propertyId)}</p>
+                      <p className="mt-1 truncate text-xs text-slate-500">{propertyName(conversation.property || conversation.propertyId)}</p>
+                      </div>
                     </div>
                     {unread ? <span className="rounded-full bg-accent-500 px-2 py-1 text-xs font-semibold text-slate-950">{unread}</span> : null}
                   </div>
@@ -151,8 +157,19 @@ function MessagesPage() {
           {activeConversation ? (
             <>
               <div className="border-b border-slate-800 p-5">
-                <p className="text-sm uppercase tracking-[0.2em] text-accent-400">{propertyName(activeConversation.propertyId)}</p>
-                <h2 className="mt-2 text-xl font-semibold text-white">{personName(normalizedRole === 'owner' ? activeConversation.userId : activeConversation.ownerId)}</h2>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-4">
+                    <img src={propertyImage(activeConversation)} alt={propertyName(activeConversation.property || activeConversation.propertyId)} className="h-20 w-20 rounded-2xl object-cover" />
+                    <div className="min-w-0">
+                      <p className="text-sm uppercase tracking-[0.2em] text-accent-400">{propertyName(activeConversation.property || activeConversation.propertyId)}</p>
+                      <h2 className="mt-2 text-xl font-semibold text-white">{personName(normalizedRole === 'owner' ? activeConversation.userId : activeConversation.ownerId)}</h2>
+                      <p className="mt-1 text-sm text-slate-400">Owner: {personName(activeConversation.ownerId)}</p>
+                    </div>
+                  </div>
+                  {propertyIdFor(activeConversation) ? (
+                    <Link to={`/properties/${propertyIdFor(activeConversation)}`} className="rounded-full border border-accent-500/60 px-4 py-2 text-sm text-accent-200">Open property</Link>
+                  ) : null}
+                </div>
               </div>
               <div className="flex-1 space-y-3 overflow-y-auto p-5">
                 {messages.map((message) => {

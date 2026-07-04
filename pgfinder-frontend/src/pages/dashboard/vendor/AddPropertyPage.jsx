@@ -23,7 +23,7 @@ const CITY_OPTIONS = {
 }
 
 const predefinedAmenities = ['WiFi', 'Meals', 'Laundry', 'Security', 'Attached balcony', 'Study table', 'Private fridge', 'Washing machine', 'Rooftop access', 'Biometric entry']
-const propertyCategoryOptions = ['PG', 'Hostel', 'Flat', 'House', 'Apartment', 'Villa', 'Co-living']
+const propertyCategoryOptions = ['PG', 'Flat', 'House', 'Hostel', 'Co-living', 'Apartment', 'Rent', 'Villa']
 const defaultSharingRows = [
   { sharingType: 'Single sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 1, vacantBeds: '', monthlyRent: '' },
   { sharingType: 'Double sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 2, vacantBeds: '', monthlyRent: '' },
@@ -169,6 +169,20 @@ function AddPropertyPage() {
     }))
   }
 
+  const updateAmenity = (index, value) => {
+    setForm((current) => ({
+      ...current,
+      amenities: current.amenities.map((item, itemIndex) => (itemIndex === index ? value : item)).filter(Boolean),
+    }))
+  }
+
+  const removeAmenity = (amenity) => {
+    setForm((current) => ({
+      ...current,
+      amenities: current.amenities.filter((item) => item !== amenity),
+    }))
+  }
+
   const handleMealToggle = (meal) => {
     setForm((current) => ({
       ...current,
@@ -278,6 +292,11 @@ function AddPropertyPage() {
       return
     }
 
+    const fallbackSharingAvailability = (form.roomInventory || [])
+      .filter((row) => row.sharingType)
+      .map((row) => row.sharingType)
+      .join(', ')
+
     const payload = new FormData()
     const roomTypesPayload = form.roomInventory.map((row) => ({
       label: row.label || row.sharingType,
@@ -308,7 +327,7 @@ function AddPropertyPage() {
     payload.append('availableBeds', form.availableBeds)
     payload.append('vacancyStatus', form.vacancyStatus)
     payload.append('availableFrom', form.availableFrom)
-    payload.append('sharingAvailability', form.sharingAvailability)
+    payload.append('sharingAvailability', form.sharingAvailability || fallbackSharingAvailability)
     payload.append('parkingAvailable', form.parkingAvailable)
     payload.append('acAvailable', form.acAvailable)
     payload.append('dailyRate', form.dailyRate)
@@ -575,6 +594,22 @@ function AddPropertyPage() {
                 Add Custom Amenity
               </button>
             </div>
+            {form.amenities.length ? (
+              <div className="mt-5 grid gap-3">
+                {form.amenities.map((amenity, index) => (
+                  <div key={`${amenity}-${index}`} className="grid gap-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-3 sm:grid-cols-[1fr_auto]">
+                    <input
+                      value={amenity}
+                      onChange={(event) => updateAmenity(index, event.target.value)}
+                      className="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-accent-400"
+                    />
+                    <button type="button" onClick={() => removeAmenity(amenity)} className="rounded-full border border-rose-500/50 px-3 py-2 text-xs text-rose-200">
+                      Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="rounded-[1.75rem] border border-slate-800 bg-slate-950/70 p-5">
             <p className="text-sm font-semibold uppercase tracking-[0.22em] text-accent-400">Custom features</p>

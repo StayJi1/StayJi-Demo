@@ -78,6 +78,10 @@ propertySchema = mongoose.Schema({
         type:String,
         default:"PG"
     },
+    propertyType:{
+        type:String,
+        default:"PG"
+    },
     pricingUnit:{
         type:String,
         default:"month"
@@ -224,6 +228,22 @@ propertySchema = mongoose.Schema({
         type:Boolean,
         default:false
     },
+    isPremium:{
+        type:Boolean,
+        default:false,
+        index:true
+    },
+    premiumStartDate:{
+        type:Date
+    },
+    premiumEndDate:{
+        type:Date
+    },
+    priority:{
+        type:Number,
+        default:0,
+        index:true
+    },
     boostScore:{
         type:Number,
         default:0
@@ -284,6 +304,8 @@ propertySchema = mongoose.Schema({
 propertySchema.pre('save', function(next) {
     if (!this.vendorId && this.userIDFK) this.vendorId = this.userIDFK;
     if (!this.userIDFK && this.vendorId) this.userIDFK = this.vendorId;
+    if (!this.propertyType && this.propertyCategory) this.propertyType = this.propertyCategory;
+    if (!this.propertyCategory && this.propertyType) this.propertyCategory = this.propertyType;
     next();
 });
 
@@ -298,4 +320,5 @@ propertySchema.index({ isDummy: 1 });
 propertySchema.index({ isVerified: 1 });
 propertySchema.index({ status: 1 });
 propertySchema.index({ approvalStatus: 1 });
+propertySchema.index({ isPremium: -1, priority: -1, addedOn: -1 });
 module.exports = mongoose.model('propertyMaster',propertySchema);

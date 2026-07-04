@@ -85,6 +85,10 @@ userSchema = mongoose.Schema({
     lastLogin:{
         type:Date
     },
+    loginHistory:{
+        type:[Mixed],
+        default:[]
+    },
     forceLogoutAt:{
         type:Date
     },
@@ -140,6 +144,10 @@ userSchema = mongoose.Schema({
         default:[]
     },
     inquiryHistory:{
+        type:[Mixed],
+        default:[]
+    },
+    comparisonHistory:{
         type:[Mixed],
         default:[]
     },

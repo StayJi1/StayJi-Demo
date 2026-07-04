@@ -13,8 +13,11 @@ function Sidebar() {
 
   const links = [
     { label: 'Dashboard', to: `/dashboard/${dashboardRole}`, icon: <FiHome /> },
-    { label: 'Browse stays', to: '/properties', icon: <FiLayers /> },
   ]
+
+  if (normalizedRole !== 'owner') {
+    links.push({ label: 'Browse stays', to: '/properties', icon: <FiLayers /> })
+  }
 
   if (normalizedRole === 'admin') {
     links.push({ label: 'Manage users', to: '/dashboard/admin/users', icon: <FiUsers /> })

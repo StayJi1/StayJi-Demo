@@ -80,9 +80,11 @@ function AdminDashboard() {
 
   const statCards = [
     { label: 'Total users', value: summary.totalUsers, icon: <FiUsers />, onClick: () => navigate('/dashboard/admin/users') },
-    { label: 'Owners', value: summary.owners, icon: <FiHome />, onClick: () => navigate('/dashboard/admin/users?role=Owner') },
+    { label: 'Total Owners', value: summary.owners, icon: <FiHome />, onClick: () => navigate('/dashboard/admin/users?role=Owner') },
     { label: 'Total properties', value: (summary.realProperties || 0) + (summary.demoProperties || 0), icon: <FiBarChart2 />, onClick: () => document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) },
-    { label: 'Pending verification', value: summary.pendingVerification || summary.pendingProperties, icon: <FiCheck />, onClick: () => { setFilters((current) => ({ ...current, propertyStatus: 'pending', approvalStatus: 'Pending' })); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) } },
+    { label: 'Pending Approval', value: summary.pendingVerification || summary.pendingProperties, icon: <FiCheck />, onClick: () => { setFilters((current) => ({ ...current, propertyStatus: 'pending', approvalStatus: 'Pending' })); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) } },
+    { label: 'Premium Listings', value: summary.premiumListings, icon: <FiCheck />, onClick: () => { setFilters((current) => ({ ...current, premium: 'true' })); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) } },
+    { label: "Today's Registrations", value: summary.todayRegistrations, icon: <FiUsers />, onClick: () => navigate('/dashboard/admin/users') },
     { label: 'Approved properties', value: summary.approvedProperties, icon: <FiCheck />, onClick: () => { setFilters((current) => ({ ...current, approvalStatus: 'Approved' })); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) } },
     { label: 'Rejected properties', value: summary.rejectedProperties, icon: <FiCheck />, onClick: () => { setFilters((current) => ({ ...current, approvalStatus: 'Rejected' })); document.getElementById('admin-properties')?.scrollIntoView({ behavior: 'smooth' }) } },
     { label: "Today's visits", value: summary.todayVisits, icon: <FiUsers />, onClick: () => document.getElementById('lead-analytics')?.scrollIntoView({ behavior: 'smooth' }) },
@@ -169,6 +171,9 @@ function AdminDashboard() {
           <button type="button" onClick={() => navigate(`/dashboard/admin/properties/${property.id}/edit`)} className="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200">Edit</button>
           <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { approvalStatus: 'Approved' } })} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">Verify</button>
           <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { approvalStatus: 'Rejected' } })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
+          <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { premiumAction: 'enable', priority: 100 } })} className="rounded-full border border-amber-400/60 px-3 py-2 text-xs text-amber-100">Premium</button>
+          <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { premiumAction: 'extend' } })} className="rounded-full border border-cyan-400/60 px-3 py-2 text-xs text-cyan-100">Extend</button>
+          <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: { premiumAction: property.isPremium ? 'disable' : 'expire' } })} className="rounded-full border border-slate-600 px-3 py-2 text-xs text-slate-200">{property.isPremium ? 'Disable Premium' : 'Expire'}</button>
           <button type="button" onClick={() => statusMutation.mutate({ id: property.id, payload: property.isActive && property.status !== 'archived' ? { isActive: false } : { isActive: true, status: 'active' } })} className={`rounded-full border px-3 py-2 text-xs transition ${
             property.isActive
               ? 'border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'

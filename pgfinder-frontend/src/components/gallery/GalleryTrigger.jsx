@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { FiX, FiChevronLeft, FiChevronRight } from 'react-icons/fi'
 
 function useSwipe(onLeft, onRight) {
@@ -49,32 +50,43 @@ function GalleryTrigger({ property }) {
 
   return (
     <div>
-      <button onClick={() => { setIndex(0); setZoomed(false); setOpen(true) }} className="h-96 w-full overflow-hidden text-left">
+      <button type="button" onClick={() => { setIndex(0); setZoomed(false); setOpen(true) }} className="h-96 w-full overflow-hidden text-left">
         <img src={images[0]} onError={(event) => { event.currentTarget.src = fallbackImage }} alt={property.name || 'StayJi property'} loading="eager" className="h-96 w-full object-cover rounded-[2rem]" />
       </button>
       {images.length > 1 ? (
         <div className="grid grid-cols-3 gap-2 bg-slate-950 p-2 sm:grid-cols-4">
           {images.slice(1, 5).map((img, idx) => (
-            <button key={img} onClick={() => { setIndex(idx + 1); setZoomed(false); setOpen(true) }} className="h-24 w-full overflow-hidden rounded-2xl">
+            <button key={img} type="button" onClick={() => { setIndex(idx + 1); setZoomed(false); setOpen(true) }} className="h-24 w-full overflow-hidden rounded-2xl">
               <img src={img} onError={(event) => { event.currentTarget.src = fallbackImage }} alt={`${property.name || 'StayJi property'} ${idx + 1}`} loading="lazy" className="h-24 w-full object-cover rounded-2xl" />
             </button>
           ))}
         </div>
       ) : null}
 
-      {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 sm:p-6" role="dialog" aria-modal="true" aria-label="Property image gallery">
-          <button onClick={() => { setZoomed(false); setOpen(false) }} className="absolute right-6 top-6 rounded-full bg-black/40 p-2 text-white">
+      {open ? createPortal((
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Property image gallery"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setZoomed(false)
+              setOpen(false)
+            }
+          }}
+        >
+          <button type="button" onClick={() => { setZoomed(false); setOpen(false) }} className="absolute right-4 top-4 z-10 rounded-full bg-black/40 p-2 text-white sm:right-6 sm:top-6">
             <FiX size={20} />
           </button>
-          <button onClick={prev} className="absolute left-6 top-1/2 -translate-y-1/2 rounded-full bg-black/30 p-3 text-white">
+          <button type="button" onClick={prev} className="absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/30 p-3 text-white sm:left-6">
             <FiChevronLeft size={24} />
           </button>
-          <button onClick={next} className="absolute right-20 top-1/2 -translate-y-1/2 rounded-full bg-black/30 p-3 text-white">
+          <button type="button" onClick={next} className="absolute right-14 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/30 p-3 text-white sm:right-20">
             <FiChevronRight size={24} />
           </button>
 
-          <div className="max-h-[90vh] max-w-[98vw] touch-pan-y">
+          <div className="max-h-[95vh] max-w-[98vw] touch-pan-y overflow-auto">
             <div
               onDoubleClick={() => setZoomed((z) => !z)}
               onTouchStart={onTouchStart}
@@ -85,7 +97,7 @@ function GalleryTrigger({ property }) {
                 src={images[index]}
                 onError={(event) => { event.currentTarget.src = fallbackImage }}
                 alt={`${property.name || 'StayJi property'} ${index + 1}`}
-                className={`max-h-[90vh] max-w-[98vw] object-contain transition-transform ${zoomed ? 'scale-150' : 'scale-100'}`}
+                className={`max-h-[95vh] max-w-[98vw] object-contain transition-transform ${zoomed ? 'scale-150' : 'scale-100'}`}
                 style={{ transformOrigin: 'center center' }}
                 draggable={false}
               />
@@ -95,7 +107,7 @@ function GalleryTrigger({ property }) {
             </div>
           </div>
         </div>
-      ) : null}
+      ), document.body) : null}
     </div>
   )
 }

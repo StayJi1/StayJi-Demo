@@ -42,6 +42,7 @@ function NotificationBell() {
   }, [])
 
   const visibleItems = useMemo(() => items.slice(0, 8), [items])
+  const roleLabel = role === 'owner' ? 'Owner' : role === 'admin' ? 'Admin' : 'User'
 
   if (!enabled) return null
 
@@ -78,7 +79,7 @@ function NotificationBell() {
       {open ? (
         <div className="absolute right-0 top-14 z-50 w-[min(92vw,24rem)] overflow-hidden rounded-2xl border border-slate-800 bg-surface-900 shadow-card">
           <div className="flex items-center justify-between gap-3 border-b border-slate-800 p-4">
-            <p className="text-sm font-semibold text-white">Notifications</p>
+            <p className="text-sm font-semibold text-white">{roleLabel} notifications</p>
             <button type="button" onClick={handleMarkAllRead} className="text-xs font-semibold text-accent-400 hover:text-accent-300">
               Mark all read
             </button>

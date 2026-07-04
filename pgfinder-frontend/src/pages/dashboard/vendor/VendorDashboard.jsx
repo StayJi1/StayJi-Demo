@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiBarChart2, FiEdit2, FiEye, FiMessageSquare, FiPlusCircle, FiSliders, FiTrash2, FiTrendingUp, FiUsers } from 'react-icons/fi'
+import { FiBarChart2, FiCreditCard, FiEdit2, FiEye, FiMessageSquare, FiPlusCircle, FiSettings, FiSliders, FiTrash2, FiTrendingUp, FiUser, FiUsers } from 'react-icons/fi'
 import Button from '../../../components/common/Button'
 import Card from '../../../components/common/Card'
 import { useAuth } from '../../../context/AuthContext'
@@ -72,6 +72,9 @@ function OwnerDashboard() {
     load()
   }, [ownerId])
 
+  const premiumProperties = properties.filter((property) => property.isPremium)
+  const pendingProperties = properties.filter((property) => (property.approvalStatus || 'Pending') === 'Pending')
+
   return (
     <div className="space-y-8">
       <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
@@ -85,6 +88,24 @@ function OwnerDashboard() {
         </div>
       </header>
 
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: 'My Properties', icon: <FiSliders />, onClick: () => navigate('/dashboard/owner/properties') },
+          { label: 'Add Property', icon: <FiPlusCircle />, onClick: () => navigate('/dashboard/owner/add-property') },
+          { label: 'Messages', icon: <FiMessageSquare />, onClick: () => navigate('/dashboard/owner/messages') },
+          { label: 'Bookings', icon: <FiUsers />, onClick: () => navigate('/dashboard/owner/leads') },
+          { label: 'Analytics', icon: <FiBarChart2 />, onClick: () => document.getElementById('owner-analytics')?.scrollIntoView({ behavior: 'smooth' }) },
+          { label: 'Subscription', icon: <FiCreditCard />, onClick: () => document.getElementById('owner-subscription')?.scrollIntoView({ behavior: 'smooth' }) },
+          { label: 'Profile', icon: <FiUser />, onClick: () => navigate('/dashboard/profile') },
+          { label: 'Settings', icon: <FiSettings />, onClick: () => navigate('/dashboard/profile') },
+        ].map((item) => (
+          <button key={item.label} type="button" onClick={item.onClick} className="rounded-2xl border border-slate-800 bg-surface-800/90 p-4 text-left text-slate-200 transition hover:border-accent-500">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-accent-400">{item.icon}</span>
+            <p className="mt-3 font-semibold text-white">{item.label}</p>
+          </button>
+        ))}
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-4">
         {loading ? (
           <Card className="p-8">Loading stats…</Card>
@@ -97,6 +118,8 @@ function OwnerDashboard() {
             { label: 'Total Visits', value: overview.totalVisits ?? overview.bookings, icon: <FiUsers />, onClick: () => navigate('/dashboard/owner/leads') },
             { label: 'Total Messages', value: overview.totalMessages, icon: <FiMessageSquare />, onClick: () => navigate('/dashboard/owner/messages') },
             { label: 'Total Inquiries', value: overview.totalInquiries ?? overview.inquiries, icon: <FiUsers />, onClick: () => navigate('/dashboard/owner/leads') },
+            { label: 'Premium Status', value: premiumProperties.length, icon: <FiCreditCard />, onClick: () => document.getElementById('owner-subscription')?.scrollIntoView({ behavior: 'smooth' }) },
+            { label: 'Property Views', value: overview.views || properties.reduce((sum, property) => sum + (Number(property.views) || Number(property.totalViews) || 0), 0), icon: <FiEye />, onClick: () => document.getElementById('owner-analytics')?.scrollIntoView({ behavior: 'smooth' }) },
           ].map((item) => (
             <button key={item.label} type="button" onClick={item.onClick} className="text-left">
               <Card className="h-full p-6 transition hover:border-accent-500">
@@ -129,12 +152,30 @@ function OwnerDashboard() {
         ))}
       </div>
 
+      <div id="owner-analytics" className="grid gap-6 xl:grid-cols-3">
+        <Card>
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Analytics</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{overview.leads || visits.length}</p>
+          <p className="mt-2 text-sm text-slate-400">Total leads from bookings, messages, inquiries, and saved-property interest.</p>
+        </Card>
+        <Card>
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Premium status</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{premiumProperties.length}</p>
+          <p className="mt-2 text-sm text-slate-400">Premium listings appear before normal listings and show a Premium badge.</p>
+        </Card>
+        <Card>
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Pending approval</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{pendingProperties.length}</p>
+          <p className="mt-2 text-sm text-slate-400">Submitted and rejected listings remain saved; rejected listings can be edited and resubmitted.</p>
+        </Card>
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-2">
         <Card id="owner-requests">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Active listings</p>
-              <h2 className="mt-3 text-2xl font-semibold text-white">Browse your properties</h2>
+              <h2 className="mt-3 text-2xl font-semibold text-white">My properties</h2>
             </div>
             <Button variant="secondary" onClick={() => navigate('/dashboard/owner/properties')}>View listings</Button>
           </div>
@@ -206,6 +247,25 @@ function OwnerDashboard() {
             </div>
           ))}
           {!moveIns.length ? <p className="text-sm text-slate-400">Verified move-ins will appear here after users submit proof.</p> : null}
+        </div>
+      </Card>
+
+      <Card id="owner-subscription">
+        <div className="flex items-center gap-3">
+          <FiCreditCard className="text-accent-400" />
+          <div>
+            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Subscription</p>
+            <h2 className="mt-1 text-2xl font-semibold text-white">Premium listing status</h2>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-3">
+          {properties.slice(0, 6).map((property) => (
+            <div key={property.id || property._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+              <p className="font-semibold text-white">{property.name || 'Untitled property'} · {property.isPremium ? 'Premium' : 'Normal'}</p>
+              <p className="mt-1">Priority {property.priority || 0} · Expires {property.premiumEndDate ? new Date(property.premiumEndDate).toLocaleDateString() : '-'}</p>
+            </div>
+          ))}
+          {!properties.length ? <p className="text-sm text-slate-400">Add a property to see subscription status.</p> : null}
         </div>
       </Card>
 

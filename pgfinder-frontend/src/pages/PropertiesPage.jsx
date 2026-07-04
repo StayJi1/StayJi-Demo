@@ -14,6 +14,7 @@ import { useAuth } from '../context/AuthContext'
 import { getDistanceKm } from '../utils/distance'
 import SEO from '../components/SEO'
 import { MVP_CITY } from '../config/mvp'
+import { readCompareIds, writeCompareIds } from '../utils/compareStorage'
 
 const filterOptions = [
   'PG',
@@ -44,7 +45,6 @@ const filterOptions = [
 
 const defaultNearbyRadiusKm = 5
 const expandedNearbyRadiusKm = 25
-const compareStorageKey = 'stayjiCompare'
 const propertyCategories = ['PG', 'Hostel', 'Flat', 'House', 'Apartment', 'Villa', 'Co-living']
 const sharingFilters = ['Single sharing', 'Double sharing', 'Triple sharing', 'Four sharing', 'Five sharing', 'Dormitory']
 const ignoredSearchWords = new Set(['near', 'nearby', 'me', 'my', 'location', 'around'])
@@ -143,13 +143,7 @@ function PropertiesPage() {
   const [mapSearchMessage, setMapSearchMessage] = useState('')
   const { user, isAuthenticated, role } = useAuth()
   const [savedPropertyIds, setSavedPropertyIds] = useState(new Set())
-  const [compareIds, setCompareIds] = useState(() => {
-    try {
-      return new Set(JSON.parse(localStorage.getItem(compareStorageKey) || '[]').filter(Boolean))
-    } catch {
-      return new Set()
-    }
-  })
+  const [compareIds, setCompareIds] = useState(() => new Set(readCompareIds(user)))
   const [compareMessage, setCompareMessage] = useState('')
   const [saveSearchMessage, setSaveSearchMessage] = useState('')
   const {
@@ -160,6 +154,11 @@ function PropertiesPage() {
     requestLocation,
     setManualLocation,
   } = useCurrentLocation()
+
+  useEffect(() => {
+    setCompareIds(new Set(readCompareIds(user)))
+    setCompareMessage('')
+  }, [isAuthenticated, user?._id])
 
   useEffect(() => {
     const loadWishlist = async () => {
@@ -260,6 +259,11 @@ function PropertiesPage() {
   }
 
   const toggleCompare = (property) => {
+    if (!isAuthenticated || !user?._id) {
+      navigate('/login', { replace: true })
+      return
+    }
+
     const propertyId = property.id || property._id
     if (!propertyId) return
     setCompareMessage('')
@@ -267,15 +271,23 @@ function PropertiesPage() {
       const next = new Set(current)
       if (next.has(propertyId)) {
         next.delete(propertyId)
-      } else if (next.size >= 3) {
+        writeCompareIds(user, [...next])
+        return next
+      }
+      if (next.size >= 3) {
         setCompareMessage('You can compare up to 3 properties at once.')
         return current
-      } else {
-        next.add(propertyId)
       }
-      localStorage.setItem(compareStorageKey, JSON.stringify([...next]))
+      next.add(propertyId)
+      writeCompareIds(user, [...next])
       return next
     })
+  }
+
+  const clearCompare = () => {
+    writeCompareIds(user, [])
+    setCompareIds(new Set())
+    setCompareMessage('')
   }
 
   const backendFilterParams = useMemo(() => {
@@ -454,6 +466,8 @@ function PropertiesPage() {
 
     return propertiesToShow
       .sort((a, b) => {
+        if (Boolean(a.isPremium) !== Boolean(b.isPremium)) return a.isPremium ? -1 : 1
+        if ((Number(a.priority) || 0) !== (Number(b.priority) || 0)) return (Number(b.priority) || 0) - (Number(a.priority) || 0)
         if (hasUserLocation && nearbyMode && nearbyMatches.length) {
           const aIsNearby = a.distanceKm !== null && a.distanceKm !== undefined && a.distanceKm <= searchRadiusKm ? 0 : 1
           const bIsNearby = b.distanceKm !== null && b.distanceKm !== undefined && b.distanceKm <= searchRadiusKm ? 0 : 1
@@ -669,11 +683,26 @@ function PropertiesPage() {
           </motion.div>
 
           {compareIds.size ? (
-            <div className="mt-6 flex flex-col gap-3 rounded-[1.5rem] border border-cyan-400/30 bg-cyan-500/10 p-4 text-sm text-cyan-100 sm:flex-row sm:items-center sm:justify-between">
-              <span>{compareIds.size}/3 properties selected for comparison.</span>
-              <Button variant="secondary" className="w-full sm:w-auto" onClick={() => navigate('/compare')}>
-                <FiColumns className="mr-2" /> Open compare
-              </Button>
+            <div className="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-5xl flex-col gap-3 rounded-[1.5rem] border border-cyan-400/30 bg-slate-950/95 p-4 text-sm text-cyan-100 shadow-card backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="font-semibold">{compareIds.size}/3 properties selected for comparison</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {filteredProperties
+                    .filter((item) => compareIds.has(item.id || item._id))
+                    .slice(0, 3)
+                    .map((item) => (
+                      <span key={item.id || item._id} className="max-w-[12rem] truncate rounded-full border border-cyan-400/30 px-3 py-1 text-xs text-cyan-100">
+                        {item.name}
+                      </span>
+                    ))}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" className="w-full sm:w-auto" onClick={clearCompare}>Clear</Button>
+                <Button className="w-full sm:w-auto" onClick={() => navigate('/compare')}>
+                  <FiColumns className="mr-2" /> Open compare
+                </Button>
+              </div>
             </div>
           ) : null}
 

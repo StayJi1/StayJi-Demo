@@ -454,9 +454,11 @@ const messageDto = (message = {}) => {
 
 const conversationDto = (conversation = {}) => {
     const row = typeof conversation.toObject === 'function' ? conversation.toObject() : conversation
+    const property = row.propertyId && typeof row.propertyId === 'object' ? row.propertyId : null
     return {
         ...row,
         id: row._id,
+        property: property ? propertyDto(property) : row.property,
         lastMessagePreview: decryptMessage(row.lastMessagePreview) || row.lastMessagePreview || '',
     }
 }
@@ -541,6 +543,86 @@ const requestConsentMetadata = (req, source) => ({
     consentVersion: process.env.CONSENT_VERSION || '2026-05-25',
     source,
 })
+
+const parseLoginDevice = (req) => {
+    const userAgent = req.headers['user-agent'] || ''
+    const browser = /edg/i.test(userAgent) ? 'Edge'
+        : /chrome|crios/i.test(userAgent) ? 'Chrome'
+            : /safari/i.test(userAgent) && !/chrome|crios/i.test(userAgent) ? 'Safari'
+                : /firefox|fxios/i.test(userAgent) ? 'Firefox'
+                    : /opr|opera/i.test(userAgent) ? 'Opera'
+                        : 'Unknown browser'
+    const os = /windows/i.test(userAgent) ? 'Windows'
+        : /android/i.test(userAgent) ? 'Android'
+            : /iphone|ipad|ios/i.test(userAgent) ? 'iOS'
+                : /mac os|macintosh/i.test(userAgent) ? 'macOS'
+                    : /linux/i.test(userAgent) ? 'Linux'
+                        : 'Unknown OS'
+    const device = /mobile|iphone|android/i.test(userAgent) ? 'Mobile'
+        : /ipad|tablet/i.test(userAgent) ? 'Tablet'
+            : 'Desktop'
+    return {
+        device,
+        browser,
+        os,
+        ip: req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress || '',
+        userAgent,
+        loginAt: new Date(),
+    }
+}
+
+const savedSearchMatchesProperty = (search = {}, property = {}) => {
+    const filters = search.filters && typeof search.filters === 'object' ? search.filters : {}
+    const haystack = [
+        property.propertyName,
+        property.cityName,
+        property.areaName,
+        property.address,
+        property.propertyCategory,
+        property.propertyType,
+        property.sharing,
+        property.sharingAvailability,
+        property.aminityFeatures,
+        ...(property.customFeatures || []),
+    ].filter(Boolean).join(' ').toLowerCase()
+    const terms = [
+        filters.searchQuery,
+        filters.city,
+        filters.mapSearchQuery,
+        search.city,
+        search.locality,
+    ].filter(Boolean).map((value) => value.toString().trim().toLowerCase()).filter(Boolean)
+    const activeFilters = Array.isArray(filters.activeFilters) ? filters.activeFilters : []
+    const filterTerms = activeFilters
+        .filter((item) => !/rating|available|nearby/i.test(item))
+        .map((item) => item.toString().replace(/\s+sharing$/i, '').trim().toLowerCase())
+        .filter(Boolean)
+    const min = Number(filters.priceRange?.min) || 0
+    const max = Number(filters.priceRange?.max) || Infinity
+    const rent = Number(property.rent) || 0
+    return [...terms, ...filterTerms].every((term) => !term || haystack.includes(term)) && rent >= min && rent <= max
+}
+
+const notifySavedSearchMatches = async (property = {}) => {
+    if (!property?._id || !['Approved', 'Verified'].includes(property.approvalStatus || '') || property.isActive === false) return
+    const users = await User.find({ userType: { $in: accountTypeVariants('User') }, isActive: true, 'savedSearches.0': { $exists: true } }).select('_id savedSearches')
+    const matchingUsers = users.filter((user) => (user.savedSearches || []).some((search) => savedSearchMatchesProperty(search, property)))
+    await Promise.all(matchingUsers.map((user) => createNotification({
+        recipientId: user._id,
+        recipientRole: 'user',
+        propertyId: property._id,
+        type: 'saved_search_match',
+        title: 'Saved search match',
+        message: `${property.propertyName || 'A new StayJi property'} matches one of your saved searches.`,
+        link: `/properties/${property._id}`,
+        metadata: { source: 'saved_search' },
+    })))
+}
+
+const expirePremiumListings = () => Property.updateMany(
+    { isPremium: true, premiumEndDate: { $lt: new Date() } },
+    { $set: { isPremium: false, priority: 0 } }
+)
 
 const notifyPropertyOwner = async (propertyId, payload = {}) => {
     const property = await Property.findOne({ _id: propertyId }).select('userIDFK vendorId propertyName')
@@ -993,7 +1075,16 @@ router.post('/loginByUser', async (req, res) => {
         if (!isHashedPassword(objUser.userPassword) || !objUser.userPassword.startsWith('$2')) {
             await User.updateOne({ _id: objUser._id }, { userPassword: hashPassword(req.body.userPassword) })
         }
-        await User.updateOne({ _id: objUser._id }, { lastLogin: new Date() })
+        const loginEntry = parseLoginDevice(req)
+        await User.updateOne(
+            { _id: objUser._id },
+            {
+                $set: { lastLogin: loginEntry.loginAt },
+                $push: { loginHistory: { $each: [loginEntry], $position: 0, $slice: 25 } },
+            }
+        )
+        objUser.lastLogin = loginEntry.loginAt
+        objUser.loginHistory = [loginEntry, ...(objUser.loginHistory || [])].slice(0, 25)
         const token = signAuthToken(objUser)
         objUser.userPassword = undefined
         res.json({ result: "success", msg: "login Successfully", data: objUser, token, role: tokenRoleName(objUser.userType) });
@@ -1106,6 +1197,7 @@ router.post('/updateUser', attachAuthenticatedUser, async (req, res) => {
 
 
 router.get('/getPropertyList', async (req, res) => {
+    await expirePremiumListings()
     const publicFilters = buildPropertyFilters({ ...req.query, cityName: MVP_CITY })
     const { page, limit, skip } = pageOptions(req.query)
     publicFilters.cityName = MVP_CITY_REGEX
@@ -1118,8 +1210,9 @@ router.get('/getPropertyList', async (req, res) => {
         Property.countDocuments(filters),
         Property.find(filters)
             .populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact'])
+            .populate('vendorId', ['userFname', 'userLname', 'userType', 'contact'])
             .populate('propertyTypeIDFK', ['typeName'])
-            .sort({ isFeatured: -1, localityPriority: -1, addedOn: -1 })
+            .sort({ isPremium: -1, priority: -1, isFeatured: -1, localityPriority: -1, addedOn: -1 })
             .skip(skip)
             .limit(limit)
             .lean()
@@ -2119,7 +2212,8 @@ router.post('/addProperty', attachAuthenticatedUser, requireRoles(['owner']), up
         objProperty.parkingAvailable = toBoolean(req.body.parkingAvailable),
         objProperty.acAvailable = toBoolean(req.body.acAvailable),
         objProperty.rating = toNumberOrUndefined(req.body.rating) || 4.6,
-        objProperty.propertyCategory = req.body.propertyCategory || req.body.propertySegment || "PG",
+        objProperty.propertyCategory = req.body.propertyCategory || req.body.propertyType || req.body.propertySegment || "PG",
+        objProperty.propertyType = req.body.propertyType || req.body.propertyCategory || req.body.propertySegment || "PG",
         objProperty.pricingUnit = req.body.pricingUnit || "month",
         objProperty.dailyRate = req.body.dailyRate || "",
         objProperty.perDayCheckIn = toBoolean(req.body.perDayCheckIn),
@@ -2557,8 +2651,18 @@ router.post('/updateProperty', attachAuthenticatedUser, requireRoles(['owner', '
     if (req.body.isFeatured !== undefined) updateFields.isFeatured = toBoolean(req.body.isFeatured)
     if (req.body.boostScore !== undefined) updateFields.boostScore = toNumberOrUndefined(req.body.boostScore) || 0
     if (req.body.localityPriority !== undefined) updateFields.localityPriority = toNumberOrUndefined(req.body.localityPriority) || 0
-    if (req.body.propertyCategory !== undefined) updateFields.propertyCategory = req.body.propertyCategory
-    if (req.body.propertySegment !== undefined) updateFields.propertyCategory = req.body.propertySegment
+    if (req.body.propertyCategory !== undefined) {
+        updateFields.propertyCategory = req.body.propertyCategory
+        updateFields.propertyType = req.body.propertyCategory
+    }
+    if (req.body.propertyType !== undefined) {
+        updateFields.propertyType = req.body.propertyType
+        updateFields.propertyCategory = req.body.propertyType
+    }
+    if (req.body.propertySegment !== undefined) {
+        updateFields.propertyCategory = req.body.propertySegment
+        updateFields.propertyType = req.body.propertySegment
+    }
     if (req.body.pricingUnit !== undefined) updateFields.pricingUnit = req.body.pricingUnit
     if (req.body.dailyRate !== undefined) updateFields.dailyRate = req.body.dailyRate
     if (req.body.perDayCheckIn !== undefined) updateFields.perDayCheckIn = toBoolean(req.body.perDayCheckIn)
@@ -2567,6 +2671,12 @@ router.post('/updateProperty', attachAuthenticatedUser, requireRoles(['owner', '
     if (req.body.isDummy !== undefined) updateFields.isDummy = toBoolean(req.body.isDummy)
     if (req.body.isVerified !== undefined) updateFields.isVerified = toBoolean(req.body.isVerified)
     if (req.body.status !== undefined) updateFields.status = req.body.status
+    if (req.auth.role === 'admin') {
+        if (req.body.isPremium !== undefined) updateFields.isPremium = toBoolean(req.body.isPremium)
+        if (req.body.premiumStartDate !== undefined) updateFields.premiumStartDate = req.body.premiumStartDate ? new Date(req.body.premiumStartDate) : null
+        if (req.body.premiumEndDate !== undefined) updateFields.premiumEndDate = req.body.premiumEndDate ? new Date(req.body.premiumEndDate) : null
+        if (req.body.priority !== undefined) updateFields.priority = toNumberOrUndefined(req.body.priority) || 0
+    }
     if (req.body.commissionConfig !== undefined) updateFields.commissionConfig = parseJsonValue(req.body.commissionConfig, {})
     if (req.body.referralAgreementAccepted !== undefined || req.body.leadPricingAccepted !== undefined || req.body.ownerTermsAccepted !== undefined) {
         const agreementAccepted = toBoolean(req.body.referralAgreementAccepted) && toBoolean(req.body.leadPricingAccepted) && toBoolean(req.body.ownerTermsAccepted)
@@ -2889,6 +2999,12 @@ const propertyDto = (property = {}, analytics = {}) => {
         city: property.cityName,
         area: property.areaName,
         category: property.propertyCategory,
+        type: property.propertyType || property.propertyCategory || property.propertyTypeIDFK?.typeName || 'PG',
+        propertyType: property.propertyType || property.propertyCategory || property.propertyTypeIDFK?.typeName || 'PG',
+        isPremium: Boolean(property.isPremium),
+        premiumStartDate: property.premiumStartDate,
+        premiumEndDate: property.premiumEndDate,
+        priority: property.priority || 0,
         occupancy: rooms > 0 ? Math.max(0, Math.min(100, Math.round(((10 - rooms) / 10) * 100))) : (property.isAvailable === false ? 100 : 0),
         roomInventory: property.roomInventory || [],
         verificationChecklist: property.verificationChecklist || {},
@@ -2948,6 +3064,8 @@ const buildAdminPropertyQuery = (query = {}) => {
     if (query.analyticsMode === 'demo' || query.dummyMode === 'demo' || query.demoLive === 'demo') filters.isDummy = true
     if (query.verificationStatus === 'verified') filters.isVerified = true
     if (query.verificationStatus === 'unverified') filters.isVerified = false
+    if (query.premium === 'true' || query.isPremium === 'true') filters.isPremium = true
+    if (query.premium === 'false' || query.isPremium === 'false') filters.isPremium = false
     if (query.propertyStatus === 'live') Object.assign(filters, { isDummy: false, isActive: true, status: { $nin: ['archived', 'suspended'] }, approvalStatus: { $in: ['Approved', 'Verified'] } })
     if (query.propertyStatus === 'demo') Object.assign(filters, { isDummy: true })
     if (query.propertyStatus === 'hidden') filters.$or = [...(filters.$or || []), { isActive: false }, { status: 'archived' }]
@@ -3051,6 +3169,8 @@ router.get('/user/overview', attachAuthenticatedUser, requireRoles(['user', 'adm
             payouts,
             savedSearches: user.savedSearches || [],
             viewedProperties: user.viewedProperties || [],
+            comparisonHistory: user.comparisonHistory || [],
+            loginHistory: user.loginHistory || [],
             wallet: {
                 totalCoins,
                 approvedRewards: approvedRewards.length,
@@ -3111,6 +3231,42 @@ router.delete('/user/saved-searches/:id', attachAuthenticatedUser, requireRoles(
     res.json({ result: 'success', msg: 'Saved search deleted.', data: user?.savedSearches || [] })
 })
 
+router.post('/user/comparison-history', attachAuthenticatedUser, requireRoles(['user']), async (req, res) => {
+    const userId = asObjectId(req.body.userId || req.body.userIDFK)
+    const propertyIds = (Array.isArray(req.body.propertyIds) ? req.body.propertyIds : parseStringList(req.body.propertyIds))
+        .map(asObjectId)
+        .filter(Boolean)
+        .slice(0, 3)
+    if (!userId || propertyIds.length < 2) return res.json({ result: 'failure', msg: 'User and at least two properties are required.', data: null })
+    if (!assertSelfOrRoles(req, res, userId, [])) return
+    const properties = await Property.find({ _id: { $in: propertyIds } }).select('propertyName cityName areaName rent depositAmount propertyCategory propertyType propertyImage propertyImageUrls approvalStatus isVerified isPremium rating').lean()
+    const entry = {
+        id: new mongoose.Types.ObjectId().toString(),
+        comparedOn: new Date(),
+        propertyIds,
+        properties: properties.map((property) => ({
+            propertyId: property._id,
+            propertyName: property.propertyName,
+            city: property.cityName,
+            locality: property.areaName,
+            rent: property.rent,
+            depositAmount: property.depositAmount,
+            propertyType: property.propertyType || property.propertyCategory,
+            image: property.propertyImage || property.propertyImageUrls?.[0] || '',
+            approvalStatus: property.approvalStatus,
+            isVerified: property.isVerified,
+            isPremium: property.isPremium,
+            rating: property.rating,
+        })),
+    }
+    const user = await User.findOneAndUpdate(
+        { _id: userId },
+        { $push: { comparisonHistory: { $each: [entry], $position: 0, $slice: 25 } } },
+        { new: true }
+    ).select('comparisonHistory')
+    res.json({ result: 'success', msg: 'Comparison history stored.', data: user?.comparisonHistory || [] })
+})
+
 router.get('/chats', attachAuthenticatedUser, async (req, res) => {
     if (!assertMessagingAccess(req, res)) return
     const viewerId = req.auth.user._id
@@ -3123,7 +3279,7 @@ router.get('/chats', attachAuthenticatedUser, async (req, res) => {
     const conversations = await Conversation.find(filters)
         .populate('userId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType'])
         .populate('ownerId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType'])
-        .populate('propertyId', ['propertyName cityName areaName'])
+        .populate('propertyId', ['propertyName cityName areaName propertyImage propertyImageUrls rent propertyCategory propertyType'])
         .sort({ lastMessageAt: -1, updatedOn: -1 })
         .limit(Math.min(100, Math.max(1, Number(req.query.limit || 50))))
 
@@ -3133,7 +3289,7 @@ router.get('/chats', attachAuthenticatedUser, async (req, res) => {
         activeConversation = await Conversation.findOne({ _id: conversationId, ...filters })
             .populate('userId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType'])
             .populate('ownerId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType'])
-            .populate('propertyId', ['propertyName cityName areaName'])
+            .populate('propertyId', ['propertyName cityName areaName propertyImage propertyImageUrls rent propertyCategory propertyType'])
         if (!activeConversation) return res.status(404).json({ result: 'failure', msg: 'Conversation not found.', data: null })
         messages = await Message.find({ conversationId, isActive: true }).sort({ addedOn: 1 }).limit(Math.min(200, Math.max(1, Number(req.query.messageLimit || 100))))
         if (viewerRole === 'user') {
@@ -3240,7 +3396,7 @@ router.post('/chats', attachAuthenticatedUser, async (req, res) => {
     const populatedConversation = await Conversation.findOne({ _id: conversation._id })
         .populate('userId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType'])
         .populate('ownerId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType'])
-        .populate('propertyId', ['propertyName cityName areaName'])
+        .populate('propertyId', ['propertyName cityName areaName propertyImage propertyImageUrls rent propertyCategory propertyType'])
     res.json({ result: 'success', msg: 'Message sent.', data: { conversation: conversationDto(populatedConversation), message: messageDto(message) } })
 })
 
@@ -3929,9 +4085,11 @@ router.get('/analytics', async (req, res) => {
             demoProperties,
             realProperties,
             inactiveListings,
+            premiumListings,
             pendingProperties,
             approvedProperties,
             rejectedProperties,
+            todayRegistrations,
             todayVisits,
             monthlyVisits,
             visitLeads,
@@ -3955,9 +4113,11 @@ router.get('/analytics', async (req, res) => {
             Property.countDocuments({ isDummy: true, ...propertyCityScope }),
             Property.countDocuments({ isDummy: false, ...propertyCityScope }),
             Property.countDocuments({ isActive: false, ...dataScope, ...propertyCityScope }),
+            Property.countDocuments({ isPremium: true, ...dataScope, ...propertyCityScope }),
             Property.countDocuments({ approvalStatus: 'Pending', ...dataScope, ...propertyCityScope }),
             Property.countDocuments({ approvalStatus: { $in: ['Approved', 'Verified'] }, ...dataScope, ...propertyCityScope }),
             Property.countDocuments({ approvalStatus: 'Rejected', ...dataScope, ...propertyCityScope }),
+            User.countDocuments({ addedOn: { $gte: todayStart }, userType: { $nin: accountTypeVariants('Admin') }, ...dataScope, ...userCityScope }),
             Visit.countDocuments(visitDateOrAddedOnScope(todayStart)),
             Visit.countDocuments(visitDateOrAddedOnScope(monthStart)),
             Visit.countDocuments(activeLeadScope),
@@ -4013,11 +4173,13 @@ router.get('/analytics', async (req, res) => {
                     demoProperties,
                     realProperties,
                     inactiveListings,
+                    premiumListings,
                     liveVacancies,
                     pendingProperties,
                     pendingVerification: pendingProperties,
                     approvedProperties,
                     rejectedProperties,
+                    todayRegistrations,
                     todayVisits,
                     monthlyVisits,
                     occupancyRate,
@@ -4046,6 +4208,7 @@ router.get('/analytics', async (req, res) => {
 
 router.get('/properties', async (req, res) => {
     try {
+        await expirePremiumListings()
         const { page, limit, skip } = pageOptions(req.query)
         const filters = buildAdminPropertyQuery(req.query)
         const ownerSearch = filters.__ownerSearch
@@ -4127,6 +4290,29 @@ router.post('/properties/:id/status', async (req, res) => {
     if (req.body.isAvailable !== undefined) update.isAvailable = req.body.isAvailable === true || req.body.isAvailable === 'true'
     if (req.body.isVerified !== undefined) update.isVerified = req.body.isVerified === true || req.body.isVerified === 'true'
     if (req.body.isDummy !== undefined) update.isDummy = req.body.isDummy === true || req.body.isDummy === 'true'
+    if (req.body.isPremium !== undefined) update.isPremium = toBoolean(req.body.isPremium)
+    if (req.body.premiumStartDate !== undefined) update.premiumStartDate = req.body.premiumStartDate ? new Date(req.body.premiumStartDate) : null
+    if (req.body.premiumEndDate !== undefined) update.premiumEndDate = req.body.premiumEndDate ? new Date(req.body.premiumEndDate) : null
+    if (req.body.priority !== undefined) update.priority = toNumberOrUndefined(req.body.priority) || 0
+    if (req.body.premiumAction) {
+        const action = req.body.premiumAction.toString().toLowerCase()
+        if (action === 'enable') {
+            update.isPremium = true
+            update.premiumStartDate = req.body.premiumStartDate ? new Date(req.body.premiumStartDate) : new Date()
+            update.premiumEndDate = req.body.premiumEndDate ? new Date(req.body.premiumEndDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+            update.priority = toNumberOrUndefined(req.body.priority) || 100
+        }
+        if (action === 'disable' || action === 'expire') {
+            update.isPremium = false
+            update.premiumEndDate = new Date()
+            if (req.body.priority === undefined) update.priority = 0
+        }
+        if (action === 'extend') {
+            update.isPremium = true
+            update.premiumEndDate = req.body.premiumEndDate ? new Date(req.body.premiumEndDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+            if (req.body.priority !== undefined) update.priority = toNumberOrUndefined(req.body.priority) || 100
+        }
+    }
     if (req.body.status) update.status = req.body.status
     if (req.body.cityName || req.body.city) update.cityName = canonicalLocationName(req.body.cityName || req.body.city)
     if (req.body.areaName || req.body.locality) update.areaName = req.body.areaName || req.body.locality
@@ -4143,11 +4329,14 @@ router.post('/properties/:id/status', async (req, res) => {
             recipientId: owner?._id || owner,
             recipientRole: 'vendor',
             propertyId: updated._id,
-            type: update.approvalStatus ? 'property_review' : 'property_status',
-            title: update.approvalStatus ? `Property ${update.approvalStatus}` : 'Property status updated',
-            message: update.approvalStatus ? `Admin marked ${updated.propertyName} as ${update.approvalStatus}.` : `Admin updated ${updated.propertyName}.`,
-            link: `/dashboard/vendor/properties/${updated._id}`,
+            type: update.approvalStatus ? 'property_review' : update.isPremium !== undefined ? 'premium_update' : 'property_status',
+            title: update.approvalStatus ? `Property ${update.approvalStatus}` : update.isPremium !== undefined ? 'Premium listing updated' : 'Property status updated',
+            message: update.approvalStatus ? `Admin marked ${updated.propertyName} as ${update.approvalStatus}.` : update.isPremium !== undefined ? `Premium status changed for ${updated.propertyName}.` : `Admin updated ${updated.propertyName}.`,
+            link: `/dashboard/owner/properties/${updated._id}`,
         })
+        if (update.approvalStatus && ['Approved', 'Verified'].includes(update.approvalStatus)) {
+            await notifySavedSearchMatches(updated)
+        }
     }
     res.json({ result: updated ? 'success' : 'failure', msg: updated ? 'Property updated' : 'Property not found', data: updated ? propertyDto(updated) : null })
 })
