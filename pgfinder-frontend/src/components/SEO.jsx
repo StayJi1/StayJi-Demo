@@ -22,7 +22,7 @@ function setCanonical(url) {
   element.setAttribute('href', url)
 }
 
-export default function SEO({ title, description, path = '/', keywords = [], schema }) {
+export default function SEO({ title, description, path = '/', keywords = [], schema, noindex = false }) {
   useEffect(() => {
     const fullTitle = title.includes(siteConfig.name) ? title : `${title} | ${siteConfig.name}`
     const canonical = `${siteConfig.domain}${path}`
@@ -36,6 +36,7 @@ export default function SEO({ title, description, path = '/', keywords = [], sch
     setMeta('twitter:card', 'summary_large_image')
     setMeta('twitter:title', fullTitle)
     setMeta('twitter:description', description)
+    setMeta('robots', noindex ? 'noindex,nofollow' : 'index,follow')
     setCanonical(canonical)
 
     const id = 'stayji-schema'
@@ -47,8 +48,7 @@ export default function SEO({ title, description, path = '/', keywords = [], sch
       script.text = JSON.stringify(schema)
       document.head.appendChild(script)
     }
-  }, [description, keywords, path, schema, title])
+  }, [description, keywords, noindex, path, schema, title])
 
   return null
 }
-

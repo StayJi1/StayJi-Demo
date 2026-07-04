@@ -17,6 +17,23 @@ var Visit = require("../models/visitDetails");
 var Payment = require("../models/paymentMaster");
 const { hashPassword, isHashedPassword, verifyPassword } = require('../utils/security');
 const { body } = require('express-validator');
+const { validateObjectIdParam } = require('../middleware/resilience');
+
+const wrapAsync = (handler) => (req, res, next) => {
+  try {
+    const result = handler(req, res, next);
+    if (result && typeof result.catch === 'function') result.catch(next);
+  } catch (error) {
+    next(error);
+  }
+};
+
+['get', 'post', 'put', 'patch', 'delete'].forEach((method) => {
+  const original = router[method].bind(router);
+  router[method] = (...args) => original(...args.map((arg) => (typeof arg === 'function' ? wrapAsync(arg) : arg)));
+});
+
+router.param('id', validateObjectIdParam('id'));
 const defaultAdmin = {
   userName: 'Admin',
   userFname: 'Admin',
@@ -27,7 +44,14 @@ const defaultAdmin = {
   gender: 'female',
   contact: '123456789',
   occupation: '',
+  city: 'Bangalore',
   userType: 'Admin',
+  assignedCity: 'Bangalore',
+  assignedState: 'Karnataka',
+  permissions: ['manage_users', 'manage_properties', 'manage_finance', 'manage_admins', 'manage_dummy_data', 'manage_seo', 'manage_moderation', 'view_global_analytics', 'view_city_analytics'],
+  accountStatus: 'active',
+  approvalStatus: 'Approved',
+  isVerified: true,
   profile: '',
   addedOn: new Date().toISOString(),
   isActive: true,
@@ -45,7 +69,16 @@ async function ensureDefaultAdmin() {
   }
 }
 
-ensureDefaultAdmin();
+// Ensure default admin users only after MongoDB is connected.
+// This prevents startup crashes/timeouts when DATABASE is temporarily unreachable.
+if (require('mongoose').connection.readyState === 1) {
+  ensureDefaultAdmin();
+} else {
+  console.log('MongoDB not connected yet; skipping ensureDefaultAdmin() at startup');
+  require('mongoose').connection.once('connected', () => {
+    ensureDefaultAdmin();
+  });
+}
 
 var storage = multer.diskStorage({
     destination: function (req, res, cb) {
@@ -386,7 +419,22 @@ router.post('/reactivateProperty', async (req, res) => {
 });
 
 router.post('/updatePropertyStatus', async (req, res) => {
-    const objProperty = await Property.updateOne({ _id: req.body.id }, { approvalStatus: req.body.status });
+    const property = await Property.findOne({ _id: req.body.id }).lean()
+    if (!property) {
+        console.warn('Admin attempted to update status for missing property', req.body.id)
+        return res.redirect('showProperty')
+    }
+    const desiredStatus = req.body.status
+    // Enforce minimal real-photo requirement: at least 3 images before approving
+    const images = [].concat(property.propertyImage || [], property.propertyImageUrls || [])
+    const uniqueImages = Array.from(new Set(images.filter(Boolean)))
+    if ((desiredStatus === 'Approved' || desiredStatus === 'Verified') && uniqueImages.length < 3) {
+        // Do not approve; keep pending and log
+        await Property.updateOne({ _id: req.body.id }, { approvalStatus: 'Pending', isVerified: false })
+        console.warn(`Property ${req.body.id} not approved: requires at least 3 images; found ${uniqueImages.length}`)
+        return res.redirect("showProperty")
+    }
+    const objProperty = await Property.updateOne({ _id: req.body.id }, { approvalStatus: desiredStatus, isVerified: desiredStatus === 'Verified' || desiredStatus === 'Approved' })
     res.redirect("showProperty");
 });
 

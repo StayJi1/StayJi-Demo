@@ -30,6 +30,20 @@ leadEventSchema = mongoose.Schema({
         type:Object,
         default:{}
     },
+    isDummy:{
+        type:Boolean,
+        default:false,
+        index:true
+    },
+    isVerified:{
+        type:Boolean,
+        default:false
+    },
+    recordStatus:{
+        type:String,
+        enum:["active","archived","demo","suspended"],
+        default:"active"
+    },
     addedOn:{
         type:Date,
         default:Date.now
@@ -39,5 +53,11 @@ leadEventSchema = mongoose.Schema({
         default:true
     }
 });
+
+leadEventSchema.index({ propertyId: 1, isActive: 1 });
+leadEventSchema.index({ vendorId: 1, isActive: 1 });
+leadEventSchema.index({ userId: 1, isActive: 1 });
+leadEventSchema.index({ isDummy: 1 });
+leadEventSchema.index({ status: 1 });
 
 module.exports = mongoose.model('leadEvent', leadEventSchema);

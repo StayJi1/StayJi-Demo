@@ -1,30 +1,34 @@
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { FiMenu, FiX } from 'react-icons/fi'
+import { FiColumns, FiMenu, FiX } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import NotificationBell from '../notifications/NotificationBell'
 
 const navItems = [
   { label: 'Home', to: '/' },
   { label: 'Bangalore PGs', to: '/bangalore' },
-  { label: 'Explore stays', to: '/properties?search=Bangalore' },
-  { label: 'Compare', to: '/compare' },
+  { label: 'Compare', to: '/compare', icon: <FiColumns /> },
   { label: 'FAQs', to: '/faq' },
-  { label: 'Login', to: '/login' },
-  { label: 'Signup', to: '/signup' },
 ]
 
 function Navbar() {
   const [open, setOpen] = useState(false)
   const { isAuthenticated, logout, role } = useAuth()
-  const dashboardRole = ['owner', 'host', 'hostel'].includes(role)
-    ? 'vendor'
+  const dashboardRole = ['owner', 'host', 'hostel', 'vendor'].includes(role)
+    ? 'owner'
     : role || 'user'
-  const visibleNavItems = isAuthenticated
-    ? navItems
-      .filter((item) => !['/login', '/signup'].includes(item.to))
-      .map((item) => (dashboardRole === 'vendor' && item.to === '/properties' ? { ...item, label: 'My stays', to: '/dashboard/vendor/properties' } : item))
-    : navItems
+  const visibleNavItems = navItems.map((item) => {
+    if (dashboardRole === 'owner' && item.to === '/properties') {
+      return { ...item, label: 'My stays', to: '/dashboard/owner/properties' }
+    }
+    return item
+  })
+  const authNavItems = !isAuthenticated
+    ? [
+        { label: 'Login', to: '/login' },
+        { label: 'Signup', to: '/signup' },
+      ]
+    : []
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/75 backdrop-blur-2xl">
@@ -41,6 +45,18 @@ function Navbar() {
 
         <div className="hidden items-center gap-6 md:flex">
           {visibleNavItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                `inline-flex items-center gap-2 text-sm font-medium transition ${isActive ? 'text-white' : 'text-slate-300 hover:text-white'}`
+              }
+            >
+              {item.icon ? <span>{item.icon}</span> : null}
+              {item.label}
+            </NavLink>
+          ))}
+          {authNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -86,6 +102,17 @@ function Navbar() {
         <div className="border-t border-white/10 bg-slate-950/95 px-6 py-5 backdrop-blur-2xl md:hidden">
           <div className="grid gap-4">
             {visibleNavItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={() => setOpen(false)}
+                className="inline-flex items-center gap-2 text-base font-medium text-slate-300 hover:text-white"
+              >
+                {item.icon ? <span>{item.icon}</span> : null}
+                {item.label}
+              </NavLink>
+            ))}
+            {authNavItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}

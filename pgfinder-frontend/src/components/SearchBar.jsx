@@ -13,7 +13,7 @@ export default function SearchBar({ query, onChange, onSearch, suggestions }) {
               value={query}
               onChange={(event) => onChange(event.target.value)}
               onKeyDown={(event) => event.key === 'Enter' && onSearch()}
-              placeholder="Try Mumbai, Delhi, Pune or Koregaon Park"
+              placeholder="Try Bangalore, Koramangala, Whitefield or HSR Layout"
               className="w-full border-none bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
             />
           </div>

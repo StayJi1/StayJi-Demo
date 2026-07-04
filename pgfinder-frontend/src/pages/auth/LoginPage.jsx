@@ -5,11 +5,30 @@ import Input from '../../components/common/Input'
 import { useAuth } from '../../context/AuthContext'
 import Card from '../../components/common/Card'
 import authService from '../../services/authService'
+import SEO from '../../components/SEO'
 
-function LoginPage() {
+const formStorageKey = 'stayji-login-form'
+
+const readStoredLoginForm = (isAdminPortal) => {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(formStorageKey) || '{}')
+    if (!saved || typeof saved !== 'object') throw new Error('Invalid saved login form')
+    return {
+      email: saved.email || '',
+      password: saved.password || '',
+      role: isAdminPortal ? 'admin' : saved.role || 'user',
+      acceptPolicy: Boolean(saved.acceptPolicy),
+    }
+  } catch {
+    return { email: '', password: '', role: isAdminPortal ? 'admin' : 'user', acceptPolicy: false }
+  }
+}
+
+function LoginPage({ portal = 'public' }) {
   const navigate = useNavigate()
   const { login, status, error, isAuthenticated, role } = useAuth()
-  const [form, setForm] = useState({ email: '', password: '', role: 'user', acceptPolicy: false })
+  const isAdminPortal = portal === 'admin'
+  const [form, setForm] = useState(() => readStoredLoginForm(isAdminPortal))
   const [resetOpen, setResetOpen] = useState(false)
   const [resetForm, setResetForm] = useState({ email: '', otp: '', password: '' })
   const [resetStep, setResetStep] = useState('email')
@@ -21,6 +40,10 @@ function LoginPage() {
     }
   }, [isAuthenticated, navigate, role])
 
+  useEffect(() => {
+    sessionStorage.setItem(formStorageKey, JSON.stringify(form))
+  }, [form])
+
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target
     setForm((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }))
@@ -28,8 +51,9 @@ function LoginPage() {
 
   const normalizeRole = (value) => {
     const rawRole = value?.toString().toLowerCase() || 'user'
-    if (['owner', 'host', 'hostel'].includes(rawRole)) return 'vendor'
+    if (['owner', 'host', 'hostel', 'vendor'].includes(rawRole)) return 'owner'
     if (['personal', 'student'].includes(rawRole)) return 'user'
+    if (rawRole === 'admin') return 'admin'
     return rawRole
   }
 
@@ -38,6 +62,7 @@ function LoginPage() {
     if (!form.acceptPolicy) return
     try {
       const response = await login(form)
+      sessionStorage.removeItem(formStorageKey)
       const rawRole = response.user?.role || response.user?.userType?.toLowerCase() || form.role
       const actualRole = normalizeRole(rawRole)
       navigate(`/dashboard/${actualRole}`, { replace: true })
@@ -71,17 +96,18 @@ function LoginPage() {
 
   return (
     <div className="mx-auto flex min-h-[calc(100vh-108px)] items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
+      {isAdminPortal ? <SEO noindex title="Admin Login" description="Restricted StayJi governance login." path="/admin-login" schema={{ '@context': 'https://schema.org', '@type': 'WebPage', name: 'Restricted Login' }} /> : null}
       <Card className="w-full max-w-xl">
         <div className="space-y-4">
-          <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Welcome back</p>
-          <h1 className="text-3xl font-semibold text-white">Login to your account</h1>
-          <p className="text-slate-400">Access your dashboard, manage properties, and book visits in one place.</p>
+          <p className="text-sm uppercase tracking-[0.28em] text-accent-400">{isAdminPortal ? 'Admin portal' : 'Welcome back'}</p>
+          <h1 className="text-3xl font-semibold text-white">{isAdminPortal ? 'Admin login' : 'Login to your account'}</h1>
+          <p className="text-slate-400">{isAdminPortal ? 'Restricted StayJi governance access. This route is hidden from public navigation and SEO.' : 'Access your dashboard, manage properties, and book visits in one place.'}</p>
         </div>
         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
           <div className="grid gap-4">
             <Input label="Email" type="email" name="email" value={form.email} onChange={handleChange} required />
             <Input label="Password" type="password" name="password" value={form.password} onChange={handleChange} required />
-            <label className="block text-sm font-medium text-slate-200">
+            {!isAdminPortal ? <label className="block text-sm font-medium text-slate-200">
               Account type
               <select
                 name="role"
@@ -90,10 +116,11 @@ function LoginPage() {
                 className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm text-slate-200 outline-none transition focus:border-brand-500"
               >
                 <option value="user">Student / User</option>
-                <option value="vendor">Host / Vendor</option>
-                <option value="admin">Admin</option>
+                <option value="owner">Owner</option>
               </select>
-            </label>
+            </label> : (
+              <input type="hidden" name="role" value={form.role} />
+            )}
           </div>
           <label className="flex items-start gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
             <input type="checkbox" name="acceptPolicy" checked={form.acceptPolicy} onChange={handleChange} required className="mt-1 h-5 w-5 rounded border-slate-700 bg-slate-900 text-accent-400" />

@@ -5,35 +5,37 @@ import { FiArrowLeft, FiEdit2, FiEye, FiMessageSquare, FiPower, FiShield, FiTras
 import Card from '../../../components/common/Card'
 import Button from '../../../components/common/Button'
 import adminApi from '../../../api/adminApi'
+import { parseAssetList, toAssetUrl } from '../../../api/propertyApi'
 
-const userName = (user = {}) => user.name || [user.userFname, user.userLname].filter(Boolean).join(' ') || user.userEmail || user.email || 'Vendor'
+const userName = (user = {}) => user.name || [user.userFname, user.userLname].filter(Boolean).join(' ') || user.userEmail || user.email || 'Owner'
 
-function AdminVendorDetailPage() {
-  const { vendorId } = useParams()
+function AdminOwnerDetailPage() {
+  const { ownerId, vendorId } = useParams()
+  const resolvedOwnerId = ownerId || vendorId
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [message, setMessage] = useState('')
-  const { data, isLoading, error } = useQuery({ queryKey: ['admin-vendor-detail', vendorId], queryFn: () => adminApi.vendorDetail(vendorId), refetchInterval: 30_000 })
-  const { data: messages = [] } = useQuery({ queryKey: ['admin-vendor-messages', vendorId], queryFn: () => adminApi.vendorMessages(vendorId), refetchInterval: 15_000 })
+  const { data, isLoading, error } = useQuery({ queryKey: ['admin-owner-detail', resolvedOwnerId], queryFn: () => adminApi.ownerDetail(resolvedOwnerId), refetchInterval: 30_000 })
+  const { data: messages = [] } = useQuery({ queryKey: ['admin-owner-messages', resolvedOwnerId], queryFn: () => adminApi.ownerMessages(resolvedOwnerId), refetchInterval: 15_000 })
   const statusMutation = useMutation({
     mutationFn: ({ id, payload }) => adminApi.updatePropertyStatus(id, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-vendor-detail', vendorId] })
+      queryClient.invalidateQueries({ queryKey: ['admin-owner-detail', resolvedOwnerId] })
       queryClient.invalidateQueries({ queryKey: ['admin-properties'] })
     },
   })
   const messageMutation = useMutation({
-    mutationFn: () => adminApi.sendVendorMessage(vendorId, { message }),
+    mutationFn: () => adminApi.sendOwnerMessage(resolvedOwnerId, { message }),
     onSuccess: () => {
       setMessage('')
-      queryClient.invalidateQueries({ queryKey: ['admin-vendor-messages', vendorId] })
+      queryClient.invalidateQueries({ queryKey: ['admin-owner-messages', resolvedOwnerId] })
     },
   })
 
-  if (isLoading) return <Card className="p-8 text-slate-300">Loading vendor analytics...</Card>
-  if (error || !data) return <Card className="p-8 text-rose-300">{error?.message || 'Vendor not found.'}</Card>
+  if (isLoading) return <Card className="p-8 text-slate-300">Loading owner analytics...</Card>
+  if (error || !data) return <Card className="p-8 text-rose-300">{error?.message || 'Owner not found.'}</Card>
 
-  const vendor = data.vendor || {}
+  const owner = data.owner || data.vendor || {}
   const properties = data.properties || []
   const totalLeads = properties.reduce((sum, item) => sum + (item.leads?.visits?.length || 0) + (item.leads?.inquiries?.length || 0), 0)
 
@@ -43,11 +45,11 @@ function AdminVendorDetailPage() {
       <header className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Vendor detail</p>
-            <h1 className="mt-3 text-4xl font-semibold text-white">{userName(vendor)}</h1>
-            <p className="mt-3 text-slate-300">{vendor.userEmail || vendor.email || '-'} · {vendor.contact || vendor.phone || '-'}</p>
+            <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Owner detail</p>
+            <h1 className="mt-3 text-4xl font-semibold text-white">{userName(owner)}</h1>
+            <p className="mt-3 text-slate-300">{owner.userEmail || owner.email || '-'} · {owner.contact || owner.phone || '-'}</p>
           </div>
-          <Button variant="secondary"><FiShield /> {vendor.isActive === false ? 'Inactive' : 'Verified vendor'}</Button>
+          <Button variant="secondary"><FiShield /> {owner.isActive === false ? 'Inactive' : 'Verified owner'}</Button>
         </div>
       </header>
 
@@ -55,8 +57,8 @@ function AdminVendorDetailPage() {
         {[
           ['Total properties', properties.length],
           ['Total leads', totalLeads],
-          ['Active status', vendor.isActive === false ? 'Inactive' : 'Active'],
-          ['Joined', vendor.addedOn ? new Date(vendor.addedOn).toLocaleDateString() : '-'],
+          ['Active status', owner.isActive === false ? 'Inactive' : 'Active'],
+          ['Joined', owner.addedOn ? new Date(owner.addedOn).toLocaleDateString() : '-'],
         ].map(([label, value]) => (
           <Card key={label} className="p-5">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</p>
@@ -70,7 +72,7 @@ function AdminVendorDetailPage() {
           <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Property tree</p>
           <div className="mt-5 space-y-4">
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-white">
-              {userName(vendor)}
+              {userName(owner)}
               <div className="mt-4 space-y-3 border-l border-slate-700 pl-4">
                 {properties.map(({ property, leads }) => (
                   <button key={property._id || property.id} type="button" onClick={() => navigate(`/dashboard/admin/properties/${property._id || property.id}`)} className="block w-full rounded-2xl border border-slate-800 bg-slate-900/70 p-3 text-left text-sm text-slate-300 hover:border-accent-500">
@@ -78,7 +80,7 @@ function AdminVendorDetailPage() {
                     <span className="mt-1 block text-xs text-slate-500">{property.cityName || property.city || '-'} · {(leads?.visits?.length || 0) + (leads?.inquiries?.length || 0)} leads · {property.approvalStatus || 'Pending'}</span>
                   </button>
                 ))}
-                {!properties.length ? <p className="text-sm text-slate-400">No properties connected to this vendor.</p> : null}
+                {!properties.length ? <p className="text-sm text-slate-400">No properties connected to this owner.</p> : null}
               </div>
             </div>
           </div>
@@ -97,8 +99,8 @@ function AdminVendorDetailPage() {
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.senderRole || 'admin'} · {item.addedOn ? new Date(item.addedOn).toLocaleString() : ''}</p>
                 <p className="mt-2">{item.message}</p>
                 <div className="mt-3 flex gap-2">
-                  <button type="button" onClick={() => adminApi.deleteVendorMessage(vendorId, item._id, { viewer: 'admin', scope: 'self' }).then(() => queryClient.invalidateQueries({ queryKey: ['admin-vendor-messages', vendorId] }))} className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-rose-400">Delete for me</button>
-                  <button type="button" onClick={() => adminApi.deleteVendorMessage(vendorId, item._id, { viewer: 'admin', scope: 'both' }).then(() => queryClient.invalidateQueries({ queryKey: ['admin-vendor-messages', vendorId] }))} className="rounded-full border border-rose-500/50 px-3 py-1 text-xs text-rose-200 hover:bg-rose-500/10">Delete both</button>
+                  <button type="button" onClick={() => adminApi.deleteOwnerMessage(resolvedOwnerId, item._id, { viewer: 'admin', scope: 'self' }).then(() => queryClient.invalidateQueries({ queryKey: ['admin-owner-messages', resolvedOwnerId] }))} className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-rose-400">Delete for me</button>
+                  <button type="button" onClick={() => adminApi.deleteOwnerMessage(resolvedOwnerId, item._id, { viewer: 'admin', scope: 'both' }).then(() => queryClient.invalidateQueries({ queryKey: ['admin-owner-messages', resolvedOwnerId] }))} className="rounded-full border border-rose-500/50 px-3 py-1 text-xs text-rose-200 hover:bg-rose-500/10">Delete both</button>
                 </div>
               </div>
             ))}
@@ -114,7 +116,7 @@ function AdminVendorDetailPage() {
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {properties.map(({ property, leads }) => {
           const totalPropertyLeads = (leads?.visits?.length || 0) + (leads?.inquiries?.length || 0)
-          const image = property.propertyImageUrls?.[0] || property.propertyImage || property.image
+          const image = toAssetUrl([].concat(parseAssetList(property.propertyImageUrls), property.propertyImage, property.image).filter(Boolean)[0])
           return (
             <Card key={property._id || property.id} className="overflow-hidden p-0">
               {image ? <img src={image} alt={property.propertyName || property.name} className="h-44 w-full object-cover" /> : <div className="h-44 bg-slate-950" />}
@@ -146,4 +148,4 @@ function AdminVendorDetailPage() {
   )
 }
 
-export default AdminVendorDetailPage
+export default AdminOwnerDetailPage

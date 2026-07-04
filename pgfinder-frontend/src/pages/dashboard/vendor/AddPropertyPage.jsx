@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { FiUpload } from 'react-icons/fi'
+import { FiPlus, FiTrash2, FiUpload } from 'react-icons/fi'
 import Button from '../../../components/common/Button'
 import Input from '../../../components/common/Input'
 import Card from '../../../components/common/Card'
 import { useAuth } from '../../../context/AuthContext'
 import propertyService from '../../../services/propertyService'
 import { bangaloreLocalities } from '../../../data/seoContent'
+import axiosClient from '../../../api/axiosClient'
+import { MVP_CITY, MVP_STATE } from '../../../config/mvp'
 
 const slugify = (value = '') => value
   .toString()
@@ -16,6 +18,22 @@ const slugify = (value = '') => value
   .replace(/[^a-z0-9]+/g, '-')
   .replace(/^-+|-+$/g, '')
 
+const CITY_OPTIONS = {
+  [MVP_STATE]: [MVP_CITY],
+}
+
+const predefinedAmenities = ['WiFi', 'Meals', 'Laundry', 'Security', 'Attached balcony', 'Study table', 'Private fridge', 'Washing machine', 'Rooftop access', 'Biometric entry']
+const propertyCategoryOptions = ['PG', 'Flat', 'House', 'Hostel', 'Co-living', 'Apartment', 'Rent', 'Villa']
+const defaultSharingRows = [
+  { sharingType: 'Single sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 1, vacantBeds: '', monthlyRent: '' },
+  { sharingType: 'Double sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 2, vacantBeds: '', monthlyRent: '' },
+  { sharingType: 'Triple sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 3, vacantBeds: '', monthlyRent: '' },
+  { sharingType: 'Four sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 4, vacantBeds: '', monthlyRent: '' },
+  { sharingType: 'Five sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 5, vacantBeds: '', monthlyRent: '' },
+  { sharingType: 'Dormitory', totalRooms: '', vacantRooms: '', bedsPerRoom: 6, vacantBeds: '', monthlyRent: '' },
+  { sharingType: 'Other', totalRooms: '', vacantRooms: '', bedsPerRoom: 1, vacantBeds: '', monthlyRent: '' },
+]
+
 function AddPropertyPage() {
   const { user, role } = useAuth()
   const { propertyId } = useParams()
@@ -24,7 +42,8 @@ function AddPropertyPage() {
   const [form, setForm] = useState({
     name: '',
     propertyCategory: 'PG',
-    city: '',
+    state: MVP_STATE,
+    city: MVP_CITY,
     area: '',
     address: '',
     latitude: '',
@@ -42,15 +61,17 @@ function AddPropertyPage() {
     sharing: '',
     gender: 'Co-ed',
     mealsAvailable: [],
+    amenities: ['WiFi', 'Laundry', 'Security'],
+    customAmenityInput: '',
     menuPhotoUrls: '',
     description: '',
     imageUrls: '',
     videoUrl: '',
-    roomInventory: [
-      { sharingType: 'Single sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 1, vacantBeds: '', monthlyRent: '' },
-      { sharingType: 'Double sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 2, vacantBeds: '', monthlyRent: '' },
-      { sharingType: 'Triple sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 3, vacantBeds: '', monthlyRent: '' },
-    ],
+    roomInventory: defaultSharingRows,
+    customFeatures: '',
+    referralAgreementAccepted: false,
+    leadPricingAccepted: false,
+    ownerTermsAccepted: false,
   })
   const [status, setStatus] = useState('idle')
   const [message, setMessage] = useState('')
@@ -58,6 +79,15 @@ function AddPropertyPage() {
   const [imageFiles, setImageFiles] = useState([])
   const [videoFile, setVideoFile] = useState(null)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [cityOptions, setCityOptions] = useState(CITY_OPTIONS)
+
+  useEffect(() => {
+    axiosClient.get('/client/city-options')
+      .then((res) => {
+        if (res.data?.data?.options) setCityOptions(res.data.data.options)
+      })
+      .catch(() => setCityOptions(CITY_OPTIONS))
+  }, [])
 
   useEffect(() => {
     const loadProperty = async () => {
@@ -68,7 +98,8 @@ function AddPropertyPage() {
         setForm({
           name: property.name || '',
           propertyCategory: property.category || property.type || 'PG',
-          city: property.city || '',
+          state: MVP_STATE,
+          city: MVP_CITY,
           area: property.area || '',
           address: property.address || '',
           latitude: property.location?.lat || property.latitude || '',
@@ -86,17 +117,19 @@ function AddPropertyPage() {
           sharing: property.sharing || '',
           gender: property.gender || 'Co-ed',
           mealsAvailable: property.mealsAvailable || [],
+          amenities: property.amenities?.length ? property.amenities : (property.aminityFeatures || '').split(',').map((item) => item.trim()).filter(Boolean),
+          customAmenityInput: '',
           menuPhotoUrls: (property.menuPhotoUrls || [property.menuPhoto]).filter(Boolean).join('\n'),
           description: property.description || '',
           imageUrls: (property.images || [property.image]).filter(Boolean).join('\n'),
           videoUrl: property.videoUrl || '',
           propertyTypeIDFK: property.propertyTypeIDFK || '',
           isAvailable: property.status !== 'Booked',
-          roomInventory: property.roomInventory?.length ? property.roomInventory : [
-            { sharingType: 'Single sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 1, vacantBeds: '', monthlyRent: '' },
-            { sharingType: 'Double sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 2, vacantBeds: '', monthlyRent: '' },
-            { sharingType: 'Triple sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 3, vacantBeds: '', monthlyRent: '' },
-          ],
+          roomInventory: property.roomInventory?.length ? property.roomInventory : defaultSharingRows,
+          customFeatures: (property.customFeatures || []).join(', '),
+          referralAgreementAccepted: Boolean(property.ownerAgreement?.referralAgreementAccepted),
+          leadPricingAccepted: Boolean(property.ownerAgreement?.leadPricingAccepted),
+          ownerTermsAccepted: Boolean(property.ownerAgreement?.termsAccepted),
         })
       } catch (err) {
         setMessage(err?.message || 'Unable to load property details.')
@@ -105,13 +138,48 @@ function AddPropertyPage() {
       }
     }
     loadProperty()
-  }, [isEditMode, propertyId])
+  }, [isEditMode, propertyId, user?.assignedState, user?.state])
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target
+    setForm((current) => {
+      const next = { ...current, [name]: type === 'checkbox' ? checked : value }
+      if (name === 'state') next.city = cityOptions[value]?.[0] || ''
+      if (name === 'perDayCheckIn' && !checked) next.dailyRate = ''
+      return next
+    })
+  }
+
+  const toggleAmenity = (amenity) => {
     setForm((current) => ({
       ...current,
-      [name]: type === 'checkbox' ? checked : value,
+      amenities: current.amenities.includes(amenity)
+        ? current.amenities.filter((item) => item !== amenity)
+        : [...current.amenities, amenity],
+    }))
+  }
+
+  const addCustomAmenity = () => {
+    const amenity = form.customAmenityInput.trim()
+    if (!amenity) return
+    setForm((current) => ({
+      ...current,
+      amenities: current.amenities.includes(amenity) ? current.amenities : [...current.amenities, amenity],
+      customAmenityInput: '',
+    }))
+  }
+
+  const updateAmenity = (index, value) => {
+    setForm((current) => ({
+      ...current,
+      amenities: current.amenities.map((item, itemIndex) => (itemIndex === index ? value : item)).filter(Boolean),
+    }))
+  }
+
+  const removeAmenity = (amenity) => {
+    setForm((current) => ({
+      ...current,
+      amenities: current.amenities.filter((item) => item !== amenity),
     }))
   }
 
@@ -131,8 +199,37 @@ function AddPropertyPage() {
     }))
   }
 
+  const addSharingBlock = () => {
+    setForm((current) => ({
+      ...current,
+      roomInventory: [...current.roomInventory, { sharingType: 'Custom sharing', totalRooms: '', occupiedRooms: '', vacantRooms: '', bedsPerRoom: 1, vacantBeds: '', waitingList: '', monthlyRent: '', bathroom: '', balcony: false, ac: false, furnishing: '', foodPreference: '', gender: '' }],
+    }))
+  }
+
+  const removeSharingBlock = (index) => {
+    setForm((current) => ({
+      ...current,
+      roomInventory: current.roomInventory.filter((_, rowIndex) => rowIndex !== index),
+    }))
+  }
+
   const handleImageFiles = (event) => {
     setImageFiles(Array.from(event.target.files || []).slice(0, 10))
+  }
+
+  const removeExistingImage = (imageUrl) => {
+    setForm((current) => ({
+      ...current,
+      imageUrls: current.imageUrls
+        .split(/[\n,]+/)
+        .map((item) => item.trim())
+        .filter((item) => item && item !== imageUrl)
+        .join('\n'),
+    }))
+  }
+
+  const removeSelectedImage = (imageFile) => {
+    setImageFiles((current) => current.filter((file) => file !== imageFile))
   }
 
   const handleVideoFile = (event) => {
@@ -179,13 +276,46 @@ function AddPropertyPage() {
       setMessage('Please login again before adding a property.')
       return
     }
-    if (!form.area || !form.city || !form.latitude || !form.longitude) {
+    if (!form.state || !form.area || !form.city || !form.latitude || !form.longitude) {
       setStatus('error')
       setMessage('Locality and Google Maps/OpenStreetMap coordinates are mandatory so this listing appears on locality pages.')
       return
     }
+    if (!isEditMode && (!form.referralAgreementAccepted || !form.leadPricingAccepted || !form.ownerTermsAccepted)) {
+      setStatus('error')
+      setMessage('Accept referral agreement, lead pricing, and StayJi owner terms before submitting.')
+      return
+    }
+    if (form.perDayCheckIn && !form.dailyRate) {
+      setStatus('error')
+      setMessage('Enter a per-day price after enabling per-day check-in.')
+      return
+    }
+
+    const fallbackSharingAvailability = (form.roomInventory || [])
+      .filter((row) => row.sharingType)
+      .map((row) => row.sharingType)
+      .join(', ')
 
     const payload = new FormData()
+    const roomTypesPayload = form.roomInventory.map((row) => ({
+      label: row.label || row.sharingType,
+      sharingType: row.sharingType,
+      totalRooms: row.totalRooms,
+      vacantRooms: row.vacantRooms,
+      occupiedRooms: row.occupiedRooms || Math.max(0, Number(row.totalRooms || 0) - Number(row.vacantRooms || 0)),
+      waitingList: row.waitingList || 0,
+      bedsPerRoom: row.bedsPerRoom,
+      availableBeds: row.vacantBeds,
+      vacantBeds: row.vacantBeds,
+      bathroom: row.bathroom || '',
+      balcony: Boolean(row.balcony),
+      ac: Boolean(row.ac),
+      furnishing: row.furnishing || '',
+      foodPreference: row.foodPreference || '',
+      gender: row.gender || '',
+      monthlyRent: row.monthlyRent,
+    }))
     payload.append('userIDFK', user._id)
     payload.append('propertyName', form.name)
     payload.append('description', form.description)
@@ -197,7 +327,7 @@ function AddPropertyPage() {
     payload.append('availableBeds', form.availableBeds)
     payload.append('vacancyStatus', form.vacancyStatus)
     payload.append('availableFrom', form.availableFrom)
-    payload.append('sharingAvailability', form.sharingAvailability)
+    payload.append('sharingAvailability', form.sharingAvailability || fallbackSharingAvailability)
     payload.append('parkingAvailable', form.parkingAvailable)
     payload.append('acAvailable', form.acAvailable)
     payload.append('dailyRate', form.dailyRate)
@@ -209,13 +339,19 @@ function AddPropertyPage() {
     payload.append('areaName', form.area)
     payload.append('localitySlug', slugify(form.area))
     payload.append('cityName', form.city)
-    payload.append('aminityFeatures', form.mealsAvailable.length ? 'WiFi, Meals, Laundry, Security' : 'WiFi, Laundry, Security')
+    payload.append('stateName', form.state)
+    payload.append('aminityFeatures', form.amenities.join(', '))
     payload.append('mealsAvailable', JSON.stringify(form.mealsAvailable))
     payload.append('menuPhotoUrls', form.menuPhotoUrls)
     payload.append('menuPhoto', form.menuPhotoUrls.split(/\n|,/).map((item) => item.trim()).filter(Boolean)[0] || '')
     payload.append('propertyImageUrls', form.imageUrls)
     payload.append('propertyImage', form.imageUrls.split(/\n|,/).map((item) => item.trim()).filter(Boolean)[0] || '')
     payload.append('roomInventory', JSON.stringify(form.roomInventory))
+    payload.append('roomTypes', JSON.stringify(roomTypesPayload))
+    payload.append('customFeatures', form.customFeatures)
+    payload.append('referralAgreementAccepted', form.referralAgreementAccepted)
+    payload.append('leadPricingAccepted', form.leadPricingAccepted)
+    payload.append('ownerTermsAccepted', form.ownerTermsAccepted)
     imageFiles.forEach((file) => payload.append('propertyImage', file))
     if (videoFile) payload.append('video', videoFile)
     payload.append('videoUrl', form.videoUrl)
@@ -225,48 +361,22 @@ function AddPropertyPage() {
     setMessage('')
     try {
       if (isEditMode && propertyId) {
-        await propertyService.updateProperty(propertyId, {
-          propertyName: form.name,
-          description: form.description,
-          address: form.address,
-          latitude: form.latitude,
-          longitude: form.longitude,
-          rent: form.rent,
-          depositAmount: form.depositAmount,
-          availableBeds: form.availableBeds,
-          vacancyStatus: form.vacancyStatus,
-          availableFrom: form.availableFrom,
-          sharingAvailability: form.sharingAvailability,
-          parkingAvailable: form.parkingAvailable,
-          acAvailable: form.acAvailable,
-          dailyRate: form.dailyRate,
-          perDayCheckIn: form.perDayCheckIn,
-          propertyCategory: form.propertyCategory,
-          pricingUnit: form.perDayCheckIn ? 'month-day' : 'month',
-          sharing: form.sharing,
-          genderType: form.gender,
-          areaName: form.area,
-          localitySlug: slugify(form.area),
-          cityName: form.city,
-          aminityFeatures: form.mealsAvailable.length ? 'WiFi, Meals, Laundry, Security' : 'WiFi, Laundry, Security',
-          mealsAvailable: form.mealsAvailable,
-          menuPhotoUrls: form.menuPhotoUrls,
-          menuPhoto: form.menuPhotoUrls.split(/\n|,/).map((item) => item.trim()).filter(Boolean)[0] || '',
-          propertyImageUrls: form.imageUrls,
-          propertyImage: form.imageUrls.split(/\n|,/).map((item) => item.trim()).filter(Boolean)[0] || '',
-          videoUrl: form.videoUrl,
-          isAvailable: form.isAvailable,
-          propertyTypeIDFK: form.propertyTypeIDFK,
-          roomInventory: form.roomInventory,
-          })
-        setMessage('Property updated successfully. Admin approval is required before it appears live.')
+        if (role === 'admin') {
+          payload.append('adminId', user?._id)
+          payload.append('performerRole', 'Admin')
+        } else {
+          payload.append('ownerId', user._id)
+        }
+        await propertyService.updateProperty(propertyId, payload)
+        setMessage('Property updated. Availability, rent, and room details are live; protected fields such as name, address, coordinates, and images wait for admin approval.')
       } else {
         await propertyService.createProperty(payload)
         setUploadProgress(100)
         setForm({
           name: '',
           propertyCategory: 'PG',
-          city: '',
+          state: MVP_STATE,
+          city: MVP_CITY,
           area: '',
           address: '',
           latitude: '',
@@ -284,17 +394,19 @@ function AddPropertyPage() {
           sharing: '',
           gender: 'Co-ed',
           mealsAvailable: [],
+          amenities: ['WiFi', 'Laundry', 'Security'],
+          customAmenityInput: '',
           menuPhotoUrls: '',
           description: '',
           imageUrls: '',
           videoUrl: '',
           propertyTypeIDFK: '',
           isAvailable: true,
-          roomInventory: [
-            { sharingType: 'Single sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 1, vacantBeds: '', monthlyRent: '' },
-            { sharingType: 'Double sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 2, vacantBeds: '', monthlyRent: '' },
-            { sharingType: 'Triple sharing', totalRooms: '', vacantRooms: '', bedsPerRoom: 3, vacantBeds: '', monthlyRent: '' },
-          ],
+          roomInventory: defaultSharingRows,
+          customFeatures: '',
+          referralAgreementAccepted: false,
+          leadPricingAccepted: false,
+          ownerTermsAccepted: false,
         })
         setImageFiles([])
         setVideoFile(null)
@@ -302,7 +414,7 @@ function AddPropertyPage() {
       }
       setStatus('success')
       if (isEditMode) {
-        navigate(role === 'admin' ? `/dashboard/admin/properties/${propertyId}` : '/dashboard/vendor/properties')
+        navigate(role === 'admin' ? `/dashboard/admin/properties/${propertyId}` : '/dashboard/owner/properties')
       }
     } catch (error) {
       setMessage(error.message || 'Unable to save property.')
@@ -331,15 +443,35 @@ function AddPropertyPage() {
                 onChange={handleChange}
                 className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
               >
-                <option value="PG">PG</option>
-                <option value="Flat">Flat</option>
-                <option value="Hotel">Hotel</option>
-                <option value="Hostel">Hostel</option>
+                {propertyCategoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
               </select>
             </label>
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
-            <Input label="City" name="city" value={form.city} onChange={handleChange} required />
+            <label className="block text-sm text-slate-200">
+              <span className="mb-2 block text-slate-300">State</span>
+              <select
+                name="state"
+                value={form.state}
+                onChange={handleChange}
+                className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
+              >
+                {Object.keys(cityOptions).map((state) => <option key={state} value={state}>{state}</option>)}
+              </select>
+            </label>
+            <label className="block text-sm text-slate-200">
+              <span className="mb-2 block text-slate-300">City</span>
+              <select
+                name="city"
+                value={form.city}
+                onChange={handleChange}
+                required
+                className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
+              >
+                <option value="">Select city</option>
+                {(cityOptions[form.state] || []).map((city) => <option key={city} value={city}>{city}</option>)}
+              </select>
+            </label>
             <label className="block text-sm text-slate-200">
               <span className="mb-2 block text-slate-300">Area / locality</span>
               <select
@@ -381,18 +513,107 @@ function AddPropertyPage() {
             <Input label="Available from" name="availableFrom" type="date" value={form.availableFrom} onChange={handleChange} />
           </div>
           <div className="rounded-[1.75rem] border border-slate-800 bg-slate-950/70 p-5">
-            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-accent-400">Sharing-wise vacancy</p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-accent-400">Sharing-wise vacancy</p>
+                <button type="button" onClick={addSharingBlock} className="inline-flex items-center gap-2 rounded-full border border-accent-500/60 px-4 py-2 text-sm text-accent-200">
+                  <FiPlus /> Add sharing
+                </button>
+              </div>
             <div className="mt-5 grid gap-4">
               {form.roomInventory.map((row, index) => (
-                <div key={row.sharingType} className="grid gap-3 rounded-3xl border border-slate-800 bg-slate-900/60 p-4 md:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr_0.8fr]">
+                <div key={`${row.sharingType}-${index}`} className="grid gap-3 rounded-3xl border border-slate-800 bg-slate-900/60 p-4 md:grid-cols-4 xl:grid-cols-6">
                   <Input label="Type" value={row.sharingType} onChange={(event) => handleRoomInventoryChange(index, 'sharingType', event.target.value)} />
                   <Input label="Total rooms" type="number" value={row.totalRooms} onChange={(event) => handleRoomInventoryChange(index, 'totalRooms', event.target.value)} />
+                  <Input label="Occupied rooms" type="number" value={row.occupiedRooms || Math.max(0, Number(row.totalRooms || 0) - Number(row.vacantRooms || 0))} onChange={(event) => handleRoomInventoryChange(index, 'occupiedRooms', event.target.value)} />
                   <Input label="Vacant rooms" type="number" value={row.vacantRooms} onChange={(event) => handleRoomInventoryChange(index, 'vacantRooms', event.target.value)} />
                   <Input label="Vacant beds" type="number" value={row.vacantBeds} onChange={(event) => handleRoomInventoryChange(index, 'vacantBeds', event.target.value)} />
                   <Input label="Rent" type="number" value={row.monthlyRent} onChange={(event) => handleRoomInventoryChange(index, 'monthlyRent', event.target.value)} />
+                  <Input label="Waiting list" type="number" value={row.waitingList || ''} onChange={(event) => handleRoomInventoryChange(index, 'waitingList', event.target.value)} />
+                  <label className="block text-sm text-slate-200">
+                    <span className="mb-2 block text-slate-300">Bathroom</span>
+                    <select value={row.bathroom || ''} onChange={(event) => handleRoomInventoryChange(index, 'bathroom', event.target.value)} className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none">
+                      <option value="">Select</option>
+                      <option value="attached">Attached</option>
+                      <option value="shared">Shared</option>
+                    </select>
+                  </label>
+                  <label className="block text-sm text-slate-200">
+                    <span className="mb-2 block text-slate-300">Furnishing</span>
+                    <select value={row.furnishing || ''} onChange={(event) => handleRoomInventoryChange(index, 'furnishing', event.target.value)} className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none">
+                      <option value="">Select</option>
+                      <option value="furnished">Furnished</option>
+                      <option value="semi-furnished">Semi-furnished</option>
+                      <option value="unfurnished">Unfurnished</option>
+                    </select>
+                  </label>
+                  <label className="block text-sm text-slate-200">
+                    <span className="mb-2 block text-slate-300">Food</span>
+                    <select value={row.foodPreference || ''} onChange={(event) => handleRoomInventoryChange(index, 'foodPreference', event.target.value)} className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none">
+                      <option value="">Select</option>
+                      <option value="veg">Veg</option>
+                      <option value="non-veg">Non-veg</option>
+                      <option value="both">Both</option>
+                      <option value="none">No food</option>
+                    </select>
+                  </label>
+                  <label className="block text-sm text-slate-200">
+                    <span className="mb-2 block text-slate-300">Gender</span>
+                    <select value={row.gender || ''} onChange={(event) => handleRoomInventoryChange(index, 'gender', event.target.value)} className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none">
+                      <option value="">Select</option>
+                      <option value="boys">Boys</option>
+                      <option value="girls">Girls</option>
+                      <option value="unisex">Unisex</option>
+                    </select>
+                  </label>
+                  <label className="inline-flex items-center gap-2 rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-200"><input type="checkbox" checked={Boolean(row.balcony)} onChange={(event) => handleRoomInventoryChange(index, 'balcony', event.target.checked)} /> Balcony</label>
+                  <label className="inline-flex items-center gap-2 rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-200"><input type="checkbox" checked={Boolean(row.ac)} onChange={(event) => handleRoomInventoryChange(index, 'ac', event.target.checked)} /> AC</label>
+                  <button type="button" onClick={() => removeSharingBlock(index)} className="inline-flex items-center justify-center gap-2 rounded-3xl border border-rose-500/50 px-4 py-3 text-sm text-rose-200">
+                    <FiTrash2 /> Delete
+                  </button>
                 </div>
               ))}
             </div>
+          </div>
+          <div className="rounded-[1.75rem] border border-slate-800 bg-slate-950/70 p-5">
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-accent-400">Amenities</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              {predefinedAmenities.map((amenity) => (
+                <button
+                  key={amenity}
+                  type="button"
+                  onClick={() => toggleAmenity(amenity)}
+                  className={`rounded-full border px-4 py-2 text-sm ${form.amenities.includes(amenity) ? 'border-accent-400 bg-accent-500/10 text-accent-100' : 'border-slate-700 text-slate-300'}`}
+                >
+                  {amenity}
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+              <Input label="Add custom amenity" name="customAmenityInput" value={form.customAmenityInput} onChange={handleChange} placeholder="Private fridge, rooftop access..." />
+              <button type="button" onClick={addCustomAmenity} className="self-end rounded-3xl border border-accent-500/60 px-5 py-3 text-sm font-semibold text-accent-200">
+                Add Custom Amenity
+              </button>
+            </div>
+            {form.amenities.length ? (
+              <div className="mt-5 grid gap-3">
+                {form.amenities.map((amenity, index) => (
+                  <div key={`${amenity}-${index}`} className="grid gap-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-3 sm:grid-cols-[1fr_auto]">
+                    <input
+                      value={amenity}
+                      onChange={(event) => updateAmenity(index, event.target.value)}
+                      className="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-accent-400"
+                    />
+                    <button type="button" onClick={() => removeAmenity(amenity)} className="rounded-full border border-rose-500/50 px-3 py-2 text-xs text-rose-200">
+                      Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="rounded-[1.75rem] border border-slate-800 bg-slate-950/70 p-5">
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-accent-400">Custom features</p>
+            <textarea name="customFeatures" value={form.customFeatures} onChange={handleChange} placeholder="Gym, study room, rooftop access, biometric access, EV charging, gaming zone, shuttle service" className="mt-4 min-h-24 w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="block text-sm text-slate-200">
@@ -411,12 +632,18 @@ function AddPropertyPage() {
             </label>
             <Input label="Sharing availability" name="sharingAvailability" value={form.sharingAvailability} onChange={handleChange} placeholder="2 double-sharing, 5 single-sharing" />
           </div>
+          <div className="grid gap-3 rounded-[1.75rem] border border-emerald-500/30 bg-emerald-500/10 p-5 text-sm text-emerald-100">
+            <p className="font-semibold uppercase tracking-[0.18em]">Owner activation agreements</p>
+            <label className="flex items-start gap-3"><input type="checkbox" name="referralAgreementAccepted" checked={form.referralAgreementAccepted} onChange={handleChange} /> I accept the property referral agreement.</label>
+            <label className="flex items-start gap-3"><input type="checkbox" name="leadPricingAccepted" checked={form.leadPricingAccepted} onChange={handleChange} /> I accept qualified lead pricing and conversion charges.</label>
+            <label className="flex items-start gap-3"><input type="checkbox" name="ownerTermsAccepted" checked={form.ownerTermsAccepted} onChange={handleChange} /> I accept StayJi owner terms and property approval rules.</label>
+          </div>
           <div className="grid gap-5 sm:grid-cols-2">
-            <Input label="Per-day price" name="dailyRate" type="number" value={form.dailyRate} onChange={handleChange} placeholder="Required for hotels / day stays" />
             <label className="inline-flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-sm text-slate-200">
               <input type="checkbox" name="perDayCheckIn" checked={form.perDayCheckIn} onChange={handleChange} className="h-5 w-5 rounded border-slate-700 bg-slate-900 text-accent-400" />
               Allows per-day check-in
             </label>
+            <Input label="Per-day price" name="dailyRate" type="number" value={form.dailyRate} onChange={handleChange} placeholder={form.perDayCheckIn ? 'Required for day stays' : 'Enable checkbox first'} disabled={!form.perDayCheckIn} />
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="inline-flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-sm text-slate-200">
@@ -480,7 +707,24 @@ function AddPropertyPage() {
               {imageFiles.length ? (
                 <div className="grid gap-3 sm:grid-cols-4">
                   {imageFiles.map((file) => (
-                    <img key={`${file.name}-${file.size}`} src={URL.createObjectURL(file)} alt={file.name} className="h-28 w-full rounded-2xl object-cover" />
+                    <div key={`${file.name}-${file.size}`} className="relative">
+                      <img src={URL.createObjectURL(file)} alt={file.name} className="h-28 w-full rounded-2xl object-cover" />
+                      <button type="button" onClick={() => removeSelectedImage(file)} className="absolute right-2 top-2 rounded-full bg-slate-950/80 px-2 py-1 text-xs text-white">
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {form.imageUrls.trim() ? (
+                <div className="grid gap-3 sm:grid-cols-4">
+                  {form.imageUrls.split(/[\n,]+/).map((item) => item.trim()).filter(Boolean).map((imageUrl) => (
+                    <div key={imageUrl} className="relative">
+                      <img src={imageUrl} alt="Existing property" className="h-28 w-full rounded-2xl object-cover" />
+                      <button type="button" onClick={() => removeExistingImage(imageUrl)} className="absolute right-2 top-2 rounded-full bg-slate-950/80 px-2 py-1 text-xs text-white">
+                        Remove
+                      </button>
+                    </div>
                   ))}
                 </div>
               ) : null}

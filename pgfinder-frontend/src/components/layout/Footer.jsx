@@ -25,7 +25,7 @@ function Footer() {
               <Link to="/properties" className="hover:text-blue-600">PGs and hostels</Link>
               <Link to="/properties" className="hover:text-blue-600">Flats</Link>
               <Link to="/properties" className="hover:text-blue-600">Nearby stays</Link>
-              <Link to="/signup?role=vendor" className="hover:text-blue-600">List property</Link>
+              <Link to="/signup?role=owner" className="hover:text-blue-600">List property</Link>
             </div>
           </div>
           <div>

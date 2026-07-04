@@ -35,6 +35,30 @@ moveInConfirmationSchema = mongoose.Schema({
     adminNote:{
         type:String
     },
+    ownerConfirmed:{
+        type:Boolean,
+        default:false,
+        index:true
+    },
+    ownerConfirmedOn:{
+        type:Date
+    },
+    ownerConfirmationNote:{
+        type:String
+    },
+    rewardCoins:{
+        type:Number,
+        default:0
+    },
+    redemptionHistory:{
+        type:[{
+            coins:Number,
+            status:{ type:String, default:"pending" },
+            note:String,
+            addedOn:{ type:Date, default:Date.now }
+        }],
+        default:[]
+    },
     status:{
         type:String,
         enum:["Pending","Verified","Rejected","Suspicious"],
@@ -52,6 +76,20 @@ moveInConfirmationSchema = mongoose.Schema({
         type:Boolean,
         default:false
     },
+    isDummy:{
+        type:Boolean,
+        default:false,
+        index:true
+    },
+    isVerified:{
+        type:Boolean,
+        default:false
+    },
+    recordStatus:{
+        type:String,
+        enum:["active","archived","demo","suspended"],
+        default:"active"
+    },
     addedOn:{
         type:Date,
         default:Date.now
@@ -66,5 +104,9 @@ moveInConfirmationSchema = mongoose.Schema({
 });
 
 moveInConfirmationSchema.index({ userId: 1, propertyId: 1, isActive: 1 });
+moveInConfirmationSchema.index({ vendorId: 1, isActive: 1 });
+moveInConfirmationSchema.index({ propertyId: 1, isActive: 1 });
+moveInConfirmationSchema.index({ status: 1, isActive: 1 });
+moveInConfirmationSchema.index({ isDummy: 1 });
 
 module.exports = mongoose.model('moveInConfirmation', moveInConfirmationSchema);

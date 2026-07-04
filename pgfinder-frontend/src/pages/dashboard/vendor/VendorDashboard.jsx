@@ -1,79 +1,125 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiBarChart2, FiEye, FiMessageSquare, FiPlusCircle, FiSliders, FiTrash2, FiTrendingUp, FiUsers } from 'react-icons/fi'
+import { FiBarChart2, FiCreditCard, FiEdit2, FiEye, FiMessageSquare, FiPlusCircle, FiSettings, FiSliders, FiTrash2, FiTrendingUp, FiUser, FiUsers } from 'react-icons/fi'
 import Button from '../../../components/common/Button'
 import Card from '../../../components/common/Card'
 import { useAuth } from '../../../context/AuthContext'
 import dashboardService from '../../../services/dashboardService'
 import adminApi from '../../../api/adminApi'
 
-function VendorDashboard() {
+function OwnerDashboard() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const queryClient = useQueryClient()
-  const [overview, setOverview] = useState({ totalProperties: 0, inquiries: 0, bookings: 0, views: 0, leads: 0 })
+  const [overview, setOverview] = useState({ totalProperties: 0, activeProperties: 0, pendingApproval: 0, rejectedProperties: 0, totalVisits: 0, totalMessages: 0, totalInquiries: 0 })
+  const [properties, setProperties] = useState([])
+  const [visits, setVisits] = useState([])
   const [moveIns, setMoveIns] = useState([])
   const [loading, setLoading] = useState(false)
   const [reply, setReply] = useState('')
-  const vendorId = user?._id || user?.id
+  const ownerId = user?._id || user?.id
   const { data: messages = [] } = useQuery({
-    queryKey: ['vendor-admin-messages', vendorId],
-    queryFn: () => adminApi.vendorMessages(vendorId, { viewer: 'vendor' }),
-    enabled: Boolean(vendorId),
+    queryKey: ['owner-admin-messages', ownerId],
+    queryFn: () => adminApi.ownerMessages(ownerId, { viewer: 'owner' }),
+    enabled: Boolean(ownerId),
     refetchInterval: 15_000,
   })
   const replyMutation = useMutation({
-    mutationFn: () => adminApi.sendVendorMessage(vendorId, { message: reply, senderRole: 'vendor' }),
+    mutationFn: () => adminApi.sendOwnerMessage(ownerId, { message: reply, senderRole: 'owner' }),
     onSuccess: () => {
       setReply('')
-      queryClient.invalidateQueries({ queryKey: ['vendor-admin-messages', vendorId] })
+      queryClient.invalidateQueries({ queryKey: ['owner-admin-messages', ownerId] })
     },
   })
   const deleteMessageMutation = useMutation({
-    mutationFn: ({ messageId, scope }) => adminApi.deleteVendorMessage(vendorId, messageId, { viewer: 'vendor', scope }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['vendor-admin-messages', vendorId] }),
+    mutationFn: ({ messageId, scope }) => adminApi.deleteOwnerMessage(ownerId, messageId, { viewer: 'owner', scope }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['owner-admin-messages', ownerId] }),
+  })
+  const ownerConfirmMutation = useMutation({
+    mutationFn: (moveInId) => adminApi.ownerConfirmMoveIn(moveInId, { ownerId }),
+    onSuccess: (updated) => {
+      setMoveIns((current) => current.map((item) => (item._id === updated?._id ? updated : item)))
+    },
   })
 
   useEffect(() => {
-    if (!user?._id) return
+    if (!ownerId) return
     const load = async () => {
       try {
         setLoading(true)
-        const data = await dashboardService.getVendorOverview(user?._id)
+        const data = await dashboardService.getOwnerOverview(ownerId)
         setOverview(data)
-        const moveInRows = await dashboardService.moveIns({ vendorId: user?._id, limit: 20 })
+        const [ownerProperties, ownerLeads, moveInRows] = await Promise.all([
+          dashboardService.getOwnerProperties(ownerId),
+          dashboardService.getOwnerLeads(ownerId),
+          dashboardService.moveIns({ vendorId: ownerId, limit: 20 }),
+        ])
+        setProperties((ownerProperties || []).filter((property) => {
+          const propertyOwnerId = property.ownerId || property.userIDFK?._id || property.userIDFK || property.vendorId?._id || property.vendorId
+          return propertyOwnerId?.toString() === ownerId.toString()
+        }))
+        setVisits(ownerLeads?.visits || [])
         setMoveIns(moveInRows)
       } catch {
-        setOverview({ totalProperties: 0, inquiries: 0, bookings: 0, views: 0 })
+        setOverview({ totalProperties: 0, activeProperties: 0, pendingApproval: 0, rejectedProperties: 0, totalVisits: 0, totalMessages: 0, totalInquiries: 0 })
+        setProperties([])
+        setVisits([])
       } finally {
         setLoading(false)
       }
     }
     load()
-  }, [user?._id])
+  }, [ownerId])
+
+  const premiumProperties = properties.filter((property) => property.isPremium)
+  const pendingProperties = properties.filter((property) => (property.approvalStatus || 'Pending') === 'Pending')
 
   return (
     <div className="space-y-8">
       <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Vendor dashboard</p>
+            <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Owner dashboard</p>
             <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">Manage your stay listings and inquiries</h1>
+            <p className="mt-2 text-xs text-slate-500">Owner ID: {user?._id ? `SJ-${user._id.toString().slice(-6).toUpperCase()}` : '-'}</p>
           </div>
-          <Button onClick={() => navigate('/dashboard/vendor/add-property')}>New property</Button>
+          <Button onClick={() => navigate('/dashboard/owner/add-property')}>New property</Button>
         </div>
       </header>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: 'My Properties', icon: <FiSliders />, onClick: () => navigate('/dashboard/owner/properties') },
+          { label: 'Add Property', icon: <FiPlusCircle />, onClick: () => navigate('/dashboard/owner/add-property') },
+          { label: 'Messages', icon: <FiMessageSquare />, onClick: () => navigate('/dashboard/owner/messages') },
+          { label: 'Bookings', icon: <FiUsers />, onClick: () => navigate('/dashboard/owner/leads') },
+          { label: 'Analytics', icon: <FiBarChart2 />, onClick: () => document.getElementById('owner-analytics')?.scrollIntoView({ behavior: 'smooth' }) },
+          { label: 'Subscription', icon: <FiCreditCard />, onClick: () => document.getElementById('owner-subscription')?.scrollIntoView({ behavior: 'smooth' }) },
+          { label: 'Profile', icon: <FiUser />, onClick: () => navigate('/dashboard/profile') },
+          { label: 'Settings', icon: <FiSettings />, onClick: () => navigate('/dashboard/profile') },
+        ].map((item) => (
+          <button key={item.label} type="button" onClick={item.onClick} className="rounded-2xl border border-slate-800 bg-surface-800/90 p-4 text-left text-slate-200 transition hover:border-accent-500">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-accent-400">{item.icon}</span>
+            <p className="mt-3 font-semibold text-white">{item.label}</p>
+          </button>
+        ))}
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-4">
         {loading ? (
           <Card className="p-8">Loading stats…</Card>
         ) : (
           [
-            { label: 'Properties', value: overview.totalProperties, icon: <FiSliders />, onClick: () => navigate('/dashboard/vendor/properties') },
-            { label: 'Leads', value: overview.leads ?? overview.inquiries + overview.bookings, icon: <FiUsers />, onClick: () => navigate('/dashboard/vendor/leads') },
-            { label: 'Inquiries', value: overview.inquiries, icon: <FiUsers />, onClick: () => document.getElementById('vendor-requests')?.scrollIntoView({ behavior: 'smooth' }) },
-            { label: 'Bookings', value: overview.bookings, icon: <FiPlusCircle />, onClick: () => document.getElementById('vendor-requests')?.scrollIntoView({ behavior: 'smooth' }) },
+            { label: 'Total Properties', value: overview.totalProperties, icon: <FiSliders />, onClick: () => navigate('/dashboard/owner/properties') },
+            { label: 'Active Properties', value: overview.activeProperties, icon: <FiEye />, onClick: () => navigate('/dashboard/owner/properties') },
+            { label: 'Pending Approval', value: overview.pendingApproval, icon: <FiPlusCircle />, onClick: () => navigate('/dashboard/owner/properties') },
+            { label: 'Rejected Properties', value: overview.rejectedProperties, icon: <FiTrash2 />, onClick: () => navigate('/dashboard/owner/properties') },
+            { label: 'Total Visits', value: overview.totalVisits ?? overview.bookings, icon: <FiUsers />, onClick: () => navigate('/dashboard/owner/leads') },
+            { label: 'Total Messages', value: overview.totalMessages, icon: <FiMessageSquare />, onClick: () => navigate('/dashboard/owner/messages') },
+            { label: 'Total Inquiries', value: overview.totalInquiries ?? overview.inquiries, icon: <FiUsers />, onClick: () => navigate('/dashboard/owner/leads') },
+            { label: 'Premium Status', value: premiumProperties.length, icon: <FiCreditCard />, onClick: () => document.getElementById('owner-subscription')?.scrollIntoView({ behavior: 'smooth' }) },
+            { label: 'Property Views', value: overview.views || properties.reduce((sum, property) => sum + (Number(property.views) || Number(property.totalViews) || 0), 0), icon: <FiEye />, onClick: () => document.getElementById('owner-analytics')?.scrollIntoView({ behavior: 'smooth' }) },
           ].map((item) => (
             <button key={item.label} type="button" onClick={item.onClick} className="text-left">
               <Card className="h-full p-6 transition hover:border-accent-500">
@@ -92,28 +138,67 @@ function VendorDashboard() {
 
       <div className="grid gap-6 xl:grid-cols-3">
         {[
-          { label: 'Conversion rate', value: `${overview?.conversionRate ?? Math.min(42, (overview?.leads || 0) * 3)}%`, icon: <FiTrendingUp /> },
-          { label: 'Commission due', value: `₹${moveIns.filter((item) => item.status === 'Verified').reduce((sum, item) => sum + (Number(item.commissionAmount) || 0), 0).toLocaleString('en-IN')}`, icon: <FiBarChart2 /> },
-          { label: 'Vacancy health', value: overview?.vacancyStatus || 'Live updates ready', icon: <FiEye /> },
+          { label: 'Conversion rate', value: `${overview?.conversionRate ?? Math.min(42, (overview?.leads || 0) * 3)}%`, icon: <FiTrendingUp />, onClick: () => navigate('/dashboard/owner/leads') },
+          { label: 'Commission due', value: `₹${moveIns.filter((item) => item.status === 'Verified').reduce((sum, item) => sum + (Number(item.commissionAmount) || 0), 0).toLocaleString('en-IN')}`, icon: <FiBarChart2 />, onClick: () => document.getElementById('owner-move-ins')?.scrollIntoView({ behavior: 'smooth' }) },
+          { label: 'Vacancy health', value: overview?.vacancyStatus || 'Live updates ready', icon: <FiEye />, onClick: () => navigate('/dashboard/owner/properties') },
         ].map((item) => (
-          <Card key={item.label} className="p-6">
-            <span className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-950 text-accent-400">{item.icon}</span>
-            <p className="mt-5 text-sm uppercase tracking-[0.24em] text-slate-500">{item.label}</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{item.value}</p>
-          </Card>
+          <button key={item.label} type="button" onClick={item.onClick} className="text-left">
+            <Card className="h-full p-6 transition hover:border-accent-500">
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-950 text-accent-400">{item.icon}</span>
+              <p className="mt-5 text-sm uppercase tracking-[0.24em] text-slate-500">{item.label}</p>
+              <p className="mt-2 text-2xl font-semibold text-white">{item.value}</p>
+            </Card>
+          </button>
         ))}
       </div>
 
+      <div id="owner-analytics" className="grid gap-6 xl:grid-cols-3">
+        <Card>
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Analytics</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{overview.leads || visits.length}</p>
+          <p className="mt-2 text-sm text-slate-400">Total leads from bookings, messages, inquiries, and saved-property interest.</p>
+        </Card>
+        <Card>
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Premium status</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{premiumProperties.length}</p>
+          <p className="mt-2 text-sm text-slate-400">Premium listings appear before normal listings and show a Premium badge.</p>
+        </Card>
+        <Card>
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Pending approval</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{pendingProperties.length}</p>
+          <p className="mt-2 text-sm text-slate-400">Submitted and rejected listings remain saved; rejected listings can be edited and resubmitted.</p>
+        </Card>
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card id="vendor-requests">
+        <Card id="owner-requests">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Active listings</p>
-              <h2 className="mt-3 text-2xl font-semibold text-white">Live property performance</h2>
+              <h2 className="mt-3 text-2xl font-semibold text-white">My properties</h2>
             </div>
-            <Button variant="secondary" onClick={() => navigate('/dashboard/vendor/properties')}>View listings</Button>
+            <Button variant="secondary" onClick={() => navigate('/dashboard/owner/properties')}>View listings</Button>
           </div>
-          <p className="mt-6 text-slate-300">Quickly edit rent, update availability, and review active leads in one interface.</p>
+          <div className="mt-6 space-y-4">
+            {properties.slice(0, 4).map((property) => (
+              <div key={property.id || property._id} className="grid gap-4 rounded-3xl border border-slate-800 bg-slate-950/70 p-4 sm:grid-cols-[96px_1fr_auto] sm:items-center">
+                <img src={property.image} alt={property.name || 'Owner property'} className="h-24 w-full rounded-2xl object-cover sm:w-24" />
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-white">{property.name || 'Untitled property'}</p>
+                  <p className="mt-1 truncate text-sm text-slate-400">{property.area || property.areaName || property.city || property.address || 'Location not set'}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-slate-300">{property.status || property.vacancyStatus || 'Available'}</span>
+                    <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-slate-300">{property.approvalStatus || 'Pending'}</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 sm:justify-end">
+                  <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEye /> View</button>
+                  <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}/edit`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEdit2 /> Edit</button>
+                </div>
+              </div>
+            ))}
+            {!properties.length ? <p className="text-sm text-slate-400">No owner properties found yet.</p> : null}
+          </div>
         </Card>
 
         <Card>
@@ -122,13 +207,28 @@ function VendorDashboard() {
             <h2 className="mt-3 text-2xl font-semibold text-white">Recent visitor requests</h2>
           </div>
           <div className="mt-6 space-y-4 text-slate-300">
-            <p>Users are asking for quick tour slots and immediate move-in options.</p>
-            <p>Your dashboard makes it easy to approve visits and update status.</p>
+            {visits.slice(0, 4).map((visit) => {
+              const visitor = visit.visituser || visit.user || {}
+              const visitorName = [visitor.userFname, visitor.userLname].filter(Boolean).join(' ') || visitor.userName || visitor.name || 'Unknown user'
+              const phone = visitor.contact || visitor.phone || visitor.mobile || 'No phone available'
+              const visitDate = visit.visitDate ? new Date(visit.visitDate).toLocaleDateString() : 'TBD'
+              const visitTime = visit.visitTime && visit.visitTime !== '-' ? `, ${visit.visitTime}` : ''
+              const request = visit.status === '1' ? 'Visit approved' : visit.status === '2' ? 'Visit completed' : visit.status === '3' ? 'Visit rejected' : visit.status === '4' ? 'Visit cancelled' : 'Visit requested'
+              return (
+                <button key={visit._id || `${visit.userIDFK}-${visit.propertyIDFK}`} type="button" onClick={() => navigate('/dashboard/owner/leads')} className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-left hover:border-accent-500">
+                  <p className="font-semibold text-white">{visitorName}</p>
+                  <p className="mt-1 text-sm text-slate-400">Phone: {phone}</p>
+                  <p className="mt-1 text-sm text-slate-400">Visit date: {visitDate}{visitTime}</p>
+                  <p className="mt-1 text-sm text-slate-300">Visit request: {request}</p>
+                </button>
+              )
+            })}
+            {!visits.length ? <p className="text-sm text-slate-400">No visit requests yet.</p> : null}
           </div>
         </Card>
       </div>
 
-      <Card>
+      <Card id="owner-move-ins">
         <div className="mb-6">
           <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Move-in conversions</p>
           <h2 className="mt-2 text-2xl font-semibold text-white">Commission and verification queue</h2>
@@ -138,10 +238,34 @@ function VendorDashboard() {
             <div key={item._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
               <p className="font-semibold text-white">{item.propertyId?.propertyName || 'StayJi property'} · {item.status}</p>
               <p className="mt-1">Commission ₹{item.commissionAmount || 0} · Cashback ₹{item.cashbackAmount || 0}</p>
-              <p className="mt-1 text-slate-500">Joining: {item.joiningDate || '-'}</p>
+              <p className="mt-1 text-slate-500">Joining: {item.joiningDate || '-'} · Owner confirmation: {item.ownerConfirmed ? 'Done' : 'Pending'}</p>
+              {!item.ownerConfirmed ? (
+                <button type="button" onClick={() => ownerConfirmMutation.mutate(item._id)} className="mt-3 rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">
+                  Tenant joined successfully
+                </button>
+              ) : null}
             </div>
           ))}
           {!moveIns.length ? <p className="text-sm text-slate-400">Verified move-ins will appear here after users submit proof.</p> : null}
+        </div>
+      </Card>
+
+      <Card id="owner-subscription">
+        <div className="flex items-center gap-3">
+          <FiCreditCard className="text-accent-400" />
+          <div>
+            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Subscription</p>
+            <h2 className="mt-1 text-2xl font-semibold text-white">Premium listing status</h2>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-3">
+          {properties.slice(0, 6).map((property) => (
+            <div key={property.id || property._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+              <p className="font-semibold text-white">{property.name || 'Untitled property'} · {property.isPremium ? 'Premium' : 'Normal'}</p>
+              <p className="mt-1">Priority {property.priority || 0} · Expires {property.premiumEndDate ? new Date(property.premiumEndDate).toLocaleDateString() : '-'}</p>
+            </div>
+          ))}
+          {!properties.length ? <p className="text-sm text-slate-400">Add a property to see subscription status.</p> : null}
         </div>
       </Card>
 
@@ -155,8 +279,8 @@ function VendorDashboard() {
         </div>
         <div className="mt-5 max-h-80 space-y-3 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
           {messages.map((item) => (
-            <div key={item._id} className={`rounded-2xl p-3 text-sm ${item.senderRole === 'vendor' ? 'bg-accent-500/10 text-accent-100' : 'bg-slate-900/80 text-slate-300'}`}>
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.senderRole === 'vendor' ? 'You' : 'StayJi admin'} · {item.addedOn ? new Date(item.addedOn).toLocaleString() : ''}</p>
+            <div key={item._id} className={`rounded-2xl p-3 text-sm ${item.senderRole === 'owner' ? 'bg-accent-500/10 text-accent-100' : 'bg-slate-900/80 text-slate-300'}`}>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.senderRole === 'owner' ? 'You' : 'StayJi admin'} · {item.addedOn ? new Date(item.addedOn).toLocaleString() : ''}</p>
               <p className="mt-2">{item.message}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" onClick={() => deleteMessageMutation.mutate({ messageId: item._id, scope: 'self' })} className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-rose-400"><FiTrash2 className="inline" /> Delete for me</button>
@@ -167,11 +291,11 @@ function VendorDashboard() {
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
           <input value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Reply to StayJi admin" className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
-          <Button onClick={() => replyMutation.mutate()} disabled={!vendorId || !reply.trim()}>Send</Button>
+          <Button onClick={() => replyMutation.mutate()} disabled={!ownerId || !reply.trim()}>Send</Button>
         </div>
       </Card>
     </div>
   )
 }
 
-export default VendorDashboard
+export default OwnerDashboard

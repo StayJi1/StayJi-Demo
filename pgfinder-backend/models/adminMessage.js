@@ -15,7 +15,7 @@ adminMessageSchema = mongoose.Schema({
     },
     senderRole:{
         type:String,
-        enum:["admin","vendor"],
+        enum:["admin","owner","vendor"],
         default:"admin"
     },
     message:{
@@ -28,6 +28,19 @@ adminMessageSchema = mongoose.Schema({
     deletedForVendor:{
         type:Boolean,
         default:false
+    },
+    deletedForOwner:{
+        type:Boolean,
+        default:false
+    },
+    isDummy:{
+        type:Boolean,
+        default:false
+    },
+    status:{
+        type:String,
+        enum:["active","archived","demo","suspended"],
+        default:"active"
     },
     addedOn:{
         type:Date,

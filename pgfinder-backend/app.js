@@ -16,9 +16,26 @@ const session = require('express-session');
 var cors = require("cors");
 var helmet = require("helmet");
 var rateLimit = require("express-rate-limit");
+const {
+    errorHandler,
+    notFoundHandler,
+    requestContext,
+    requestLogger,
+    registerProcessErrorLogging,
+    structuredResponses,
+    timeoutHandler,
+    validateKnownObjectIds
+} = require('./middleware/resilience');
+
+registerProcessErrorLogging();
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+
+app.use(requestContext);
+app.use(structuredResponses);
+app.use(requestLogger);
+app.use(timeoutHandler());
 
 /*
 |--------------------------------------------------------------------------
@@ -35,6 +52,8 @@ const corsOrigins = [
     "https://www.stayji.com"
 ];
 
+const isLocalDevOrigin = (origin) => /^http:\/\/(localhost|127\.0\.0\.1):517\d$/.test(origin);
+
 app.use(cors({
     origin: function(origin, callback) {
 
@@ -42,7 +61,7 @@ app.use(cors({
             return callback(null, true);
         }
 
-        if (corsOrigins.indexOf(origin) !== -1) {
+        if (corsOrigins.indexOf(origin) !== -1 || isLocalDevOrigin(origin)) {
             callback(null, true);
         } else {
             callback(new Error("CORS Not Allowed"));
@@ -90,6 +109,8 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({
     extended: false
 }));
+
+app.use(validateKnownObjectIds);
 
 /*
 |--------------------------------------------------------------------------
@@ -239,6 +260,9 @@ app.use('/api/notifications', (req, res, next) => {
     req.url = req.url === '/' ? '/notifications' : `/notifications${req.url}`;
     clientController(req, res, next);
 });
+
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 /*
 |--------------------------------------------------------------------------

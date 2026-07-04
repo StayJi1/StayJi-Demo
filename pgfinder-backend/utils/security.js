@@ -1,22 +1,30 @@
 const crypto = require('crypto')
+const bcrypt = require('bcryptjs')
 
 const HASH_PREFIX = 'pbkdf2$sha256'
 const ITERATIONS = 120000
 const KEY_LENGTH = 32
 const DIGEST = 'sha256'
+const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12)
 
 function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString('hex')
-  const hash = crypto.pbkdf2Sync(String(password || ''), salt, ITERATIONS, KEY_LENGTH, DIGEST).toString('hex')
-  return `${HASH_PREFIX}$${ITERATIONS}$${salt}$${hash}`
+  return bcrypt.hashSync(String(password || ''), BCRYPT_ROUNDS)
 }
 
 function isHashedPassword(value) {
-  return typeof value === 'string' && value.startsWith(`${HASH_PREFIX}$`)
+  return typeof value === 'string' && (value.startsWith('$2a$') || value.startsWith('$2b$') || value.startsWith('$2y$') || value.startsWith(`${HASH_PREFIX}$`))
 }
 
 function verifyPassword(password, storedPassword) {
-  if (!isHashedPassword(storedPassword)) {
+  if (typeof storedPassword !== 'string' || !storedPassword) {
+    return false
+  }
+
+  if (storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2y$')) {
+    return bcrypt.compareSync(String(password || ''), storedPassword)
+  }
+
+  if (!storedPassword.startsWith(`${HASH_PREFIX}$`)) {
     return String(password || '') === String(storedPassword || '')
   }
 

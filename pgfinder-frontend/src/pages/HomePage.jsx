@@ -24,7 +24,7 @@ const cities = [
 const reasons = [
   { title: 'Verified listings', text: 'Photos, pricing, amenities, and availability reviewed before going live.', icon: <FiShield /> },
   { title: 'Fast nearby search', text: 'Find PGs, hostels, flats, and stays around your campus or office.', icon: <FiNavigation /> },
-  { title: 'Smart dashboards', text: 'Purpose-built dashboards for users, vendors, and admins.', icon: <FiSliders /> },
+  { title: 'Smart dashboards', text: 'Purpose-built dashboards for users, owners, and admins.', icon: <FiSliders /> },
   { title: 'Book visits', text: 'Shortlist properties, check live availability, and schedule visits quickly.', icon: <FiCheckCircle /> },
 ]
 
@@ -41,8 +41,8 @@ const testimonials = [
   },
   {
     name: 'Nisha Iyer',
-    role: 'Vendor, Bangalore',
-    quote: 'The vendor dashboard makes approvals, availability, and inquiries much easier to manage.',
+    role: 'Owner, Bangalore',
+    quote: 'The owner dashboard makes approvals, availability, and inquiries much easier to manage.',
   },
 ]
 
@@ -91,8 +91,7 @@ function HomePage() {
               .filter(Boolean),
           ),
         )
-      } catch (error) {
-        console.error('Unable to load wishlist state', error)
+      } catch {
         setSavedPropertyIds(new Set())
       }
     }
@@ -120,8 +119,7 @@ function HomePage() {
           return next
         })
       }
-    } catch (error) {
-      console.error(error)
+    } catch {
       alert('Unable to update this PG in your wishlist.')
     }
   }
@@ -130,6 +128,10 @@ function HomePage() {
     event.preventDefault()
     const query = search.trim()
     navigate(query ? `/properties?search=${encodeURIComponent(query)}` : '/properties')
+  }
+
+  const handleNearby = () => {
+    navigate('/properties?nearby=true')
   }
 
   return (
@@ -165,8 +167,8 @@ function HomePage() {
                   className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500"
                 />
               </label>
-              <Button type="button" variant="secondary" onClick={requestLocation} disabled={locationLoading} className="w-full sm:w-auto">
-                <FiMapPin className="mr-2" /> {locationLoading ? 'Finding' : 'Nearby'}
+              <Button type="button" variant="secondary" onClick={handleNearby} className="w-full sm:w-auto">
+                <FiMapPin className="mr-2" /> Nearby
               </Button>
               <Button type="submit" className="w-full sm:w-auto">
                 Search <FiArrowRight className="ml-2" />
@@ -215,8 +217,8 @@ function HomePage() {
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-blue-600">Featured stays</p>
               <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Premium verified stays</h2>
             </div>
-            <Link to="/properties" className="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-purple-600">
-              View all stays <FiArrowRight className="ml-2" />
+            <Link to="/bangalore" className="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-purple-600">
+              Explore Bangalore PGs <FiArrowRight className="ml-2" />
             </Link>
           </div>
           <div className="mt-10 grid gap-6 lg:grid-cols-3">
@@ -295,10 +297,10 @@ function HomePage() {
             <h2 className="mt-3 text-3xl font-semibold sm:text-4xl">Find stays around your real location</h2>
             <p className="mt-4 leading-7 text-slate-300">Use map-first discovery to compare commute distance, nearby areas, and verified StayJi listings before booking a visit.</p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Button onClick={requestLocation} disabled={locationLoading}>
-                <FiNavigation className="mr-2" /> {hasUserLocation ? 'Refresh location' : 'Use my location'}
+              <Button onClick={handleNearby} disabled={locationLoading}>
+                <FiNavigation className="mr-2" /> {hasUserLocation ? 'Show nearby stays' : 'Show nearby stays'}
               </Button>
-              <Link to="/properties">
+              <Link to="/bangalore">
                 <Button variant="secondary">Open map search</Button>
               </Link>
             </div>
@@ -317,7 +319,7 @@ function HomePage() {
             <FiUsers className="text-blue-600" />
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-blue-600">Testimonials</p>
           </div>
-          <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Loved by students, professionals, and vendors</h2>
+          <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Loved by students, professionals, and owners</h2>
           <div className="mt-10 grid gap-6 lg:grid-cols-3">
             {testimonials.map((item) => (
               <motion.article key={item.name} whileHover={{ y: -6 }} className="rounded-[2rem] border border-slate-200 bg-slate-50 p-7 shadow-soft">
@@ -347,7 +349,7 @@ function HomePage() {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link to="/properties"><Button>Explore stays</Button></Link>
-            <Link to="/signup?role=vendor"><Button variant="secondary">List your property</Button></Link>
+            <Link to="/signup?role=owner"><Button variant="secondary">List your property</Button></Link>
           </div>
         </div>
       </section>

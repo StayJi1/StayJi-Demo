@@ -1,19 +1,26 @@
 import { motion } from 'framer-motion'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { FiHeart, FiMapPin, FiStar } from 'react-icons/fi'
+import { FiColumns, FiHeart, FiMapPin, FiStar } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import propertyService from '../../services/propertyService'
 import { formatDistance } from '../../utils/distance'
 
-function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
+function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSave = false, compareSelected = false, onToggleCompare }) {
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
   const [internalSaved, setInternalSaved] = useState(Boolean(savedProp))
   const [saving, setSaving] = useState(false)
   const saved = onToggleSave ? Boolean(savedProp) : internalSaved
 
-  const handleShortlist = async () => {
+  const propertyPath = `/properties/${property.id || property._id || 'detail'}`
+
+  const openProperty = () => {
+    navigate(propertyPath)
+  }
+
+  const handleShortlist = async (event) => {
+    event.stopPropagation()
     if (!isAuthenticated || !user?._id) {
       navigate('/login', { replace: true })
       return
@@ -40,14 +47,34 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
     }
   }
 
+  const handleCompare = (event) => {
+    event.stopPropagation()
+    if (onToggleCompare) onToggleCompare(property)
+  }
+
   return (
     <motion.article
       layout
       whileHover={{ y: -6 }}
       transition={{ type: 'spring', stiffness: 220, damping: 20 }}
-      className="group min-w-0 overflow-hidden rounded-[1.5rem] border border-slate-800/70 bg-slate-950/90 shadow-card sm:rounded-[2rem]"
+      role="button"
+      tabIndex={0}
+      onClick={openProperty}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') openProperty()
+      }}
+      className="group min-w-0 cursor-pointer overflow-hidden rounded-[1.5rem] border border-slate-800/70 bg-slate-950/90 shadow-card sm:rounded-[2rem]"
     >
       <div className="relative overflow-hidden">
+        {property.displayBadges?.length ? (
+          <div className="absolute left-4 top-4 z-20 flex max-w-[70%] flex-wrap gap-2">
+            {property.displayBadges.map((badge) => (
+              <span key={badge} className="rounded-full border border-amber-300/50 bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-100 backdrop-blur-xl">
+                {badge}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <div className="absolute right-4 top-4 z-20 rounded-full bg-slate-950/70 px-3 py-2 text-xs font-semibold text-white backdrop-blur-xl">
           {property.availableBeds ? `${property.availableBeds} beds live` : property.vacancyStatus || property.status || 'Verified'}
         </div>
@@ -64,17 +91,19 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-accent-500">{property.category || property.type || 'PG'}</p>
             <h3 className="mt-2 line-clamp-2 text-xl font-semibold text-white">{property.name}</h3>
           </div>
-          <button
-            type="button"
-            onClick={handleShortlist}
-            disabled={saving}
-            className={`inline-flex h-11 w-11 items-center justify-center rounded-3xl shadow-soft transition ${
-              saved ? 'bg-rose-500 text-white' : 'bg-slate-900 text-slate-200 hover:text-rose-300'
-            }`}
-            aria-label={saved ? 'Remove from wishlist' : 'Add to wishlist'}
-          >
-            <FiHeart />
-          </button>
+          {hideSave ? null : (
+            <button
+              type="button"
+              onClick={handleShortlist}
+              disabled={saving}
+              className={`inline-flex h-11 w-11 items-center justify-center rounded-3xl shadow-soft transition ${
+                saved ? 'bg-rose-500 text-white' : 'bg-slate-900 text-slate-200 hover:text-rose-300'
+              }`}
+              aria-label={saved ? 'Remove from wishlist' : 'Add to wishlist'}
+            >
+              <FiHeart />
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-400">
           <FiMapPin className="h-4 w-4" />
@@ -104,17 +133,34 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave }) {
             Food: {property.mealsAvailable.join(', ')}
           </p>
         ) : null}
-        <div className="flex items-center justify-between gap-3 text-slate-300">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-slate-300">
           <div className="inline-flex items-center gap-2 text-sm">
             <FiStar className="text-amber-400" />
             {property.rating || 4.8}
           </div>
-          <Link
-            to={`/properties/${property.id || property._id || 'detail'}`}
+          {onToggleCompare ? (
+            <button
+              type="button"
+              onClick={handleCompare}
+              className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                compareSelected
+                  ? 'border-cyan-300 bg-cyan-400/10 text-cyan-100'
+                  : 'border-slate-700 text-slate-300 hover:border-cyan-300 hover:text-white'
+              }`}
+            >
+              <FiColumns /> {compareSelected ? 'Comparing' : 'Compare'}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              openProperty()
+            }}
             className="rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-brand-400"
           >
             View details
-          </Link>
+          </button>
         </div>
       </div>
     </motion.article>

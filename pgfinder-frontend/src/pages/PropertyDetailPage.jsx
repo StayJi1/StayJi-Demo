@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { FiArrowLeft, FiClock, FiMessageSquare, FiShield, FiShuffle, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome } from 'react-icons/fi'
+import { FiArrowLeft, FiClock, FiColumns, FiMessageSquare, FiShield, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome, FiStar, FiShare2, FiFlag } from 'react-icons/fi'
 import Loader from '../components/common/Loader'
 import Button from '../components/common/Button'
 import PropertyMap from '../components/map/PropertyMap'
+import GalleryTrigger from '../components/gallery/GalleryTrigger'
 import propertyService from '../services/propertyService'
 import { useAuth } from '../context/AuthContext'
 import useCurrentLocation from '../hooks/useCurrentLocation'
 import { formatDistance, getDistanceKm } from '../utils/distance'
+import { readCompareIds, writeCompareIds } from '../utils/compareStorage'
 
 const getAmenityIcon = (amenity) => {
   const value = amenity.toLowerCase()
@@ -21,6 +23,49 @@ const getAmenityIcon = (amenity) => {
   return <FiHome />
 }
 
+const getAmenityEmoji = (amenity) => {
+  const value = amenity.toLowerCase()
+  if (/wifi|internet/.test(value)) return '📶'
+  if (/food|meal|breakfast|lunch|dinner|kitchen/.test(value)) return '🍽️'
+  if (/parking|bike|car/.test(value)) return '🅿️'
+  if (/cctv|security|camera|biometric/.test(value)) return '🛡️'
+  if (/laundry|washing/.test(value)) return '🧺'
+  if (/power|backup|electric/.test(value)) return '🔋'
+  if (/gym|fitness/.test(value)) return '🏋️'
+  if (/study|table|desk/.test(value)) return '📚'
+  if (/fridge|refrigerator/.test(value)) return '🧊'
+  if (/balcony|rooftop|terrace/.test(value)) return '🌇'
+  if (/ac|air conditioning/.test(value)) return '❄️'
+  return '✨'
+}
+
+function StarRating({ value, onChange }) {
+  return (
+    <div className="mt-2 flex items-center gap-2" role="radiogroup" aria-label="Rating">
+      {[1, 2, 3, 4, 5].map((rating) => {
+        const active = Number(value) >= rating
+        return (
+          <button
+            key={rating}
+            type="button"
+            onClick={() => onChange(String(rating))}
+            className={`inline-flex h-12 w-12 items-center justify-center rounded-full border text-xl transition ${
+              active
+                ? 'scale-105 border-amber-300 bg-amber-400/20 text-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.22)]'
+                : 'border-slate-700 bg-slate-950 text-slate-500 hover:border-amber-300 hover:text-amber-200'
+            }`}
+            aria-checked={active}
+            role="radio"
+          >
+            <FiStar className={active ? 'fill-current' : ''} />
+          </button>
+        )
+      })}
+      <span className="text-sm text-slate-400">{value}/5</span>
+    </div>
+  )
+}
+
 function PropertyDetailPage() {
   const { id, propertyId } = useParams()
   const activePropertyId = id || propertyId
@@ -31,15 +76,43 @@ function PropertyDetailPage() {
   const [leadPrefs, setLeadPrefs] = useState({ preferredVisitTime: '', moveInPreference: '' })
   const [moveInForm, setMoveInForm] = useState({ ownerName: '', joiningDate: '', userNote: '', paymentScreenshot: null, roomImage: null })
   const [moveInMessage, setMoveInMessage] = useState('')
+  const [reviews, setReviews] = useState([])
+  const [reviewForm, setReviewForm] = useState({ rating: '5', details: '', tags: '' })
+  const [reviewMessage, setReviewMessage] = useState('')
+  const [editingReviewId, setEditingReviewId] = useState(null)
+  const [actionMessage, setActionMessage] = useState('')
+  const [compareIds, setCompareIds] = useState([])
+  const { user, role, isAuthenticated } = useAuth()
   const { position, loading: locationLoading, error: locationError, hasUserLocation, requestLocation } = useCurrentLocation()
+
+  useEffect(() => {
+    setCompareIds(readCompareIds(user))
+  }, [isAuthenticated, user?._id])
 
   useEffect(() => {
     const loadProperty = async () => {
       try {
-        const data = await propertyService.fetchPropertyById(activePropertyId)
+        const includePrivate = ['owner', 'admin'].includes(role)
+      const data = await propertyService.fetchPropertyById(activePropertyId, { includePrivate })
+      if (!data?.id && !data?._id) {
+        setError('This property is unavailable or has been removed.')
+        return
+      }
         setProperty(data)
         const viewed = JSON.parse(localStorage.getItem('stayjiViewed') || '[]')
         localStorage.setItem('stayjiViewed', JSON.stringify([activePropertyId, ...viewed.filter((item) => item !== activePropertyId)].slice(0, 20)))
+        if (user?._id) {
+          propertyService.recordViewed?.({
+            userId: user._id,
+            propertyId: activePropertyId,
+            propertyName: data?.name,
+            city: data?.city,
+            locality: data?.area,
+          }).catch(() => {})
+        }
+        propertyService.fetchReviews?.({ propertyId: activePropertyId, limit: 8 })
+          .then(setReviews)
+          .catch(() => setReviews([]))
       } catch {
         setError('Unable to load property details.')
       } finally {
@@ -47,35 +120,95 @@ function PropertyDetailPage() {
       }
     }
     loadProperty()
-  }, [activePropertyId])
+  }, [activePropertyId, role, user?._id])
 
-  const { user, role } = useAuth()
   const isAdmin = role === 'admin'
+  const isOwnerView = role === 'owner'
+  const isConsumerView = !isAdmin && !isOwnerView
 
   useEffect(() => {
-    if (!property || role !== 'vendor') return
+    if (!property || role !== 'owner') return
     const ownerId = property.ownerId?.toString()
     const userId = user?._id?.toString()
     if (ownerId && userId && ownerId !== userId) {
-      navigate('/dashboard/vendor/properties', { replace: true })
+      navigate('/dashboard/owner/properties', { replace: true })
     }
   }, [navigate, property, role, user?._id])
 
+  const handleToggleCompare = () => {
+    setActionMessage('')
+    if (!user || !user._id) {
+      navigate('/login', { replace: true })
+      return
+    }
+
+    const propertyId = property?._id || property?.id
+    if (!propertyId) return
+
+    setCompareIds((current) => {
+      if (current.includes(propertyId)) {
+        const next = current.filter((item) => item !== propertyId)
+        writeCompareIds(user, next)
+        setActionMessage('Removed from your comparison list.')
+        return next
+      }
+
+      if (current.length >= 3) {
+        setActionMessage('You can compare up to 3 properties at once.')
+        return current
+      }
+
+      const next = [...current, propertyId]
+      writeCompareIds(user, next)
+      setActionMessage('Added to your comparison list.')
+      return next
+    })
+  }
+
   const handleShortlist = async () => {
+    setActionMessage('')
     if (!user || !user._id) {
       navigate('/login', { replace: true })
       return
     }
     try {
-      await propertyService.shortlistProperty({ userIDFK: user._id, propertyIDFK: property._id })
-      alert('Property saved to your shortlist.')
+      await propertyService.shortlistProperty({ userIDFK: user._id, propertyIDFK: property._id || property.id })
+      setActionMessage('Property saved to your shortlist.')
     } catch (err) {
-      console.error(err)
-      alert('Unable to save shortlist.')
+      setActionMessage(err?.message || 'Unable to save this property right now.')
     }
   }
 
   const handleExpressInterest = async () => {
+    setActionMessage('')
+    if (!user || !user._id) {
+      navigate('/login', { replace: true })
+      return
+    }
+    try {
+      const ownerId = property.ownerId || property.vendorId?._id || property.vendorId || property.userIDFK?._id || property.userIDFK
+      const chat = await propertyService.sendChat({
+        fromUserId: user._id,
+        ownerId,
+        propertyId: property._id || property.id,
+        message: 'I am interested in this property and would like to know the next steps.',
+      })
+      await propertyService.expressInterest({
+        userIDFK: user._id,
+        propertyIDFK: property._id || property.id,
+        subject: 'Interested in this property',
+        description: 'I am interested in this property and would like to know the next steps.',
+        preferredVisitTime: leadPrefs.preferredVisitTime,
+        moveInPreference: leadPrefs.moveInPreference,
+      })
+      navigate(`/dashboard/user/messages?conversationId=${chat?.conversation?.id || chat?.conversation?._id || ''}`)
+    } catch (err) {
+      setActionMessage(err?.message || 'Unable to message the owner right now.')
+    }
+  }
+
+  const handleRequestCallback = async () => {
+    setActionMessage('')
     if (!user || !user._id) {
       navigate('/login', { replace: true })
       return
@@ -83,35 +216,74 @@ function PropertyDetailPage() {
     try {
       await propertyService.expressInterest({
         userIDFK: user._id,
-        propertyIDFK: property._id,
-        subject: 'Interested in this property',
-        description: 'I am interested in this property and would like to know the next steps.',
+        propertyIDFK: property._id || property.id,
+        subject: 'Callback requested',
+        description: 'User requested an owner callback from the property page.',
         preferredVisitTime: leadPrefs.preferredVisitTime,
         moveInPreference: leadPrefs.moveInPreference,
       })
-      alert('Your interest has been sent to the host.')
+      setActionMessage('Callback request sent. The owner and StayJi admin can now track this lead.')
     } catch (err) {
-      console.error(err)
-      alert('Unable to send your interest.')
+      setActionMessage(err?.message || 'Unable to request callback right now.')
     }
   }
 
   const handleBookVisit = async () => {
+    setActionMessage('')
     if (!user || !user._id) {
       navigate('/login', { replace: true })
       return
     }
+    if (!leadPrefs.preferredVisitTime) {
+      setActionMessage('Select a visit date and time before booking.')
+      return
+    }
+    const [visitDate, visitTime] = leadPrefs.preferredVisitTime.split('T')
     try {
       await propertyService.bookVisit({
         userIDFK: user._id,
-        propertyIDFK: property._id,
-        visitDate: leadPrefs.preferredVisitTime || new Date(),
+        propertyIDFK: property._id || property.id,
+        visitDate,
+        visitTime: visitTime || '',
         moveInPreference: leadPrefs.moveInPreference,
       })
-      alert('Visit request submitted.')
+      setActionMessage('Visit request submitted.')
     } catch (err) {
-      console.error(err)
-      alert('Unable to book visit.')
+      setActionMessage(err?.message || 'Unable to book visit right now.')
+    }
+  }
+
+  const handleShare = async () => {
+    const shareUrl = window.location.href
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: property.name || 'StayJi property', text: 'Check this StayJi property', url: shareUrl })
+      } else {
+        await navigator.clipboard.writeText(shareUrl)
+        setActionMessage('Property link copied.')
+      }
+    } catch {
+      setActionMessage('Unable to share this property right now.')
+    }
+  }
+
+  const handleReport = async () => {
+    if (!isAuthenticated || !user?._id) {
+      navigate('/login', { replace: true })
+      return
+    }
+    setActionMessage('')
+    try {
+      await propertyService.reportProperty({
+        reportedBy: user._id,
+        propertyId: property._id || property.id,
+        propertyName: property.name,
+        propertyLink: window.location.href,
+        reportMessage: `User reported property: ${property.name}`,
+      })
+      setActionMessage('Property reported. Admin will review it shortly.')
+    } catch {
+      setActionMessage('Unable to report this property right now.')
     }
   }
 
@@ -131,24 +303,53 @@ function PropertyDetailPage() {
     if (moveInForm.roomImage) payload.append('roomImage', moveInForm.roomImage)
     try {
       await propertyService.submitMoveIn(payload)
-      setMoveInMessage('Move-in submitted. StayJi admin will verify proof, vendor confirmation, and occupancy before cashback or commission is processed.')
+      setMoveInMessage('Move-in submitted. StayJi admin will verify proof, owner confirmation, and occupancy before cashback or commission is processed.')
       setMoveInForm({ ownerName: '', joiningDate: '', userNote: '', paymentScreenshot: null, roomImage: null })
     } catch (err) {
       setMoveInMessage(err?.message || 'Unable to submit move-in proof.')
     }
   }
 
-  const handleCompare = () => {
-    const current = JSON.parse(localStorage.getItem('stayjiCompare') || '[]')
-    const propertyId = property._id || property.id
-    const next = [propertyId, ...current.filter((item) => item !== propertyId)].slice(0, 3)
-    localStorage.setItem('stayjiCompare', JSON.stringify(next))
-    alert('Added to comparison. You can compare up to 3 properties while browsing.')
+  const handleSubmitReview = async (event) => {
+    event.preventDefault()
+    if (!user || !user._id) {
+      navigate('/login', { replace: true })
+      return
+    }
+    setReviewMessage('')
+    try {
+      const payload = {
+        userIDFK: user._id,
+        propertyIDFK: property._id || property.id,
+        rating: reviewForm.rating,
+        details: reviewForm.details,
+        tags: reviewForm.tags,
+      }
+      if (editingReviewId) {
+        payload.reviewId = editingReviewId
+      }
+      await propertyService.submitReview(payload)
+      const nextReviews = await propertyService.fetchReviews({ propertyId: property._id || property.id, limit: 8 })
+      setReviews(nextReviews)
+      setReviewForm({ rating: '5', details: '', tags: '' })
+      setEditingReviewId(null)
+      setReviewMessage(editingReviewId ? 'Review updated successfully.' : 'Review saved. Admins can use it for rating quality and ranking decisions.')
+    } catch (err) {
+      setReviewMessage(err?.message || 'Unable to save review.')
+    }
+  }
+
+  const handleEditReview = (review) => {
+    if (review.userIDFK?._id === user?._id || review.userId === user?._id) {
+      setReviewForm({ rating: String(review.rating), details: review.details || '', tags: review.tags || '' })
+      setEditingReviewId(review._id)
+      window.scrollTo({ top: document.querySelector('[data-review-form]')?.offsetTop || 0, behavior: 'smooth' })
+    }
   }
 
   const getMapsUrl = (provider = 'google') => {
-    const lat = property.location?.lat || property.latitude || 19.07598
-    const lng = property.location?.lng || property.longitude || 72.87766
+    const lat = property.location?.lat || property.latitude || 12.9716
+    const lng = property.location?.lng || property.longitude || 77.5946
     if (provider === 'apple') return `https://maps.apple.com/?daddr=${lat},${lng}`
     return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
   }
@@ -169,10 +370,21 @@ function PropertyDetailPage() {
   }
 
   const coordinates = {
-    lat: property.location?.lat || 19.07598,
-    lng: property.location?.lng || 72.87766,
+    lat: property.location?.lat || 12.9716,
+    lng: property.location?.lng || 77.5946,
   }
   const distanceKm = hasUserLocation ? getDistanceKm(position, coordinates) : null
+  const positiveReviews = reviews.filter((review) => Number(review.rating) >= 4)
+  const neutralReviews = reviews.filter((review) => Number(review.rating) === 3)
+  const negativeReviews = reviews.filter((review) => Number(review.rating) < 3).slice(0, 2)
+  const displayedReviews = [...positiveReviews, ...neutralReviews, ...negativeReviews].slice(0, 8)
+  const amenityItems = [...new Set([
+    ...(property.amenities || []),
+    ...(property.customFeatures || []),
+    ...(property.parkingAvailable ? ['Parking'] : []),
+    ...(property.acAvailable ? ['AC rooms'] : []),
+    ...(property.mealsAvailable || []),
+  ].filter(Boolean))]
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -180,24 +392,16 @@ function PropertyDetailPage() {
         <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-accent-500">
           <FiArrowLeft /> Back
         </button>
-        <span className="rounded-full bg-slate-900/80 px-4 py-2 text-sm text-accent-400">Premium stay</span>
+        <div className="flex flex-wrap gap-2">
+          {property.isPremium ? <span className="rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-950">Premium</span> : null}
+          {property.isVerified || ['Approved', 'Verified'].includes(property.approvalStatus) ? <span className="rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-200">Verified</span> : null}
+        </div>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[1.25fr_0.75fr]">
         <section className="space-y-8">
           <div className="overflow-hidden rounded-[2rem] bg-slate-950/90 shadow-card">
-            <img
-              src={property.image || 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1200&q=80'}
-              alt={property.name}
-              className="h-96 w-full object-cover"
-            />
-            {(property.images || []).length > 1 ? (
-              <div className="grid grid-cols-3 gap-2 bg-slate-950 p-2 sm:grid-cols-4">
-                {property.images.slice(1, 5).map((image) => (
-                  <img key={image} src={image} alt={property.name} className="h-24 w-full rounded-2xl object-cover" />
-                ))}
-              </div>
-            ) : null}
+            <GalleryTrigger property={property} />
           </div>
 
           {property.videoUrl ? (
@@ -209,12 +413,17 @@ function PropertyDetailPage() {
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm uppercase tracking-[0.28em] text-accent-400">{property.category || property.type || 'PG'}</p>
+                <p className="text-sm uppercase tracking-[0.28em] text-accent-400">{property.propertyType || property.category || property.type || 'PG'}</p>
                 <h1 className="mt-3 text-4xl font-semibold text-white">{property.name}</h1>
+                <p className="mt-3 text-sm text-slate-400">{property.locationLabel || property.area || property.city}</p>
               </div>
               <p className="rounded-3xl bg-brand-500/10 px-5 py-3 text-2xl font-semibold text-brand-100">₹{property.rent || '8,500'}/mo</p>
             </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
+                <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Property type</p>
+                <p className="mt-2 text-base text-white">{property.propertyType || property.category || property.type || 'PG'}</p>
+              </div>
               <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
                 <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Gender type</p>
                 <p className="mt-2 text-base text-white">{property.gender || 'Co-ed'}</p>
@@ -226,6 +435,30 @@ function PropertyDetailPage() {
               <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
                 <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Deposit</p>
                 <p className="mt-2 text-base text-white">₹{property.depositAmount || '0'}</p>
+              </div>
+              <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300 sm:col-span-2">
+                <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Sharing options</p>
+                <p className="mt-2 text-base text-white">{property.sharingAvailability || property.sharing || 'Sharing availability will be confirmed by owner.'}</p>
+                {property.roomInventory?.length ? (
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    {property.roomInventory.map((row) => (
+                      <div key={`${row.sharingType}-${row.monthlyRent}`} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3 text-sm text-slate-300">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold text-white">{row.sharingType || 'Shared room'}</p>
+                          {row.monthlyRent ? <span className="text-brand-100">₹{row.monthlyRent}</span> : null}
+                        </div>
+                        <p className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+                          {row.vacantRooms || row.vacantBeds ? `${row.vacantRooms || 0} rooms · ${row.vacantBeds || 0} beds vacant` : `${row.totalRooms || 0} rooms listed`}
+                        </p>
+                        {(row.bathroom || row.gender || row.foodPreference || row.ac) ? (
+                          <p className="mt-2 text-slate-400">
+                            {[row.gender, row.foodPreference, row.bathroom, row.ac ? 'AC' : ''].filter(Boolean).join(' · ')}
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
                 <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Daily stay</p>
@@ -260,13 +493,14 @@ function PropertyDetailPage() {
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               <div className="rounded-3xl bg-slate-950/80 p-5">
                 <FiMessageSquare className="text-accent-400" />
-                <p className="mt-3 text-sm text-slate-400">Owner contact</p>
-                <p className="mt-2 text-white">Hidden until StayJi verifies the lead</p>
+                <p className="mt-3 text-sm text-slate-400">Owner</p>
+                <p className="mt-2 text-white">{property.ownerName || property.owner?.name || 'StayJi owner'}</p>
+                <p className="mt-1 text-xs text-slate-500">{property.contact ? 'Contact available after verified lead' : 'Contact hidden until StayJi verifies the lead'}</p>
               </div>
               <div className="rounded-3xl bg-slate-950/80 p-5">
                 <FiClock className="text-accent-400" />
-                <p className="mt-3 text-sm text-slate-400">Next available visit</p>
-                <p className="mt-2 text-white">{property.nextVisit || 'Tomorrow 3:00 PM'}</p>
+                <p className="mt-3 text-sm text-slate-400">Verification</p>
+                <p className="mt-2 text-white">{property.isVerified || ['Approved', 'Verified'].includes(property.approvalStatus) ? 'Verified listing' : property.approvalStatus || 'Pending review'}</p>
               </div>
             </div>
             {isAdmin ? (
@@ -279,6 +513,15 @@ function PropertyDetailPage() {
                       {item}
                     </label>
                   ))}
+                </div>
+              </div>
+            ) : isOwnerView ? (
+              <div className="mt-6 rounded-3xl border border-accent-500/40 bg-accent-500/10 p-5 text-slate-200">
+                <p className="font-semibold text-white">Owner visit-slot controls</p>
+                <p className="mt-2 text-sm text-slate-400">Users see your live vacancy and availability from the listing. Update beds, vacancy status, and available-from date from your owner property edit or occupancy controls.</p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Button onClick={() => navigate(`/dashboard/owner/properties/${property._id || property.id}/edit`)}>Update listing</Button>
+                  <Button variant="secondary" onClick={() => navigate(`/dashboard/owner/leads?propertyId=${property._id || property.id}`)}>Open leads</Button>
                 </div>
               </div>
             ) : (
@@ -309,22 +552,24 @@ function PropertyDetailPage() {
                 </div>
                 <div className="mt-8 flex flex-wrap gap-4">
                   <Button onClick={handleShortlist} className="w-full sm:w-auto">Shortlist</Button>
+                  <Button onClick={handleToggleCompare} variant="secondary" className="w-full sm:w-auto"><FiColumns className="mr-2" /> {compareIds.includes(property?._id || property?.id) ? 'Added to compare' : 'Compare'}</Button>
                   <Button onClick={handleExpressInterest} variant="secondary" className="w-full sm:w-auto">Message owner</Button>
-                  <Button onClick={handleExpressInterest} className="w-full sm:w-auto">Request callback</Button>
+                  <Button onClick={handleRequestCallback} className="w-full sm:w-auto">Request callback</Button>
                   <Button onClick={handleBookVisit} variant="secondary" className="w-full sm:w-auto">Book visit</Button>
-                  <Button onClick={handleCompare} variant="secondary" className="w-full sm:w-auto"><FiShuffle className="mr-2" /> Compare</Button>
-                  <a href="/compare" className="inline-flex w-full items-center justify-center rounded-3xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cyan-300/60 hover:bg-white/15 sm:w-auto">Open comparison</a>
+                  <Button onClick={handleShare} variant="secondary" className="w-full sm:w-auto"><FiShare2 /> Share</Button>
+                  <Button onClick={handleReport} variant="secondary" className="w-full sm:w-auto"><FiFlag /> Report</Button>
                 </div>
+                {actionMessage ? <p className={`mt-4 text-sm ${actionMessage.startsWith('Unable') || actionMessage.startsWith('Select') ? 'text-rose-300' : 'text-emerald-300'}`}>{actionMessage}</p> : null}
               </>
             )}
           </div>
 
-          {!isAdmin ? (
+          {isConsumerView ? (
             <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
               <p className="text-sm uppercase tracking-[0.28em] text-emerald-300">Verified move-in</p>
               <h2 className="mt-3 text-2xl font-semibold text-white">Moved In Successfully</h2>
               <p className="mt-3 text-sm leading-6 text-slate-400">
-                Submit proof only after joining. StayJi verifies payment proof, vendor confirmation, and occupancy before marking a lead converted, generating vendor commission, or processing user cashback.
+                Submit proof only after joining. StayJi verifies payment proof, owner confirmation, and occupancy before marking a lead converted, generating owner commission, or processing user cashback.
               </p>
               <form onSubmit={handleSubmitMoveIn} className="mt-6 grid gap-4">
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -356,6 +601,46 @@ function PropertyDetailPage() {
               </form>
             </div>
           ) : null}
+
+          {isConsumerView ? (
+            <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
+              <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Resident reviews</p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">Rate and review this stay</h2>
+              <form onSubmit={handleSubmitReview} className="mt-6 grid gap-4">
+                <div className="grid gap-4 sm:grid-cols-[0.35fr_1fr]">
+                  <div className="text-sm text-slate-300">
+                    Rating
+                    <StarRating value={reviewForm.rating} onChange={(rating) => setReviewForm((current) => ({ ...current, rating }))} />
+                  </div>
+                  <label className="text-sm text-slate-300">
+                    Tags
+                    <input value={reviewForm.tags} onChange={(event) => setReviewForm((current) => ({ ...current, tags: event.target.value }))} placeholder="food, cleanliness, safety" className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-accent-400" />
+                  </label>
+                </div>
+                <label className="text-sm text-slate-300">
+                  Review
+                  <textarea value={reviewForm.details} onChange={(event) => setReviewForm((current) => ({ ...current, details: event.target.value }))} required rows="3" className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-accent-400" />
+                </label>
+                {reviewMessage ? <p className={`text-sm ${reviewMessage.startsWith('Unable') ? 'text-rose-300' : 'text-emerald-300'}`}>{reviewMessage}</p> : null}
+                <Button type="submit" className="w-full sm:w-auto">Submit review</Button>
+              </form>
+              <div className="mt-6 space-y-3">
+                {displayedReviews.map((review) => (
+                  <div key={review._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+                    <p className="font-semibold text-white">
+                      {Array.from({ length: 5 }).map((_, index) => (
+                        <FiStar key={index} className={`mr-1 inline ${index < Number(review.rating) ? 'fill-amber-300 text-amber-300' : 'text-slate-600'}`} />
+                      ))}
+                      <span className="ml-2">{[review.userIDFK?.userFname, review.userIDFK?.userLname].filter(Boolean).join(' ') || 'StayJi user'}</span>
+                    </p>
+                    <p className="mt-2">{review.details}</p>
+                    {review.ownerReply ? <p className="mt-2 text-accent-200">Owner reply: {review.ownerReply}</p> : null}
+                  </div>
+                ))}
+                {!reviews.length ? <p className="text-sm text-slate-400">No reviews yet. After a visit or move-in, share a helpful rating for future students.</p> : null}
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <aside className="space-y-6">
@@ -375,9 +660,11 @@ function PropertyDetailPage() {
                 </div>
               ) : null}
               <p className="rounded-3xl bg-slate-950/80 p-4 text-sm text-slate-300">Available from: {property.availableFrom || 'Immediately'}</p>
-              <button type="button" onClick={handleExpressInterest} className="rounded-3xl bg-emerald-500 px-5 py-3 text-center text-sm font-semibold text-white">
-                Message owner privately
-              </button>
+              {isConsumerView ? (
+                <button type="button" onClick={handleExpressInterest} className="rounded-3xl bg-emerald-500 px-5 py-3 text-center text-sm font-semibold text-white">
+                  Message owner privately
+                </button>
+              ) : null}
             </div>
           </div>
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
@@ -409,9 +696,10 @@ function PropertyDetailPage() {
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
             <p className="text-sm uppercase tracking-[0.28em] text-accent-500">Amenities</p>
             <ul className="mt-6 grid gap-3 sm:grid-cols-2 text-slate-300">
-              {(property.amenities || ['WiFi', '24/7 Security', 'Kitchen access']).map((item) => (
-                <li key={item} className="flex items-center gap-3 rounded-3xl bg-slate-950/80 p-4">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-accent-500/10 text-accent-300">{getAmenityIcon(item)}</span>
+              {(amenityItems.length ? amenityItems : ['WiFi', '24/7 Security', 'Kitchen access']).map((item) => (
+                <li key={item} className="flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950/80 p-4 transition hover:border-accent-500/60 hover:bg-slate-900">
+                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-accent-500/10 text-xl">{getAmenityEmoji(item)}</span>
+                  <span className="text-accent-300">{getAmenityIcon(item)}</span>
                   <span>{item}</span>
                 </li>
               ))}

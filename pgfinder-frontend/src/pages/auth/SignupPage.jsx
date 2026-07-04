@@ -4,22 +4,68 @@ import Button from '../../components/common/Button'
 import Input from '../../components/common/Input'
 import { useAuth } from '../../context/AuthContext'
 import Card from '../../components/common/Card'
+import axiosClient from '../../api/axiosClient'
+import { MVP_CITY, MVP_STATE } from '../../config/mvp'
+
+const CITY_OPTIONS = {
+  [MVP_STATE]: [MVP_CITY],
+}
+
+const formStorageKey = 'stayji-signup-form'
+
+const readStoredSignupForm = (requestedRole) => {
+  const fallback = { name: '', contact: '', email: '', password: '', role: requestedRole || 'user', state: MVP_STATE, city: MVP_CITY, acceptTerms: false, acceptPrivacy: false }
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(formStorageKey) || '{}')
+    if (!saved || typeof saved !== 'object') return fallback
+    return {
+      ...fallback,
+      ...saved,
+      role: requestedRole || saved.role || fallback.role,
+      acceptTerms: Boolean(saved.acceptTerms),
+      acceptPrivacy: Boolean(saved.acceptPrivacy),
+    }
+  } catch {
+    return fallback
+  }
+}
 
 function SignupPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const requestedRole = searchParams.get('role') === 'vendor' ? 'vendor' : null
+  const requestedRole = ['owner', 'vendor'].includes(searchParams.get('role')) ? 'owner' : null
   const { signup, googleSignup, status, error, isAuthenticated, role } = useAuth()
   const googleButtonRef = useRef(null)
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-  const [form, setForm] = useState({ name: '', contact: '', email: '', password: '', role: requestedRole || 'user', acceptTerms: false, acceptPrivacy: false })
+  const [form, setForm] = useState(() => readStoredSignupForm(requestedRole))
   const [localError, setLocalError] = useState('')
+  const [cityOptions, setCityOptions] = useState(CITY_OPTIONS)
+
+  useEffect(() => {
+    axiosClient.get('/client/city-options')
+      .then((res) => {
+        const options = res.data?.data?.options
+        if (options && Object.keys(options).length) {
+          setCityOptions(options)
+          setForm((current) => {
+            const state = options[current.state] ? current.state : Object.keys(options)[0]
+            const city = options[state]?.includes(current.city) ? current.city : options[state]?.[0] || ''
+            return { ...current, state, city }
+          })
+        }
+      })
+      .catch(() => setCityOptions(CITY_OPTIONS))
+  }, [])
 
   useEffect(() => {
     if (isAuthenticated) {
       navigate(`/dashboard/${role || 'user'}`, { replace: true })
     }
   }, [isAuthenticated, navigate, role])
+
+  useEffect(() => {
+    sessionStorage.setItem(formStorageKey, JSON.stringify(form))
+  }, [form])
 
   useEffect(() => {
     if (!googleClientId || !googleButtonRef.current) return undefined
@@ -39,7 +85,7 @@ function SignupPage() {
             return
           }
           try {
-            const response = await googleSignup({ credential, contact: form.contact, role: form.role, acceptTerms: form.acceptTerms, acceptPrivacy: form.acceptPrivacy })
+            const response = await googleSignup({ credential, contact: form.contact, role: form.role, state: form.state, city: form.city, acceptTerms: form.acceptTerms, acceptPrivacy: form.acceptPrivacy })
             navigate(`/dashboard/${response.user?.role || form.role}`)
           } catch {
             // handled in context
@@ -69,11 +115,15 @@ function SignupPage() {
     return () => {
       script.onload = null
     }
-  }, [googleClientId, googleSignup, form.contact, form.role, form.acceptTerms, form.acceptPrivacy, navigate])
+  }, [googleClientId, googleSignup, form.contact, form.role, form.state, form.city, form.acceptTerms, form.acceptPrivacy, navigate])
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target
-    setForm((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }))
+    setForm((current) => {
+      const next = { ...current, [name]: type === 'checkbox' ? checked : value }
+      if (name === 'state') next.city = cityOptions[value]?.[0] || ''
+      return next
+    })
   }
 
   const handleSubmit = async (event) => {
@@ -87,12 +137,17 @@ function SignupPage() {
       setLocalError('Accept StayJi Terms & Conditions and Privacy Policy to continue.')
       return
     }
+    if (form.role === 'owner' && (!form.state || !form.city)) {
+      setLocalError('Select your operating state and city to create an Owner account.')
+      return
+    }
     if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(form.password)) {
       setLocalError('Use a stronger password with 8+ characters, uppercase, lowercase, and a number.')
       return
     }
     try {
       const response = await signup(form)
+      sessionStorage.removeItem(formStorageKey)
       navigate(`/dashboard/${response.user?.role || form.role}`)
     } catch {
       // handled in context
@@ -105,7 +160,7 @@ function SignupPage() {
         <div className="space-y-4">
           <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Get started</p>
           <h1 className="text-3xl font-semibold text-white">Create your account</h1>
-          <p className="text-slate-400">Join as a student or vendor and manage listings with a premium dashboard.</p>
+          <p className="text-slate-400">Join as a user or owner and manage listings with a premium dashboard.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
@@ -116,7 +171,7 @@ function SignupPage() {
             <Input label="Password" type="password" name="password" value={form.password} onChange={handleChange} required />
             {requestedRole ? (
               <div className="rounded-3xl border border-accent-500/40 bg-accent-500/10 px-4 py-3 text-sm text-accent-100">
-                Creating a vendor account for listing stays on StayJi.
+                Creating an Owner account for listing stays on StayJi. Admin approval is required before property activation.
               </div>
             ) : (
               <label className="block text-sm text-slate-200">
@@ -128,10 +183,36 @@ function SignupPage() {
                   className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400"
                 >
                   <option value="user">Student / User</option>
-                  <option value="vendor">Host / Vendor</option>
+                  <option value="owner">Owner</option>
                 </select>
               </label>
             )}
+            {form.role === 'owner' ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block text-sm text-slate-200">
+                  State
+                  <select
+                    name="state"
+                    value={form.state}
+                    onChange={handleChange}
+                    className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400"
+                  >
+                    {Object.keys(cityOptions).map((state) => <option key={state} value={state}>{state}</option>)}
+                  </select>
+                </label>
+                <label className="block text-sm text-slate-200">
+                  City
+                  <select
+                    name="city"
+                    value={form.city}
+                    onChange={handleChange}
+                    className="mt-2 w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400"
+                  >
+                    {(cityOptions[form.state] || []).map((city) => <option key={city} value={city}>{city}</option>)}
+                  </select>
+                </label>
+              </div>
+            ) : null}
           </div>
           <div className="grid gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
             <label className="flex items-start gap-3">

@@ -10,12 +10,48 @@ const axiosClient = axios.create({
   },
 })
 
+axiosClient.interceptors.request.use((config) => {
+  // Always prefer axios instance default Authorization (set by AuthContext when token changes)
+  // Otherwise fall back to persisted token (legacy/refresh scenario)
+  const defaultAuth = axiosClient.defaults?.headers?.common?.Authorization
+  if (!config.headers) config.headers = {}
+
+  if (!config.headers.Authorization && defaultAuth) {
+    config.headers.Authorization = defaultAuth
+    return config
+  }
+
+  if (!config.headers.Authorization && typeof window !== 'undefined') {
+    try {
+      const savedRaw = sessionStorage.getItem('stayji-auth') || localStorage.getItem('stayji-auth')
+      const saved = savedRaw ? JSON.parse(savedRaw) : null
+      if (saved?.token) config.headers.Authorization = `Bearer ${saved.token}`
+    } catch {
+      // keep request unchanged
+    }
+  }
+  return config
+})
+
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      sessionStorage.removeItem('stayji-auth')
+      localStorage.removeItem('stayji-auth')
+      delete axiosClient.defaults.headers.common.Authorization
+      window.dispatchEvent(new Event('stayji-auth-expired'))
+    }
     if (!error.response) {
       return Promise.reject({
         message: `Backend is not reachable at ${baseURL}. Start the Node server on port 3000 and check CORS/API URL settings.`,
+      })
+    }
+    const serverMessage = error.response.data?.msg || error.response.data?.message
+    if (serverMessage) {
+      return Promise.reject({
+        ...error,
+        message: serverMessage,
       })
     }
     return Promise.reject(error)

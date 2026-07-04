@@ -1,0 +1,61 @@
+var mongoose = require('mongoose');
+
+walletPayoutSchema = mongoose.Schema({
+    userId:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:'userMaster',
+        required:true,
+        index:true
+    },
+    moveInId:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:'moveInConfirmation'
+    },
+    upiId:{
+        type:String
+    },
+    upiQr:{
+        type:String
+    },
+    bankDetails:{
+        type:Object,
+        default:{}
+    },
+    coins:{
+        type:Number,
+        default:0
+    },
+    amount:{
+        type:Number,
+        default:0
+    },
+    status:{
+        type:String,
+        enum:["Pending","Approved","Paid","Rejected"],
+        default:"Pending",
+        index:true
+    },
+    adminNote:{
+        type:String
+    },
+    reviewedBy:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:'userMaster'
+    },
+    reviewedOn:{
+        type:Date
+    },
+    paidOn:{
+        type:Date
+    },
+    addedOn:{
+        type:Date,
+        default:Date.now
+    },
+    isActive:{
+        type:Boolean,
+        default:true
+    }
+});
+
+module.exports = mongoose.model('walletPayout', walletPayoutSchema);

@@ -17,8 +17,6 @@ const NotFoundPage = lazy(() => import('../pages/NotFoundPage'))
 const FAQPage = lazy(() => import('../pages/FAQPage'))
 const FAQDetailPage = lazy(() => import('../pages/FAQDetailPage'))
 const LocalityPage = lazy(() => import('../pages/LocalityPage'))
-const BlogPage = lazy(() => import('../pages/BlogPage'))
-const RecommendationPage = lazy(() => import('../pages/RecommendationPage'))
 const LegalPage = lazy(() => import('../pages/LegalPage'))
 const AdminDashboard = lazy(() => import('../pages/dashboard/admin/AdminDashboard'))
 const VendorDashboard = lazy(() => import('../pages/dashboard/vendor/VendorDashboard'))
@@ -30,13 +28,15 @@ const VendorLeadsPage = lazy(() => import('../pages/dashboard/vendor/VendorLeads
 const ManageUsersPage = lazy(() => import('../pages/dashboard/admin/ManageUsersPage'))
 const AdminVendorDetailPage = lazy(() => import('../pages/dashboard/admin/AdminVendorDetailPage'))
 const AdminPropertyDetailPage = lazy(() => import('../pages/dashboard/admin/AdminPropertyDetailPage'))
+const MessagesPage = lazy(() => import('../pages/dashboard/MessagesPage'))
 
 function DashboardRedirect() {
   const { role } = useAuth()
   if (!role) {
     return <Navigate to="/login" replace />
   }
-  return <Navigate to={`/dashboard/${role || 'user'}`} replace />
+  const dashboardRole = role === 'owner' ? 'owner' : role || 'user'
+  return <Navigate to={`/dashboard/${dashboardRole}`} replace />
 }
 
 function AppRoutes() {
@@ -48,29 +48,31 @@ function AppRoutes() {
           <Route path="/properties" element={<PropertiesPage />} />
           <Route path="/properties/:id" element={<PropertyDetailPage />} />
           <Route path="/property/:id" element={<PropertyDetailPage />} />
-          <Route path="/compare" element={<ComparePage />} />
+          <Route path="/compare" element={<ProtectedRoute><ComparePage /></ProtectedRoute>} />
           <Route path="/bangalore" element={<LocalityPage />} />
           <Route path="/bangalore/:localitySlug" element={<LocalityPage />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/faq/:category" element={<FAQPage />} />
           <Route path="/faq/:category/:faqSlug" element={<FAQDetailPage />} />
-          <Route path="/blog" element={<BlogPage />} />
-          <Route path="/blog/:slug" element={<BlogPage />} />
-          <Route path="/blogs" element={<BlogPage />} />
-          <Route path="/blogs/:slug" element={<BlogPage />} />
-          <Route path="/recommendations" element={<RecommendationPage />} />
-          <Route path="/recommendations/:slug" element={<RecommendationPage />} />
+          <Route path="/blog" element={<Navigate to="/bangalore" replace />} />
+          <Route path="/blog/:slug" element={<Navigate to="/bangalore" replace />} />
+          <Route path="/blogs" element={<Navigate to="/bangalore" replace />} />
+          <Route path="/blogs/:slug" element={<Navigate to="/bangalore" replace />} />
+          <Route path="/recommendations" element={<Navigate to="/properties" replace />} />
+          <Route path="/recommendations/:slug" element={<Navigate to="/properties" replace />} />
           <Route path="/terms-and-conditions" element={<LegalPage />} />
           <Route path="/privacy-policy" element={<LegalPage />} />
           <Route path="/refund-policy" element={<LegalPage />} />
           <Route path="/vendor-policy" element={<LegalPage />} />
           <Route path="/community-guidelines" element={<LegalPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/admin-login" element={<LoginPage portal="admin" />} />
           <Route path="/signup" element={<SignupPage />} />
         </Route>
 
       <Route path="/admin" element={<Navigate to="/dashboard/admin" replace />} />
-      <Route path="/vendor" element={<Navigate to="/dashboard/vendor" replace />} />
+      <Route path="/vendor" element={<Navigate to="/dashboard/owner" replace />} />
+      <Route path="/owner" element={<Navigate to="/dashboard/owner" replace />} />
 
       <Route
         path="/dashboard"
@@ -106,6 +108,14 @@ function AppRoutes() {
           }
         />
         <Route
+          path="admin/owners/:ownerId"
+          element={
+            <RoleProtectedRoute role="admin">
+              <AdminVendorDetailPage />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
           path="admin/properties/:propertyId"
           element={
             <RoleProtectedRoute role="admin">
@@ -123,49 +133,62 @@ function AppRoutes() {
         />
         <Route
           path="vendor"
+          element={<Navigate to="/dashboard/owner" replace />}
+        />
+        <Route
+          path="owner"
           element={
-            <RoleProtectedRoute role="vendor">
+            <RoleProtectedRoute role="owner">
               <VendorDashboard />
             </RoleProtectedRoute>
           }
         />
+        <Route path="vendor/*" element={<Navigate to="/dashboard/owner" replace />} />
         <Route
-          path="vendor/add-property"
+          path="owner/add-property"
           element={
-            <RoleProtectedRoute role="vendor">
+            <RoleProtectedRoute role="owner">
               <AddPropertyPage />
             </RoleProtectedRoute>
           }
         />
         <Route
-          path="vendor/leads"
+          path="owner/leads"
           element={
-            <RoleProtectedRoute role="vendor">
+            <RoleProtectedRoute role="owner">
               <VendorLeadsPage />
             </RoleProtectedRoute>
           }
         />
         <Route
-          path="vendor/properties"
+          path="owner/properties"
           element={
-            <RoleProtectedRoute role="vendor">
+            <RoleProtectedRoute role="owner">
               <ManagePropertiesPage />
             </RoleProtectedRoute>
           }
         />
         <Route
-          path="vendor/properties/:propertyId"
+          path="owner/properties/:propertyId"
           element={
-            <RoleProtectedRoute role="vendor">
+            <RoleProtectedRoute role="owner">
               <PropertyDetailPage />
             </RoleProtectedRoute>
           }
         />
         <Route
-          path="vendor/properties/:propertyId/edit"
+          path="owner/properties/:propertyId/edit"
           element={
-            <RoleProtectedRoute role="vendor">
+            <RoleProtectedRoute role="owner">
               <AddPropertyPage />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="owner/messages"
+          element={
+            <RoleProtectedRoute role="owner">
+              <MessagesPage />
             </RoleProtectedRoute>
           }
         />
@@ -174,6 +197,14 @@ function AppRoutes() {
           element={
             <RoleProtectedRoute role="user">
               <UserDashboard />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="user/messages"
+          element={
+            <RoleProtectedRoute role="user">
+              <MessagesPage />
             </RoleProtectedRoute>
           }
         />

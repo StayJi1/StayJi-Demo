@@ -35,6 +35,9 @@ userSchema = mongoose.Schema({
     city:{
         type:String
     },
+    state:{
+        type:String
+    },
     socialLinks:{
         type:[String],
         default:[]
@@ -52,11 +55,60 @@ userSchema = mongoose.Schema({
         enum:["active","suspended","blocked","pending_verification"],
         default:"active"
     },
+    approvalStatus:{
+        type:String,
+        enum:["Pending","Approved","Rejected","Suspended","Verified"],
+        default:"Pending"
+    },
+    permissions:{
+        type:[String],
+        default:[]
+    },
+    assignedCity:{
+        type:String
+    },
+    assignedState:{
+        type:String
+    },
+    regionalScope:{
+        type:Mixed,
+        default:{}
+    },
+    roleHistory:{
+        type:[Mixed],
+        default:[]
+    },
+    suspiciousActivity:{
+        type:[Mixed],
+        default:[]
+    },
+    lastLogin:{
+        type:Date
+    },
+    loginHistory:{
+        type:[Mixed],
+        default:[]
+    },
+    forceLogoutAt:{
+        type:Date
+    },
     termsAcceptedAt:{
         type:Date
     },
     privacyAcceptedAt:{
         type:Date
+    },
+    termsConsent:{
+        type:Mixed,
+        default:{}
+    },
+    privacyConsent:{
+        type:Mixed,
+        default:{}
+    },
+    consentHistory:{
+        type:[Mixed],
+        default:[]
     },
     userType:{
         type:String
@@ -95,6 +147,10 @@ userSchema = mongoose.Schema({
         type:[Mixed],
         default:[]
     },
+    comparisonHistory:{
+        type:[Mixed],
+        default:[]
+    },
     businessName:{
         type:String
     },
@@ -120,11 +176,38 @@ userSchema = mongoose.Schema({
     addedOn:{
         type:String
     },
+    isDummy:{
+        type:Boolean,
+        default:false,
+        index:true
+    },
+    isVerified:{
+        type:Boolean,
+        default:false,
+        index:true
+    },
+    status:{
+        type:String,
+        enum:["active","archived","demo","suspended"],
+        default:"active",
+        index:true
+    },
     isActive:{
         type:Boolean,
         default:true
     }
 });
+
+userSchema.index({ userEmail: 1, userType: 1 }, { collation: { locale: 'en', strength: 2 } });
+userSchema.index({ userType: 1 });
+userSchema.index({ city: 1 });
+userSchema.index({ state: 1 });
+userSchema.index({ assignedCity: 1 });
+userSchema.index({ assignedState: 1 });
+userSchema.index({ accountStatus: 1 });
+userSchema.index({ isVerified: 1 });
+userSchema.index({ isDummy: 1 });
+userSchema.index({ isActive: 1 });
 
 userSchema.set('toJSON', {
     transform: function (doc, ret) {

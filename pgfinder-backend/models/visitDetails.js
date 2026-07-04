@@ -41,6 +41,15 @@ visitSchema = mongoose.Schema({
     status:{
         type:String
     },
+    isDummy:{
+        type:Boolean,
+        default:false,
+        index:true
+    },
+    isVerified:{
+        type:Boolean,
+        default:false
+    },
     addedOn:{
         type:String
     },
@@ -56,4 +65,9 @@ visitSchema.pre('save', function(next) {
     if (!this.userIDFK && this.userId) this.userIDFK = this.userId;
     next();
 });
+visitSchema.index({ propertyIDFK: 1, isActive: 1 });
+visitSchema.index({ propertyId: 1, isActive: 1 });
+visitSchema.index({ vendorId: 1, isActive: 1 });
+visitSchema.index({ userIDFK: 1, isActive: 1 });
+visitSchema.index({ isDummy: 1 });
 module.exports = mongoose.model('visitDetails',visitSchema);

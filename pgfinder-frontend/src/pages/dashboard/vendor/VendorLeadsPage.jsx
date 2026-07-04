@@ -6,7 +6,7 @@ import Card from '../../../components/common/Card'
 import dashboardService from '../../../services/dashboardService'
 import { useAuth } from '../../../context/AuthContext'
 
-function VendorLeadsPage() {
+function OwnerLeadsPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -20,19 +20,38 @@ function VendorLeadsPage() {
       await dashboardService.markLeadConverted({ type, id })
       setLeads((current) => ({
         ...current,
-        visits: type === 'visit' ? current.visits.map((item) => (item._id === id ? { ...item, isConverted: true, leadStage: 'converted' } : item)) : current.visits,
-        inquiries: type === 'inquiry' ? current.inquiries.map((item) => (item._id === id ? { ...item, isConverted: true, leadStage: 'converted' } : item)) : current.inquiries,
+        visits: type === 'visit' ? current.visits.map((item) => ((item._id || item.id) === id ? { ...item, isConverted: true, leadStage: 'converted' } : item)) : current.visits,
+        inquiries: type === 'inquiry' ? current.inquiries.map((item) => ((item._id || item.id) === id ? { ...item, isConverted: true, leadStage: 'converted' } : item)) : current.inquiries,
       }))
     } catch (err) {
       setError(err?.message || 'Unable to mark lead converted.')
     }
+  }
+  const updateVisit = async (id, payload) => {
+    try {
+      const updated = await dashboardService.updateVisit(id, payload)
+      setLeads((current) => ({
+        ...current,
+        visits: current.visits.map((item) => ((item._id || item.id) === id ? { ...item, ...updated } : item)),
+      }))
+    } catch (err) {
+      setError(err?.message || 'Unable to update visit.')
+    }
+  }
+
+  const rescheduleVisit = async (visit) => {
+    const currentDate = visit.visitDate ? new Date(visit.visitDate).toISOString().slice(0, 10) : ''
+    const visitDate = window.prompt('New visit date (YYYY-MM-DD)', currentDate)
+    if (!visitDate) return
+    const visitTime = window.prompt('New visit time', visit.visitTime && visit.visitTime !== '-' ? visit.visitTime : '')
+    await updateVisit(visit._id || visit.id, { action: 'approve', visitDate, visitTime: visitTime || '-' })
   }
 
   useEffect(() => {
     const loadLeads = async () => {
       try {
         if (!user?._id) return
-        const data = await dashboardService.getVendorLeads(user._id)
+        const data = await dashboardService.getOwnerLeads(user._id)
         if (selectedPropertyId) {
           const matchesProperty = (item) => {
             const propertyId = item.propertyIDFK?._id || item.propertyIDFK || item.property?._id || item.propertyId || item.property?.id
@@ -49,8 +68,7 @@ function VendorLeadsPage() {
         } else {
           setLeads(data)
         }
-      } catch (err) {
-        console.error(err)
+      } catch {
         setError('Unable to load your leads. Please try again later.')
       } finally {
         setLoading(false)
@@ -64,45 +82,39 @@ function VendorLeadsPage() {
       <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Vendor leads</p>
+            <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Owner leads</p>
             <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">Student leads and visit requests</h1>
             <p className="mt-3 max-w-3xl text-slate-400">Review every student who expressed interest or requested a visit for your properties.</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Button variant="secondary" onClick={() => navigate('/dashboard/vendor')}>Back to dashboard</Button>
-            <Button onClick={() => navigate('/dashboard/vendor/properties')}>My properties</Button>
+            <Button variant="secondary" onClick={() => navigate('/dashboard/owner')}>Back to dashboard</Button>
+            <Button onClick={() => navigate('/dashboard/owner/properties')}>My properties</Button>
           </div>
         </div>
       </header>
 
       <div className="grid gap-6 xl:grid-cols-4">
-        <Card className="p-8">
-          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Total leads</p>
-          <p className="mt-4 text-5xl font-semibold text-white">{loading ? '…' : leads.totalLeads}</p>
-          <p className="mt-4 text-sm text-slate-400">Qualified leads only: visits and owner-contact requests.</p>
-        </Card>
-        <Card className="p-8">
-          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Visit requests</p>
-          <p className="mt-4 text-5xl font-semibold text-white">{loading ? '…' : leads.visits.length}</p>
-          <p className="mt-4 text-sm text-slate-400">Students who scheduled a property visit.</p>
-        </Card>
-        <Card className="p-8">
-          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Interest messages</p>
-          <p className="mt-4 text-5xl font-semibold text-white">{loading ? '…' : leads.inquiries.length}</p>
-          <p className="mt-4 text-sm text-slate-400">Students who expressed interest in your properties.</p>
-        </Card>
-        <Card className="p-8">
-          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Wishlist saves</p>
-          <p className="mt-4 text-5xl font-semibold text-white">{loading ? '…' : leads.shortlistCount}</p>
-          <p className="mt-4 text-sm text-slate-400">Analytics only. User phone numbers stay private at this stage.</p>
-        </Card>
+        {[
+          { label: 'Total leads', value: leads.totalLeads, note: 'Qualified leads only: visits and owner-contact requests.', target: 'owner-lead-visits' },
+          { label: 'Visit requests', value: leads.visits.length, note: 'Students who scheduled a property visit.', target: 'owner-lead-visits' },
+          { label: 'Interest messages', value: leads.inquiries.length, note: 'Students who expressed interest in your properties.', target: 'owner-lead-interest' },
+          { label: 'Wishlist saves', value: leads.shortlistCount, note: 'Analytics only. User phone numbers stay private at this stage.', target: 'owner-lead-wishlist' },
+        ].map((item) => (
+          <button key={item.label} type="button" onClick={() => document.getElementById(item.target)?.scrollIntoView({ behavior: 'smooth' })} className="text-left">
+            <Card className="h-full p-8 transition hover:border-accent-500">
+              <p className="text-sm uppercase tracking-[0.24em] text-accent-400">{item.label}</p>
+              <p className="mt-4 text-5xl font-semibold text-white">{loading ? '...' : item.value}</p>
+              <p className="mt-4 text-sm text-slate-400">{item.note}</p>
+            </Card>
+          </button>
+        ))}
       </div>
 
       {error ? (
         <Card className="p-8 text-center text-rose-300">{error}</Card>
       ) : (
         <div className="grid gap-6 xl:grid-cols-2">
-          <Card>
+          <Card id="owner-lead-visits">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Visit requests</p>
@@ -119,8 +131,8 @@ function VendorLeadsPage() {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm text-slate-400">Student</p>
-                        <p className="text-lg font-semibold text-white">{visit.visituser?.userFname || visit.visituser?.userName || 'Unknown student'} {visit.visituser?.userLname || ''}</p>
-                        <p className="text-sm text-slate-400">{visit.visituser?.contact || visit.visituser?.userEmail || 'No contact available'}</p>
+                        <p className="text-lg font-semibold text-white">{visit.visituser?.userFname || visit.user?.userFname || visit.visituser?.userName || visit.user?.name || 'Unknown student'} {visit.visituser?.userLname || visit.user?.userLname || ''}</p>
+                        <p className="text-sm text-slate-400">{visit.visituser?.contact || visit.user?.contact || visit.visituser?.userEmail || visit.user?.email || 'No contact available'}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Visit date</p>
@@ -128,9 +140,15 @@ function VendorLeadsPage() {
                         <p className="mt-1 text-sm text-slate-400">Move-in: {visit.moveInPreference || 'Not shared'}</p>
                       </div>
                     </div>
-                    <button type="button" onClick={() => markConverted('visit', visit._id)} className="mt-4 rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10">
+                    <p className="mt-3 text-sm text-slate-400">Status: {visit.statusLabel || visit.status || 'Pending'}</p>
+                    <button type="button" onClick={() => markConverted('visit', visit._id || visit.id)} className="mt-4 rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10">
                       {visit.isConverted ? 'Converted' : 'Mark converted'}
                     </button>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => updateVisit(visit._id || visit.id, { action: 'approve' })} className="rounded-full border border-cyan-500/60 px-3 py-2 text-xs text-cyan-200">Approve visit</button>
+                      <button type="button" onClick={() => updateVisit(visit._id || visit.id, { action: 'reject' })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject visit</button>
+                      <button type="button" onClick={() => rescheduleVisit(visit)} className="rounded-full border border-amber-500/60 px-3 py-2 text-xs text-amber-100">Reschedule</button>
+                    </div>
                   </div>
                 ))
               ) : (
@@ -139,7 +157,7 @@ function VendorLeadsPage() {
             </div>
           </Card>
 
-          <Card>
+          <Card id="owner-lead-interest">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Interest leads</p>
@@ -166,7 +184,7 @@ function VendorLeadsPage() {
                     </div>
                     <p className="mt-3 text-slate-300">{inquiry.subject || 'Interested in this property'}</p>
                     <p className="mt-2 text-sm text-slate-400">Preferred visit: {inquiry.preferredVisitTime || 'Not shared'} • Move-in: {inquiry.moveInPreference || 'Not shared'}</p>
-                    <button type="button" onClick={() => markConverted('inquiry', inquiry._id)} className="mt-4 rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10">
+                    <button type="button" onClick={() => markConverted('inquiry', inquiry._id || inquiry.id)} className="mt-4 rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10">
                       {inquiry.isConverted ? 'Converted' : 'Mark converted'}
                     </button>
                   </div>
@@ -176,7 +194,7 @@ function VendorLeadsPage() {
               )}
             </div>
           </Card>
-          <Card>
+          <Card id="owner-lead-wishlist">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Wishlist leads</p>
@@ -214,4 +232,4 @@ function VendorLeadsPage() {
   )
 }
 
-export default VendorLeadsPage
+export default OwnerLeadsPage
