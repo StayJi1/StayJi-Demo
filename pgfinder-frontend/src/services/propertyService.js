@@ -15,6 +15,7 @@ const propertyService = {
   expressInterest: ({ userIDFK, propertyIDFK, subject, description, preferredVisitTime, moveInPreference }) => propertyApi.expressInterest({ userIDFK, propertyIDFK, subject, description, preferredVisitTime, moveInPreference }),
   fetchReviews: (params) => propertyApi.reviews(params),
   submitReview: (payload) => propertyApi.addReview(payload),
+  reportProperty: (payload) => propertyApi.reportProperty(payload),
   sendChat: (payload) => propertyApi.sendChat(payload),
   recordViewed: (payload) => propertyApi.recordViewed(payload),
   recordComparison: (payload) => propertyApi.recordComparison(payload),

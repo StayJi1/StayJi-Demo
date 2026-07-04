@@ -79,6 +79,7 @@ function PropertyDetailPage() {
   const [reviews, setReviews] = useState([])
   const [reviewForm, setReviewForm] = useState({ rating: '5', details: '', tags: '' })
   const [reviewMessage, setReviewMessage] = useState('')
+  const [editingReviewId, setEditingReviewId] = useState(null)
   const [actionMessage, setActionMessage] = useState('')
   const [compareIds, setCompareIds] = useState([])
   const { user, role, isAuthenticated } = useAuth()
@@ -266,10 +267,24 @@ function PropertyDetailPage() {
     }
   }
 
-  const handleReport = () => {
-    const subject = encodeURIComponent(`Report property ${property._id || property.id}`)
-    const body = encodeURIComponent(`Please review this StayJi property:\n${window.location.href}\n\nReason:`)
-    window.location.href = `mailto:hello.stayji@gmail.com?subject=${subject}&body=${body}`
+  const handleReport = async () => {
+    if (!isAuthenticated || !user?._id) {
+      navigate('/login', { replace: true })
+      return
+    }
+    setActionMessage('')
+    try {
+      await propertyService.reportProperty({
+        reportedBy: user._id,
+        propertyId: property._id || property.id,
+        propertyName: property.name,
+        propertyLink: window.location.href,
+        reportMessage: `User reported property: ${property.name}`,
+      })
+      setActionMessage('Property reported. Admin will review it shortly.')
+    } catch {
+      setActionMessage('Unable to report this property right now.')
+    }
   }
 
   const handleSubmitMoveIn = async (event) => {
@@ -303,19 +318,32 @@ function PropertyDetailPage() {
     }
     setReviewMessage('')
     try {
-      await propertyService.submitReview({
+      const payload = {
         userIDFK: user._id,
         propertyIDFK: property._id || property.id,
         rating: reviewForm.rating,
         details: reviewForm.details,
         tags: reviewForm.tags,
-      })
+      }
+      if (editingReviewId) {
+        payload.reviewId = editingReviewId
+      }
+      await propertyService.submitReview(payload)
       const nextReviews = await propertyService.fetchReviews({ propertyId: property._id || property.id, limit: 8 })
       setReviews(nextReviews)
       setReviewForm({ rating: '5', details: '', tags: '' })
-      setReviewMessage('Review saved. Admins can use it for rating quality and ranking decisions.')
+      setEditingReviewId(null)
+      setReviewMessage(editingReviewId ? 'Review updated successfully.' : 'Review saved. Admins can use it for rating quality and ranking decisions.')
     } catch (err) {
       setReviewMessage(err?.message || 'Unable to save review.')
+    }
+  }
+
+  const handleEditReview = (review) => {
+    if (review.userIDFK?._id === user?._id || review.userId === user?._id) {
+      setReviewForm({ rating: String(review.rating), details: review.details || '', tags: review.tags || '' })
+      setEditingReviewId(review._id)
+      window.scrollTo({ top: document.querySelector('[data-review-form]')?.offsetTop || 0, behavior: 'smooth' })
     }
   }
 

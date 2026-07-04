@@ -338,6 +338,12 @@ function PropertiesPage() {
   }, [backendFilterParams, page, pageSize])
 
   useEffect(() => {
+    if (searchParams.get('nearby') === 'true' && !hasUserLocation && !locationLoading) {
+      requestLocation()
+    }
+  }, [hasUserLocation, locationLoading, requestLocation, searchParams])
+
+  useEffect(() => {
     if (hasUserLocation && nearbyMode) {
       window.setTimeout(() => setSortBy('nearest'), 0)
     }

@@ -130,6 +130,10 @@ function HomePage() {
     navigate(query ? `/properties?search=${encodeURIComponent(query)}` : '/properties')
   }
 
+  const handleNearby = () => {
+    navigate('/properties?nearby=true')
+  }
+
   return (
     <div className="overflow-hidden">
       <SEO
@@ -163,8 +167,8 @@ function HomePage() {
                   className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500"
                 />
               </label>
-              <Button type="button" variant="secondary" onClick={requestLocation} disabled={locationLoading} className="w-full sm:w-auto">
-                <FiMapPin className="mr-2" /> {locationLoading ? 'Finding' : 'Nearby'}
+              <Button type="button" variant="secondary" onClick={handleNearby} className="w-full sm:w-auto">
+                <FiMapPin className="mr-2" /> Nearby
               </Button>
               <Button type="submit" className="w-full sm:w-auto">
                 Search <FiArrowRight className="ml-2" />
@@ -293,8 +297,8 @@ function HomePage() {
             <h2 className="mt-3 text-3xl font-semibold sm:text-4xl">Find stays around your real location</h2>
             <p className="mt-4 leading-7 text-slate-300">Use map-first discovery to compare commute distance, nearby areas, and verified StayJi listings before booking a visit.</p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Button onClick={requestLocation} disabled={locationLoading}>
-                <FiNavigation className="mr-2" /> {hasUserLocation ? 'Refresh location' : 'Use my location'}
+              <Button onClick={handleNearby} disabled={locationLoading}>
+                <FiNavigation className="mr-2" /> {hasUserLocation ? 'Show nearby stays' : 'Show nearby stays'}
               </Button>
               <Link to="/bangalore">
                 <Button variant="secondary">Open map search</Button>

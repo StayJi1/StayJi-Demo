@@ -296,6 +296,10 @@ const propertyApi = {
     if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Message could not be sent')
     return res.data?.data
   }),
+  reportProperty: (payload) => axiosClient.post('/client/properties/report', payload).then((res) => {
+    if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Property report could not be submitted')
+    return res.data?.data
+  }),
   recordViewed: (payload) => axiosClient.post('/client/user/viewed-properties', payload).then((res) => res.data?.data || []),
   recordComparison: (payload) => axiosClient.post('/client/user/comparison-history', payload).then((res) => {
     if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Comparison history could not be saved')

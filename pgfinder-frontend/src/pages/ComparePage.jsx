@@ -113,6 +113,25 @@ function ComparePage() {
 
   if (loading) return <div className="mx-auto max-w-7xl px-4 py-10"><Loader message="Building comparison..." /></div>
 
+  if (!isAuthenticated) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
+        <div className="rounded-[2rem] border border-slate-800 bg-surface-800/90 p-8 shadow-card sm:p-10">
+          <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Compare stays</p>
+          <h1 className="mt-3 text-4xl font-semibold text-white">Compare up to 3 PGs side by side</h1>
+          <p className="mt-4 max-w-3xl text-lg text-slate-400">
+            Compare rent, food, sharing, vacancy, amenities, and resident score before you book a visit. Sign in to save your shortlist and open the full comparison view.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link to="/login"><Button>Login to compare</Button></Link>
+            <Link to="/signup"><Button variant="secondary">Create account</Button></Link>
+            <Link to="/properties"><Button variant="secondary">Browse stays</Button></Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -128,7 +147,8 @@ function ComparePage() {
 
       {!properties.length ? (
         <div className="rounded-[2rem] border border-slate-800 bg-surface-800/90 p-10 text-center text-slate-300">
-          No properties added for comparison yet.
+          <p className="text-lg font-semibold text-white">No properties added for comparison yet.</p>
+          <p className="mt-3 text-slate-400">Pick up to 3 stays from the listings page and compare them here.</p>
           <div className="mt-6"><Link to="/properties"><Button>Browse stays</Button></Link></div>
         </div>
       ) : (
