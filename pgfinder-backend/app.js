@@ -272,8 +272,7 @@ app.use(errorHandler);
 
 if (require.main === module) {
     const server = app.listen(PORT, () => {
-
-        console.log("Connected to Port " + PORT);
+        process.stdout.write(`StayJi backend connected to port ${PORT}\n`);
     });
 
     /*

@@ -55,7 +55,7 @@ const stats = [
 function HomePage() {
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
-  const { position, loading: locationLoading, error: locationError, hasUserLocation, requestLocation } = useCurrentLocation()
+  const { position, loading: locationLoading, error: locationError, hasUserLocation } = useCurrentLocation()
   const [popular, setPopular] = useState([])
   const [savedPropertyIds, setSavedPropertyIds] = useState(new Set())
   const [loading, setLoading] = useState(true)

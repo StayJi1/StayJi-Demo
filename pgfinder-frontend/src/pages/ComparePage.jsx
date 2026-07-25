@@ -91,7 +91,7 @@ function ComparePage() {
       }
     }
     load()
-  }, [isAuthenticated, searchParams, setSearchParams, user?._id])
+  }, [isAuthenticated, searchParams, setSearchParams, user])
 
   const bestRent = useMemo(() => Math.min(...properties.map((item) => Number(item.rent) || Infinity)), [properties])
 

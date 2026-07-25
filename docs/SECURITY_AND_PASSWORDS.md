@@ -2,7 +2,7 @@
 
 ## Where Passwords Are Saved
 
-User, owner, admin, and super admin passwords are stored in MongoDB in the `usermasters` collection, inside the `userPassword` field.
+User, owner, and admin passwords are stored in MongoDB in the `usermasters` collection, inside the `userPassword` field.
 
 The application hashes passwords before saving them. The hashing helpers are in:
 
@@ -15,11 +15,11 @@ No. StayJi passwords are not meant to be decrypted.
 
 They are saved as one-way hashes. A one-way hash lets the backend check whether a login password is correct, but it does not let anyone recover the original password. This is the correct security design.
 
-If a user, owner, admin, or super admin forgets a password, use a reset flow:
+If a user, owner, or admin forgets a password, use a reset flow:
 
 - Logged-in account: Dashboard Profile -> Update login password.
 - Forgot password: `requestPasswordReset` and `resetPasswordWithOtp`.
-- Super admin reset for another account: Super Admin user management reset password workflow.
+- Admin reset for another account: Admin user management reset password workflow.
 
 Operational answer: you cannot decrypt `userPassword`. To regain access, create a new temporary password through the reset workflow. The backend hashes that new password, saves the new hash, clears reset OTP fields, and forces old sessions to log in again.
 
@@ -31,21 +31,15 @@ New passwords must be at least 8 characters and include:
 - One lowercase letter
 - One number
 
-## Admin And Super Admin Accounts
+## Admin Accounts
 
-Admin accounts should be created only by Super Admin from the Super Admin account factory. Each Admin must be assigned a city and state.
+Admin accounts should be created only by trusted launch operators. Each Admin account is responsible for Bangalore Phase-1 operations.
 
 City Admin scope:
 
 - Can manage users, owners, leads, move-ins, property updates, and listings only for the assigned city.
-- Cannot manage other admins or super admins.
+- Cannot manage other admin accounts.
 - Cannot see data from another assigned city.
-
-Super Admin scope:
-
-- Can see all cities.
-- Can create regional admins.
-- Can launch cities, hide demo data, manage protected property update approvals, and review global audit logs.
 
 ## Password Change Flow
 

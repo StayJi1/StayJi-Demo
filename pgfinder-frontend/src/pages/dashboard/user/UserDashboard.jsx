@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FiBookmark, FiCalendar, FiClock, FiColumns, FiMapPin, FiMessageSquare, FiSearch } from 'react-icons/fi'
+import { FiBookmark, FiCalendar, FiClock, FiColumns, FiSearch } from 'react-icons/fi'
 import Button from '../../../components/common/Button'
 import Card from '../../../components/common/Card'
 import dashboardService from '../../../services/dashboardService'
@@ -342,7 +342,7 @@ function UserDashboard() {
           <p className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.24em] text-accent-400"><FiColumns /> Comparison history</p>
           <div className="mt-5 space-y-3">
             {comparisonHistory.slice(0, 6).map((item) => {
-              const ids = (item.propertyIds || item.properties?.map((property) => property.propertyId)).filter(Boolean)
+              const ids = (item.propertyIds || (item.properties || []).map((property) => property.propertyId)).filter(Boolean)
               const href = ids.length ? `/compare?ids=${ids.join(',')}` : '/compare'
               return (
                 <div key={item.id || item.comparedOn} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">

@@ -28,7 +28,7 @@ Use Compare to save properties for side-by-side review. Recently viewed properti
 
 Coins are added only after all three conditions are complete: admin verification, owner confirmation, and successful move-in. After coins are approved, submit a payout request using your UPI ID, optional UPI QR, or optional bank details.
 
-Payouts move through Pending, Approved, Paid, or Rejected states. Admins and Super Admins review payout requests before payment.
+Payouts move through Pending, Approved, Paid, or Rejected states. Admins review payout requests before payment.
 
 ## Rental History And Reviews
 
@@ -44,7 +44,7 @@ The Support card includes a clickable email and phone number. Click `hello.stayj
 
 Passwords are stored in the database as bcrypt hashes, never as readable text. StayJi cannot decrypt a password. If you forget it, use the reset flow; the old password is replaced with a new bcrypt hash.
 
-There is no safe "decrypt password" feature. Admins and Super Admins can reset a password, but they cannot read the previous password from the database.
+There is no safe "decrypt password" feature. Admins can reset a password, but they cannot read the previous password from the database.
 ## Dashboard Workflows
 
 - Click Visit bookings, Inquiry history, Viewed properties, Saved searches, Rental history, Notifications, and Comparison history cards to jump to the correct live section.

@@ -950,8 +950,6 @@ router.post('/addUser', async (req, res) => {
         ],
         objUser.addedOn = new Date(),
         objUser.isActive = true;
-    console.log();
-
     const inserted = await objUser.save();
 
     if (inserted != null) {
@@ -1095,9 +1093,6 @@ router.post('/loginByUser', async (req, res) => {
 });
 
 router.post('/updateUserPhoto', upload.single('profile'), async (req, res) => {
-
-    console.log("File");
-    console.log(req);
     const objUser = await User.updateOne({
         _id: req.body.id
     }, {
@@ -1361,11 +1356,7 @@ router.post('/getVisitorList', attachAuthenticatedUser, requireRoles(['owner', '
 });
 
 // router.post('/getVisitorList', async (req, res) => {
-
-//     console.log(req.body.userIDFK);
 //     const objProperty = await Property.find({ userIDFK: req.body.userIDFK });
-
-//     console.log(objProperty);
 //     var objdata = [];
 //     for (const element of objProperty) {
 //         const objVisit = await Visit.find({ propertyIDFK: element._id, isActive: true }).
@@ -1402,7 +1393,6 @@ router.post('/getVisitorListStatus', async (req, res) => {
         populate('userIDFK', ['userFname', 'userLname', 'userType']).populate('propertyIDFK', ['propertyName']);
     // var data = [];
     // data["propertyCount"]= objProperty.length;
-    console.log(req.body.userIDFK);
     if (objVisit != null) {
         res.json({ result: "success", msg: "Visitor List Found", data: objVisit });
 
@@ -1851,7 +1841,6 @@ router.post('/addPropertyImages', upload.single('propertyImage'), async (req, re
 
     const objPropertyImage = new PropertyImage();
     objPropertyImage.propertyIDFK = req.body.propertyIDFK,
-        console.log("id" + req.body.propertyIDFK);
     objPropertyImage.image = req.file.filename,
         objPropertyImage.addedOn = new Date(),
         objPropertyImage.isActive = true
@@ -2140,7 +2129,6 @@ router.post('/deleteShortlist', attachAuthenticatedUser, requireRoles(['user']),
 
 router.get('/getPropertyType', async (req, res) => {
     const objtype = await PropertyType.find({ isActive: true });
-    console.log(objtype)
     if (objtype != null) {
         res.json({ result: "success", msg: "PropertyType List Found", data: objtype });
 
@@ -2372,9 +2360,7 @@ router.post('/getemailbydata', async (req, res) => {
 
     transporter.sendMail(mailOptions, function (error, info) {
         if (error) {
-            console.log(error);
         } else {
-            console.log('Email sent: ' + info.response);
         }
     });
     res.json({
@@ -3980,7 +3966,6 @@ router.post('/requestPasswordReset', async (req, res) => {
     if (user) {
         const otp = `${Math.floor(100000 + Math.random() * 900000)}`
         await User.updateOne({ _id: user._id }, { resetOtp: hashPassword(otp), resetOtpExpiresAt: new Date(Date.now() + 10 * 60 * 1000) })
-        console.log(`StayJi password reset OTP for ${email}: ${otp}`)
     }
     res.json({ result: 'success', msg: 'If this email exists, a verification code has been sent.', data: 1 })
 })

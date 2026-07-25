@@ -156,9 +156,11 @@ function PropertiesPage() {
   } = useCurrentLocation()
 
   useEffect(() => {
-    setCompareIds(new Set(readCompareIds(user)))
-    setCompareMessage('')
-  }, [isAuthenticated, user?._id])
+    queueMicrotask(() => {
+      setCompareIds(new Set(readCompareIds(user)))
+      setCompareMessage('')
+    })
+  }, [isAuthenticated, user])
 
   useEffect(() => {
     const loadWishlist = async () => {

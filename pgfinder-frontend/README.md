@@ -1,16 +1,47 @@
-# React + Vite
+# StayJi Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React and Vite frontend for the Bangalore Phase-1 StayJi launch.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+cp .env.example .env
+npm run dev
+```
 
-## React Compiler
+The frontend usually runs on `http://localhost:5173`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Environment
 
-## Expanding the ESLint configuration
+```env
+VITE_API_BASE_URL=http://localhost:3000
+VITE_GOOGLE_MAPS_API_KEY=optional-google-maps-key
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Active Roles
+
+- User dashboard
+- Owner/Vendor dashboard
+- Admin dashboard
+
+Phase 1 supports only User, Owner/Vendor, and Admin screens.
+
+## Feature Areas
+
+- Bangalore property search, filters, maps, and details
+- Compare page
+- Saved properties and recently viewed properties
+- User profile and password management
+- User to Owner messaging
+- Visit requests and history
+- Owner property CRUD, media, availability, leads, visits, and messages
+- Admin users, owners, properties, approvals, analytics, visits, messages, filters, and pagination
+- Notifications with unread count and mark-as-read
+
+## Checks
+
+```bash
+npm run lint
+npm run build
+```

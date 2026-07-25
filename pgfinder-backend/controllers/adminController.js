@@ -62,7 +62,6 @@ async function ensureDefaultAdmin() {
     const adminExists = await User.findOne({ userType: 'Admin' })
     if (!adminExists) {
       await new User(defaultAdmin).save()
-      console.log('Default admin user created.')
     }
   } catch (error) {
     console.error('Error ensuring default admin user:', error)
@@ -74,7 +73,6 @@ async function ensureDefaultAdmin() {
 if (require('mongoose').connection.readyState === 1) {
   ensureDefaultAdmin();
 } else {
-  console.log('MongoDB not connected yet; skipping ensureDefaultAdmin() at startup');
   require('mongoose').connection.once('connected', () => {
     ensureDefaultAdmin();
   });
@@ -249,7 +247,6 @@ router.get('/fetchArea/:id', async (req, res) => {
 });
 
 router.post('/updateAreaEJS',async (req, res) => {
-    console.log(req.body.id)
         const objArea = await Area.updateOne({
             _id: req.body.id
         }, {
@@ -260,7 +257,6 @@ router.post('/updateAreaEJS',async (req, res) => {
         res.redirect("showArea");
 });
 router.post('/deleteArea', async (req, res) => {
-    console.log(req.body.id);
     const objDeleteArea = await Area.updateOne({
         _id: req.body.id
     },{
@@ -308,7 +304,6 @@ router.get('/fetchPropertyType/:id', async (req, res) => {
 });
 
 router.post('/updatePropertyTypeEJS',upload.single('image'),async (req, res) => {
-    console.log(req.body.id)
         if (req.file) {
             const objPropertyType = await PropertyType.updateOne({
                 _id: req.body.id
@@ -329,7 +324,6 @@ router.post('/updatePropertyTypeEJS',upload.single('image'),async (req, res) => 
         }
 });
 router.post('/deletePropertyType', async (req, res) => {
-    console.log(req.body.id);
     const objDeletePropertyType = await PropertyType.updateOne({
         _id: req.body.id
     },{
@@ -348,7 +342,6 @@ router.get('/addProperty', async (req, res) => {
 });
 
 router.post('/addPropertyEJS',upload.fields([{name:'propertyImage'},{name:'image'}]), async (req, res) => {
-    console.log(req.body);
     const objProperty = new Property();
     objProperty.userIDFK = req.body.userIDFK,
     objProperty.propertyName = req.body.propertyName,
@@ -369,11 +362,9 @@ router.post('/addPropertyEJS',upload.fields([{name:'propertyImage'},{name:'image
 
     //property 
     var images=req.files["image"];
-    console.log(images)
     images.forEach(async (element)=>{
         const objPropertyImage = new PropertyImage();
         objPropertyImage.propertyIDFK = inserted._id.toString(),
-        console.log("id"+req.body.propertyIDFK);
         objPropertyImage.image = element.filename,
         objPropertyImage.addedOn = new Date(),
         objPropertyImage.isActive = true
@@ -444,12 +435,10 @@ router.get('/fetchProperty/:id', async (req, res) => {
     });
     const objUser = await User.find();
     const objPropertyType = await PropertyType.find();
-    console.log(objPropertyType);
     res.render("addProperty.html", {operation:"update",propertyData:fetchPropertyObj,userData:objUser,propertyTypeData:objPropertyType});
 });
 
 router.post('/updatePropertyEJS',upload.single('propertyImage'),async (req, res) => {
-    console.log(req.body)
         if (req.file) {
             const objProperty = await Property.updateOne({
                 _id: req.body.id
@@ -499,7 +488,6 @@ router.post('/updatePropertyEJS',upload.single('propertyImage'),async (req, res)
         }
 });
 router.post('/deleteProperty', async (req, res) => {
-    console.log(req.body.id);
     const objDeleteProperty = await Property.updateOne({
         _id: req.body.id
     },{
@@ -510,7 +498,6 @@ router.post('/deleteProperty', async (req, res) => {
 
 
 router.get('/addAminityFeatures/:id', async (req, res) => {
-    console.log(req.params.id);
     var aminityFeatures="";
     const objProperty = await Property.findOne({ _id: req.params.id });
     const typeData = await Aminity.find({ propertyTypeIDFK: objProperty.propertyTypeIDFK});
@@ -521,20 +508,11 @@ router.get('/addAminityFeatures/:id', async (req, res) => {
         aminityData.push(iterator.split(":")[1]);
        }
     }
-    
-    console.log(typeData.length);
-
-    
-    console.log(aminityData);
-    
-
     res.render('addAminityFeatures.html', { typeData: typeData, noofsize: typeData.length,aminityData:aminityData,propertyID: objProperty._id,"type":"form" });
 });
 
 
 router.post('/updateAminityFeature', async (req, res) => {
-
-    console.log(req);
     const size = req.body.noOfSizes;
     var aminityFeatures="";
     for (var i = 1; i <= size; i++) {
@@ -545,7 +523,6 @@ router.post('/updateAminityFeature', async (req, res) => {
         }
             
     }
-    console.log(aminityFeatures);
     const objProperty = await Property.updateOne({
         _id: req.body.id,
     }, 
@@ -583,7 +560,6 @@ router.post('/addUserEJS',upload.single('profile'), async (req, res) => {
     objUser.profile = req.file.filename,
     objUser.addedOn = new Date(),
     objUser.isActive = true;
-    console.log();
     const inserted = await objUser.save();
     res.redirect("showUser");
 });
@@ -669,7 +645,6 @@ router.get('/fetchUser/:id', async (req, res) => {
 });
 
 router.post('/updateUserEJS',upload.single('profile'),async (req, res) => {
-    console.log(req.body.id)
         const updateFields = {
             userName : req.body.userName,
             userFname : req.body.userFname,
@@ -733,7 +708,6 @@ router.post('/updateUserEJS',upload.single('profile'),async (req, res) => {
         */
 });
 router.post('/deleteUser', async (req, res) => {
-    console.log(req.body.id);
     const objDeleteUser = await User.updateOne({
         _id: req.body.id
     },{
@@ -750,11 +724,9 @@ router.post('/deleteUser', async (req, res) => {
 // });
 
 // router.post('/addPropertyImageEJS',upload.array('image'), async (req, res) => {
-//     console.log(req.body);
 //     req.files.map(async (file)=>{
 //         const objPropertyImage = new PropertyImage();
 //         objPropertyImage.propertyIDFK = req.body.propertyIDFK,
-//         console.log("id"+req.body.propertyIDFK);
 //         objPropertyImage.image = file.filename,
 //         objPropertyImage.addedOn = new Date(),
 //         objPropertyImage.isActive = true
@@ -773,10 +745,8 @@ router.post('/deleteUser', async (req, res) => {
 //     for (var i = 0; i < objPropertyImage.length; i++) {
 //         objPropertyImage[i].property_value = objPropertyImage[i].propertyIDFK.propertyName
         
-//         // console.log(objStudent[i].category_value)
 //     }
 
-//     // console.log("caetgory", objStudent[0].category_value)
     
 //     res.render("showPropertyImage.html",{"data":objPropertyImage});
 
@@ -788,11 +758,9 @@ router.get('/addPropertyImage/:id', async (req, res) => {
 });
 
 router.post('/addPropertyImageEJS',upload.array('image'), async (req, res) => {
-    console.log(req.body);
     req.files.map(async (file)=>{
         const objPropertyImage = new PropertyImage();
         objPropertyImage.propertyIDFK = req.body.propertyIDFK,
-        console.log("id "+req.body.propertyIDFK);
         objPropertyImage.image = file.filename,
         objPropertyImage.addedOn = new Date(),
         objPropertyImage.isActive = true
@@ -810,12 +778,7 @@ router.get('/showPropertyImage/:id', async (req, res) => {
 
     for (var i = 0; i < objPropertyImage.length; i++) {
         objPropertyImage[i].property_value = objPropertyImage[i].propertyIDFK.propertyName
-        
-        // console.log(objStudent[i].category_value)
     }
-
-    // console.log("caetgory", objStudent[0].category_value)
-    
     res.render("showPropertyImage.html",{"data":objPropertyImage,"propertyData":req.params.id});
 
 });
@@ -825,12 +788,10 @@ router.get('/fetchPropertyImage/:id', async (req, res) => {
         _id: req.params.id
     });
     const objProperty = await Property.find();
-    console.log(objProperty);
     res.render("addPropertyImage.html", {operation:"update",propertyImageData:fetchPropertyImageObj,propertyData:objProperty});
 });
 
 router.post('/deletePropertyImage', async (req, res) => {
-    console.log(req.body.id);
     const objDeletePropertyImage = await PropertyImage.updateOne({
         _id: req.body.id
     },{
@@ -849,11 +810,9 @@ router.get('/addAminity', async (req, res) => {
 });
 
 router.post('/addAminityEJS',async (req, res) => {
-    console.log(req.body);
         const objAminity = new Aminity();
         objAminity.aminityName=req.body.aminityName;
         objAminity.propertyTypeIDFK = req.body.propertyTypeIDFK,
-        console.log("id"+req.body.propertyTypeIDFK);   
         objAminity.addedOn = new Date(),
         objAminity.isActive = true
         const inserted = await objAminity.save();
@@ -864,18 +823,11 @@ router.get('/showAminity', async (req, res) => {
 
     let objAminity = await Aminity.find({isActive: true})
         .populate('propertyTypeIDFK', 'typeName');
-
-        console.log(objAminity);
     // // return res.send(objStudent)
 
     for (var i = 0; i < objAminity.length; i++) {
         objAminity[i].property_value = objAminity[i].propertyTypeIDFK.typeName
-        
-        // console.log(objStudent[i].category_value)
     }
-
-    // console.log("caetgory", objStudent[0].category_value)
-    
     res.render("showAminity.html",{"data":objAminity});
 
 });
@@ -885,12 +837,10 @@ router.get('/fetchAminity/:id', async (req, res) => {
         _id: req.params.id
     });
     const objProperty = await PropertyType.find({isActive:true});
-    console.log(objProperty);
     res.render("addAminity.html", {operation:"update",aminityData:fetchAminityObj,propertytypeData:objProperty});
 });
 
 router.post('/updateAminityEJS',async (req, res) => {
-    console.log(req.body)
     const objAminity = await Aminity.updateOne({
         _id: req.body.id
     }, {
@@ -905,7 +855,6 @@ router.post('/updateAminityEJS',async (req, res) => {
 });
 
 router.post('/deleteAminity', async (req, res) => {
-    console.log(req.body.id);
     const objDeleteAminity = await Aminity.updateOne({
         _id: req.body.id
     },{
@@ -926,10 +875,8 @@ router.post('/deleteAminity', async (req, res) => {
 //     for (var i = 0; i < objChat.length; i++) {
 //         objChat[i].user_value = objChat[i].userIDFK.userFname+" "+objChat[i].userIDFK.userLname
         
-//         // console.log(objStudent[i].category_value)
 //     }
 
-//     // console.log("caetgory", objStudent[0].category_value)
     
 //     res.render("showChat.html",{"data":objChat});
 
@@ -948,13 +895,7 @@ router.get('/showUserRequest', async (req, res) => {
     for (var i = 0; i < objRequest.length; i++) {
         objRequest[i].property_value = objRequest[i].propertyIDFK.propertyName;
         objRequest[i].user_value = objRequest[i].userIDFK.userFname+" "+objRequest[i].userIDFK.userLname;
-        
-        
-        // console.log(objStudent[i].category_value)
     }
-
-    // console.log("caetgory", objStudent[0].category_value)
-    
     res.render("showUserRequest.html",{"data":objRequest});
 
 });
@@ -964,12 +905,10 @@ router.get('/fetchRequest/:id', async (req, res) => {
         _id: req.params.id
     });
     const objProperty = await Property.find({isActive:true});
-    console.log(objProperty);
     res.render("showUserRequest.html", {operation:"update",requestData:fetchRequestObj,propertyData:objProperty});
 });
 
 router.post('/updateRequestEJS',async (req, res) => {
-    console.log(req.body)
     const objUserRequest = await UserRequest.updateOne({
         _id: req.body.id
     }, {
@@ -994,13 +933,7 @@ router.get('/showUserReview', async (req, res) => {
     for (var i = 0; i < objReview.length; i++) {
         objReview[i].property_value = objReview[i].propertyIDFK.propertyName;
         objReview[i].user_value = objReview[i].userIDFK.userFname+" "+objReview[i].userIDFK.userLname;
-        
-        
-        // console.log(objStudent[i].category_value)
     }
-
-    // console.log("caetgory", objStudent[0].category_value)
-    
     res.render("showUserReview.html",{"data":objReview});
 
 });
@@ -1021,12 +954,7 @@ router.get('/showShortlist', async (req, res) => {
         objShortlist[i].user_value = objShortlist[i].userIDFK.userFname+" "+objShortlist[i].userIDFK.userLname;
         objShortlist[i].user_contact = objShortlist[i].userIDFK.contact;
         objShortlist[i].property_image = objShortlist[i].propertyIDFK.propertyImage;
-        
-        // console.log(objStudent[i].category_value)
     }
-
-    // console.log("caetgory", objStudent[0].category_value)
-    
     res.render("showShortlist.html",{"data":objShortlist});
 
 });
@@ -1043,13 +971,7 @@ router.get('/showInquiry', async (req, res) => {
     for (var i = 0; i < objInquiry.length; i++) {
         objInquiry[i].property_value = objInquiry[i].propertyIDFK.propertyName;
         objInquiry[i].user_value = objInquiry[i].userIDFK.userFname+" "+objInquiry[i].userIDFK.userLname;
-    
-        
-        // console.log(objStudent[i].category_value)
     }
-
-    // console.log("caetgory", objStudent[0].category_value)
-    
     res.render("showInquiry.html",{"data":objInquiry});
 
 });
@@ -1067,13 +989,7 @@ router.get('/showVisit', async (req, res) => {
     for (var i = 0; i < objVisit.length; i++) {
         objVisit[i].property_value = objVisit[i].propertyIDFK.propertyName;
         objVisit[i].user_value = objVisit[i].userIDFK.userFname+" "+objVisit[i].userIDFK.userLname;
-    
-        
-        // console.log(objStudent[i].category_value)
     }
-
-    // console.log("caetgory", objStudent[0].category_value)
-    
     res.render("showVisit.html",{"data":objVisit});
 
 });
@@ -1083,12 +999,10 @@ router.get('/fetchVisit/:id', async (req, res) => {
         _id: req.params.id
     });
     const objProperty = await Property.find({isActive:true});
-    console.log(objProperty);
     res.render("showVisit.html", {operation:"update",visitData:fetchVisitObj,propertyData:objProperty});
 });
 
 router.post('/updateVisitEJS',async (req, res) => {
-    console.log(req.body)
     const objVisit = await Visit.updateOne({
         _id: req.body.id
     }, {
@@ -1111,14 +1025,7 @@ router.get('/showPayment', async (req, res) => {
 
     for (var i = 0; i < objPayment.length; i++) {
         objPayment[i].property_value = objPayment[i].propertyIDFK.propertyName;
-        
-    
-        
-        // console.log(objStudent[i].category_value)
     }
-
-    // console.log("caetgory", objStudent[0].category_value)
-    
     res.render("showPayment.html",{"data":objPayment});
 
 });
