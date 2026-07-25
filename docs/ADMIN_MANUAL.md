@@ -45,10 +45,10 @@ Approval mix is the dashboard chart that compares Pending, Live, and Inactive/Hi
 Passwords are stored as bcrypt hashes in `userMaster.userPassword`. They cannot be decrypted. Admins reset passwords by replacing the hash with a new hashed password and forcing the user to log in again.
 ## City Admin Operating Rules
 
-- Admin accounts are created by Super Admin and assigned to a city/state.
+- Admin accounts are created by trusted launch operators for Bangalore operations.
 - City Admin dashboards are scoped to assigned city users, owners, properties, leads, move-ins, payouts, and protected update requests.
 - Bulk property workflows support Mark LIVE, Mark DEMO, Hide Publicly, Archive, Unarchive, Verify, and Suspend. Hidden properties can be made visible again with Unhide, Unarchive, or Mark LIVE.
 - Move-in rewards require owner confirmation first, then admin approval. Approved move-ins create cashback and commission records.
 - Protected owner edits show previous values and requested values before approval.
-- Manage Users filters are intended for owners and users in the assigned city; city admins cannot manage other admins or super admins, and Admin role filtering is kept out of the city-admin workflow.
+- Manage Users filters are intended for owners and users in Bangalore; admin account changes should stay restricted to trusted Admin users.
 - Password updates for the logged-in admin are available from Dashboard -> Profile. See `docs/SECURITY_AND_PASSWORDS.md`.

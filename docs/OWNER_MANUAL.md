@@ -38,7 +38,7 @@ When a user submits move-in proof, confirm Tenant joined successfully only after
 
 ## Reviews And Feedback
 
-Users can review after visits or move-in. Owners can reply to reviews. Admins and Super Admins can moderate fake, abusive, or suspicious reviews. Reviews influence property rating and ranking.
+Users can review after visits or move-in. Owners can reply to reviews. Admins can moderate fake, abusive, or suspicious reviews. Reviews influence property rating and ranking.
 
 ## Password And Phone Security
 

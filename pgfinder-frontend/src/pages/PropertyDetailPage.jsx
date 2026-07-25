@@ -86,8 +86,10 @@ function PropertyDetailPage() {
   const { position, loading: locationLoading, error: locationError, hasUserLocation, requestLocation } = useCurrentLocation()
 
   useEffect(() => {
-    setCompareIds(readCompareIds(user))
-  }, [isAuthenticated, user?._id])
+    queueMicrotask(() => {
+      setCompareIds(readCompareIds(user))
+    })
+  }, [isAuthenticated, user])
 
   useEffect(() => {
     const loadProperty = async () => {
@@ -635,6 +637,11 @@ function PropertyDetailPage() {
                     </p>
                     <p className="mt-2">{review.details}</p>
                     {review.ownerReply ? <p className="mt-2 text-accent-200">Owner reply: {review.ownerReply}</p> : null}
+                    {(review.userIDFK?._id === user?._id || review.userId === user?._id) ? (
+                      <button type="button" onClick={() => handleEditReview(review)} className="mt-3 text-xs font-semibold uppercase tracking-[0.2em] text-accent-300 hover:text-accent-200">
+                        Edit review
+                      </button>
+                    ) : null}
                   </div>
                 ))}
                 {!reviews.length ? <p className="text-sm text-slate-400">No reviews yet. After a visit or move-in, share a helpful rating for future students.</p> : null}

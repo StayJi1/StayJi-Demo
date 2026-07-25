@@ -1,35 +1,54 @@
-# 🏠 PG Finder
+# StayJi Backend
 
-**PG Finder** is a modern web application designed to help users search, find, and manage Paying Guest (PG) accommodations with ease. Built with a robust backend API and a user-friendly interface, it simplifies PG hunting for students, professionals, and travelers.  
+Express and MongoDB API for the Bangalore Phase-1 StayJi launch.
 
----
+## Setup
 
-## 🌟 Features
+```bash
+npm install
+cp .env.example .env
+npm run dev
+```
 
-- **Search PGs**: Filter by city, rent, amenities, and more.  
-- **User Authentication**: Sign up/login to manage favorites and bookings.  
-- **Real-time Communication**: Chat with PG owners before booking.  
-- **Admin Panel**: Manage PG listings, users, and reviews.  
-- **Secure and Reliable**: Sensitive data is protected; payments handled securely.  
+The backend runs on `http://localhost:3000` unless `PORT` is changed.
 
----
+## Environment
 
-## 🚀 Tech Stack
+```env
+DATABASE=mongodb+srv://user:password@cluster/db
+PORT=3000
+SESSION_SECRET=replace-with-a-long-random-secret
+JWT_SECRET=replace-with-a-long-random-secret
+GOOGLE_CLIENT_ID=optional-google-client-id
+CORS_ORIGINS=http://localhost:5173,https://your-frontend-domain.com
+```
 
-- **Frontend**: HTML, CSS, JavaScript (or Angular/React if applicable)  
-- **Backend**: Node.js, Express.js  
-- **Database**: MongoDB  
-- **Version Control**: Git & GitHub  
+## Active Roles
 
----
+- User
+- Owner/Vendor
+- Admin
 
-## 📂 Project Structure
+Phase 1 supports only User, Owner/Vendor, and Admin routes or permissions.
 
-```text
-pgfinder-backend/
-│
-├─ backend/          # Node.js API
-├─ frontend/         # Frontend files
-├─ .gitignore        # Files/folders to ignore in Git
-├─ README.md         # Project documentation
-└─ package.json      # Project dependencies
+## API Areas
+
+- Auth and profile
+- Property search and CRUD
+- Property images and amenities
+- Shortlists, recently viewed, compare history
+- User to Owner messaging
+- Visit requests and status updates
+- Database notifications
+- Owner leads and availability
+- Admin users, owners, properties, approvals, visits, messages, reports, analytics
+
+## Checks
+
+```bash
+node --check app.js
+node --check controllers/clientController.js
+node --check controllers/adminController.js
+```
+
+`npm test` is currently a placeholder and should not be used as release proof.

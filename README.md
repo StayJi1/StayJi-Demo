@@ -1,506 +1,228 @@
-# PG Finder — Full Stack PG & Hostel Finder Platform
+# StayJi Bangalore Phase-1 Launch
 
-A modern full-stack PG Finder platform built for students and working professionals to search nearby PGs, hostels, and rental accommodations.
+StayJi is a full-stack accommodation discovery and management platform for paying guest homes, hostels, co-living spaces, flats, houses, apartments, and villas. Phase 1 is scoped to Bangalore only and supports three active roles: User, Owner/Vendor, and Admin.
 
-The project contains:
+The current product lets users discover properties, compare stays, save favourites, message owners, schedule visits, and manage their profile. Owners manage their own listings, media, availability, visit requests, leads, and messages. Admins manage Bangalore users, owners, properties, approvals, messages, visits, analytics, reports, filters, quick actions, and pagination.
 
-* Modern React frontend
-* Express.js backend
-* MongoDB Atlas database
-* Google Maps integration support
-* Vendor/Admin/User architecture
-* Live property management system
+## Architecture
 
----
+StayJi is split into two independently started projects:
 
-# Project Structure
+- `pgfinder-frontend`: React, Vite, Tailwind CSS, React Router, TanStack Query, Axios, Leaflet, Recharts.
+- `pgfinder-backend`: Node.js, Express, MongoDB, Mongoose, JWT authentication, session cookies, Helmet, CORS, rate limiting, Multer.
 
-```bash
+The frontend talks to the backend through `VITE_API_BASE_URL`, defaulting to `http://localhost:3000` for local development. The backend exposes legacy `/client` and `/admin` endpoints plus REST-style `/api/*` aliases used by the current frontend.
+
+## Folder Structure
+
+```text
 PG-Finder/
-│
-├── pgfinder-backend/
-│   ├── connection/
-│   ├── controllers/
-│   ├── middleware/
-│   ├── models/
-│   ├── public/
-│   ├── routes/
-│   ├── upload/
-│   ├── views/
-│   ├── app.js
-│   ├── package.json
-│   └── .env
-│
-├── pgfinder-frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── api/
-│   │   ├── assets/
-│   │   ├── components/
-│   │   ├── config/
-│   │   ├── context/
-│   │   ├── hooks/
-│   │   ├── layouts/
-│   │   ├── pages/
-│   │   ├── routes/
-│   │   ├── services/
-│   │   ├── styles/
-│   │   ├── utils/
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   │
-│   ├── package.json
-│   ├── vite.config.js
-│   └── .env
-│
-├── README.md
-└── .gitignore
+  pgfinder-backend/
+    app.js
+    server.js
+    connection/
+    controllers/
+    middleware/
+    models/
+    public/upload/
+    scripts/
+    utils/
+    views/
+  pgfinder-frontend/
+    src/
+      api/
+      components/
+      context/
+      hooks/
+      layouts/
+      pages/
+      routes/
+      services/
+      utils/
+    vite.config.js
+  docs/
+  README.md
 ```
 
----
+## Installation
 
-# Tech Stack
-
-## Frontend
-
-* React
-* Vite
-* Tailwind CSS
-* Axios
-* React Router DOM
-* Framer Motion
-
----
-
-## Backend
-
-* Node.js
-* Express.js
-* MongoDB Atlas
-* Mongoose
-* JWT Authentication
-* CORS
-
----
-
-# Features
-
-## User Features
-
-* Search PGs and hostels
-* Nearby PG search
-* Filter by city/locality
-* View property details
-* Mobile responsive UI
-* Google Maps support
-* Property wishlist
-* Book property visits
-
----
-
-## Vendor Features
-
-* Vendor login
-* Add PG/property
-* Edit property
-* Delete property
-* Upload images
-* Update live availability
-* Manage inquiries
-
----
-
-## Admin Features
-
-* Admin dashboard
-* Manage users
-* Manage vendors
-* Manage properties
-* Approve/reject listings
-* Analytics overview
-
----
-
-# IMPORTANT SECURITY NOTE
-
-DO NOT upload:
-
-* `.env`
-* MongoDB passwords
-* JWT secrets
-* Google Maps API keys
-* `node_modules`
-
-Always use environment variables.
-
----
-
-# Backend Setup
-
-# STEP 1 — Enter Backend Folder
+Install dependencies separately:
 
 ```bash
 cd pgfinder-backend
-```
+npm install
 
----
-
-# STEP 2 — Install Dependencies
-
-```bash
+cd ../pgfinder-frontend
 npm install
 ```
 
----
+## Environment Variables
 
-# STEP 3 — Create `.env`
-
-Inside:
-
-```bash
-pgfinder-backend/.env
-```
-
-Add:
+Backend variables live in `pgfinder-backend/.env`:
 
 ```env
-DATABASE=YOUR_MONGODB_CONNECTION_STRING
+DATABASE=mongodb+srv://user:password@cluster/db
 PORT=3000
-JWT_SECRET=YOUR_SECRET_KEY
+SESSION_SECRET=replace-with-a-long-random-secret
+JWT_SECRET=replace-with-a-long-random-secret
+GOOGLE_CLIENT_ID=optional-google-client-id
+CORS_ORIGINS=http://localhost:5173,https://your-frontend-domain.com
 ```
 
----
-
-# STEP 4 — Start Backend Server
-
-```bash
-npm start
-```
-
----
-
-# Backend Runs On
-
-```text
-http://localhost:3000
-```
-
----
-
-# Backend API Test
-
-Open browser:
-
-```text
-http://localhost:3000/client/getPropertyList
-```
-
-Expected:
-
-```json
-{
-  "result": "success",
-  "data": []
-}
-```
-
----
-
-# Frontend Setup
-
-# STEP 1 — Enter Frontend Folder
-
-```bash
-cd pgfinder-frontend
-```
-
----
-
-# STEP 2 — Install Dependencies
-
-```bash
-npm install
-```
-
----
-
-# STEP 3 — Create `.env`
-
-Inside:
-
-```bash
-pgfinder-frontend/.env
-```
-
-Add:
+Frontend variables live in `pgfinder-frontend/.env`:
 
 ```env
 VITE_API_BASE_URL=http://localhost:3000
-VITE_GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY
+VITE_GOOGLE_MAPS_API_KEY=optional-google-maps-key
 ```
 
----
+Never commit real `.env` secrets.
 
-# STEP 4 — Start Frontend
-
-```bash
-npm run dev
-```
-
----
-
-# Frontend Runs On
-
-```text
-http://localhost:5173
-```
-
----
-
-# View Frontend Output
-
-Open browser:
-
-```text
-http://localhost:5173
-```
-
----
-
-# How Frontend Connects To Backend
-
-Frontend uses Axios client:
-
-```js
-axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL
-})
-```
-
-This connects frontend APIs to:
-
-```text
-http://localhost:3000
-```
-
----
-
-# Running Full Project
-
-## Terminal 1 — Backend
+## Backend Setup
 
 ```bash
 cd pgfinder-backend
-npm install
-npm start
-```
-
-Backend URL:
-
-```text
-http://localhost:3000
-```
-
----
-
-## Terminal 2 — Frontend
-
-```bash
-cd pgfinder-frontend
-npm install
 npm run dev
 ```
 
-Frontend URL:
+The backend runs on `http://localhost:3000` unless `PORT` is changed.
 
-```text
-http://localhost:5173
-```
-
----
-
-# Mobile Testing
-
-To open frontend on mobile:
-
-Run frontend with:
+Useful checks:
 
 ```bash
-npm run dev -- --host
+node --check app.js
+node --check controllers/clientController.js
+node --check controllers/adminController.js
 ```
 
-Use network URL shown in terminal:
-
-```text
-http://192.168.x.x:5173
-```
-
-Both devices must be on same WiFi.
-
----
-
-# MongoDB Atlas Setup
-
-1. Create MongoDB Atlas cluster
-2. Create database user
-3. Add IP access:
-
-```text
-0.0.0.0/0
-```
-
-4. Copy connection string
-5. Paste into backend `.env`
-
----
-
-# Important Backend APIs
-
-## Get Property List
-
-```text
-GET /client/getPropertyList
-```
-
----
-
-## Add User
-
-```text
-POST /client/addUser
-```
-
----
-
-## User Login
-
-```text
-POST /client/loginByUser
-```
-
----
-
-# Deployment Plan
-
-## Frontend Deployment
-
-Recommended:
-
-* Vercel
-
----
-
-## Backend Deployment
-
-Recommended:
-
-* Render
-
----
-
-## Database
-
-* MongoDB Atlas
-
----
-
-# Production Environment Variables
-
-## Backend
-
-```env
-DATABASE=PRODUCTION_DATABASE_URL
-PORT=3000
-JWT_SECRET=PRODUCTION_SECRET
-```
-
----
-
-## Frontend
-
-```env
-VITE_API_BASE_URL=https://your-backend-url.onrender.com
-VITE_GOOGLE_MAPS_API_KEY=YOUR_KEY
-```
-
----
-
-# GitHub Push Commands
-
-## Initialize Git
+## Frontend Setup
 
 ```bash
-git init
+cd pgfinder-frontend
+npm run dev
 ```
 
----
+The Vite dev server usually runs on `http://localhost:5173`.
 
-## Add Files
+Useful checks:
 
 ```bash
-git add .
+npm run lint
+npm run build
 ```
 
----
+## Database Setup
 
-## Commit Files
+StayJi uses MongoDB through Mongoose. Set `DATABASE` to a MongoDB Atlas or local MongoDB connection string, then start the backend. The backend uses collections for users, properties, images, shortlists, chats, visits, notifications, inquiries, reviews, move-ins, audit logs, and operational city state.
+
+For Bangalore launch data, keep property city/locality values normalized around Bangalore areas such as Whitefield, Bellandur, Koramangala, HSR Layout, Indiranagar, Marathahalli, Electronic City, and nearby launch localities.
+
+## Running Project
+
+Use two terminals:
 
 ```bash
-git commit -m "Initial PG Finder setup"
+cd pgfinder-backend
+npm run dev
 ```
-
----
-
-## Connect GitHub Repository
 
 ```bash
-git remote add origin YOUR_GITHUB_REPOSITORY_URL
+cd pgfinder-frontend
+npm run dev
 ```
 
----
+Open `http://localhost:5173`.
 
-## Push Code
+## API Structure
+
+Primary active frontend-facing endpoints include:
+
+- Auth: `/client/loginByUser`, `/client/addUser`, `/api/auth/login`, `/api/auth/signup`.
+- Properties: `/client/getPropertyList`, `/client/getPropertyById/:id`, `/client/addProperty`, `/api/properties`.
+- User dashboard: `/client/user/overview`, saved properties, visits, saved searches, wallet requests.
+- Owner dashboard: owner properties, leads, visits, availability, image and property updates.
+- Messaging: `/client/chats` for User to Owner and Owner to User conversation history.
+- Notifications: `/client/notifications` and `/api/notifications` with authenticated account scoping.
+- Admin: `/client/getAdminStats`, `/client/getAdminUsers`, `/client/admin/searchProperty`, property approval and management endpoints.
+
+## Authentication Flow
+
+Users, Owners, and Admins authenticate with JWT-backed sessions. The frontend stores auth state under `stayji-auth`, and `axiosClient` attaches `Authorization: Bearer <token>` to API calls. Unauthorized responses clear stale auth state and emit `stayji-auth-expired`.
+
+Route protection is handled by `ProtectedRoute`, `RoleProtectedRoute`, and dashboard routing in `pgfinder-frontend/src/routes/AppRoutes.jsx`.
+
+## Project Roles
+
+- User: browse, search, compare, save, message, schedule visits, view history, edit profile.
+- Owner/Vendor: manage only their own properties, availability, images, leads, visit requests, messages, profile, and password.
+- Admin: manage Bangalore users, owners, properties, approvals, analytics, messages, visits, reports, filters, pagination, and quick actions.
+
+Phase 1 supports only User, Owner/Vendor, and Admin functionality.
+
+## Available Features
+
+- Bangalore-only property discovery.
+- Case-insensitive and partial search by name, area, budget, sharing, gender, and property category.
+- Property details, images, amenities, pricing, room sharing, rules, nearby places, availability, and maps.
+- Compare page for price, distance, amenities, food, room type, deposit, sharing, ratings, owner, availability, and property type.
+- Persistent favourites and recently viewed properties.
+- User to Owner messaging with timestamps and history.
+- Visit request booking, owner status updates, and history.
+- Database notifications with unread count and mark-as-read.
+- Admin dashboards for operational management.
+- Responsive React UI with loading, empty, forbidden, unauthorized, and not-found states.
+
+## Deployment Guide
+
+1. Create production `.env` files for backend and frontend.
+2. Set `VITE_API_BASE_URL` to the deployed backend URL.
+3. Run frontend checks with `npm run lint` and `npm run build`.
+4. Run backend syntax checks with `node --check app.js` and controller checks.
+5. Deploy backend first, then frontend.
+6. Verify CORS allows the frontend domain.
+7. Smoke test User, Owner, and Admin login after deployment.
+8. Verify property search, compare, save, message, visit, owner CRUD, and admin approval flows.
+
+## Testing
+
+Manual release QA should cover:
+
+- Registration, login, forgot password, Google login, logout.
+- User search, details, map, compare, save, message, visit, notifications, profile.
+- Owner add/edit/delete property, image upload, availability, leads, visits, messages.
+- Admin user, owner, property, approval, analytics, message, visit, report, filter, pagination, and quick-action workflows.
+- Mobile, tablet, laptop, and desktop responsiveness.
+
+Automated checks currently available:
 
 ```bash
-git branch -M main
-git push -u origin main
+cd pgfinder-frontend && npm run lint && npm run build
+cd ../pgfinder-backend && node --check app.js && node --check controllers/clientController.js && node --check controllers/adminController.js
+git diff --check
 ```
 
----
+## Performance
 
-# Recommended Future Features
+The frontend uses lazy-loaded routes and API-level pagination. Keep property images optimized before upload, avoid unnecessary dashboard refetches, and prefer indexed MongoDB queries for listing, owner, status, city, locality, and created-date filters.
 
-* Real-time vacancy updates
-* WhatsApp integration
-* Payment gateway
-* AI PG recommendations
-* Reviews and ratings
-* Notifications
-* Chat system
-* Booking confirmation
-* Nearby commute analysis
-* Advanced analytics
+## Security
 
----
+Use strong `SESSION_SECRET` and `JWT_SECRET` values. Validate ObjectIds, restrict owner resources by owner id, restrict notifications to the authenticated account, hash passwords, enforce role-based routes, and keep CORS limited to known frontend domains.
 
-# Recommended Hosting Architecture
+## Phase-2 Roadmap
 
-```text
-Frontend (Vercel)
-        ↓
-Backend APIs (Render)
-        ↓
-MongoDB Atlas
-```
+- AI property recommendation assistant.
+- AI search query understanding for locality, commute, budget, and lifestyle preferences.
+- AI listing-quality scoring for owners.
+- AI moderation for suspicious listings, images, and messages.
+- n8n workflows for lead follow-up, visit reminders, owner onboarding, stale listing checks, and admin alerts.
+- Payment and move-in automation.
+- More city launches after Bangalore stabilizes.
 
----
+## Contribution Guide
 
-# Author
+Keep changes scoped, run checks before committing, do not commit secrets, preserve database compatibility, and avoid adding routes or controls that are not implemented end to end.
 
-Vaibhav Malviya
+## License
 
----
-
-# License
-
-This project is for educational and startup MVP purposes.
+ISC. See `pgfinder-backend/LICENSE`.
