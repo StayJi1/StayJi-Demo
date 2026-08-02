@@ -91,14 +91,14 @@ function AdvancedDataTable({
 
   return (
     <section className="overflow-hidden rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 shadow-card sm:rounded-[2rem]">
-      <div className="flex flex-col gap-4 border-b border-slate-800 p-4 lg:flex-row lg:items-center lg:justify-between sm:p-5">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-accent-400">{eyebrow}</p>
-          <h2 className="mt-2 text-xl font-semibold text-white sm:text-2xl">{title}</h2>
+      <div className="flex min-w-0 flex-col gap-4 border-b border-slate-800 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.2em]">{eyebrow}</p>
+          <h2 className="mt-2 break-words text-xl font-semibold text-white sm:text-2xl">{title}</h2>
           <p className="mt-1 text-sm text-slate-400">{searchableRows.length} records · {selected.length} selected</p>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <label className="flex min-w-0 items-center gap-3 rounded-3xl border border-slate-700 bg-slate-950/70 px-4 text-slate-300 sm:min-w-[280px]">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+          <label className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-700 bg-slate-950/70 px-4 text-slate-300 sm:min-w-[280px] sm:rounded-3xl">
             <FiSearch />
             <input
               type="search"
@@ -108,7 +108,7 @@ function AdvancedDataTable({
               className="w-full bg-transparent py-3 text-sm text-slate-100 outline-none"
             />
           </label>
-          <button type="button" onClick={exportCsv} className="inline-flex items-center justify-center gap-2 rounded-3xl border border-slate-700 px-4 py-3 text-sm text-slate-200 hover:border-accent-500">
+          <button type="button" onClick={exportCsv} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-700 px-4 py-3 text-sm text-slate-200 hover:border-accent-500 sm:rounded-3xl">
             <FiDownload /> CSV
           </button>
         </div>
@@ -116,7 +116,43 @@ function AdvancedDataTable({
 
       {actions ? <div className="border-b border-slate-800 p-4 sm:p-5">{actions({ selected, setSelected, visibleRows, allRows: searchableRows })}</div> : null}
 
-      <div className="max-w-full overflow-x-auto overscroll-x-contain">
+      <div className="grid gap-3 p-4 sm:hidden">
+        {visibleRows.map((row, index) => {
+          const id = rowId(row)
+          return (
+            <article key={id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <label className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-slate-500">
+                  <input type="checkbox" checked={selected.includes(id)} onChange={() => toggleRow(id)} />
+                  #{(safePage - 1) * pageSize + index + 1}
+                </label>
+                {onRowClick ? (
+                  <button type="button" onClick={() => onRowClick(row)} className="rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200">
+                    Open
+                  </button>
+                ) : null}
+              </div>
+              <dl className="mt-3 grid gap-3">
+                {columns.map((column) => (
+                  <div key={column.key} className="min-w-0">
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{column.label}</dt>
+                    <dd className="mt-1 break-words text-sm leading-6 text-slate-200">
+                      {column.render ? column.render(row, { onRowClick }) : valueText(column.value?.(row))}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </article>
+          )
+        })}
+        {!visibleRows.length ? (
+          <p className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-8 text-center text-sm text-slate-400">
+            {loading ? 'Loading records...' : emptyMessage}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="hidden max-w-full overflow-x-auto overscroll-x-contain sm:block">
         <table className="w-full divide-y divide-slate-800 text-left text-sm" style={{ minWidth }}>
           <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase tracking-[0.16em] text-slate-500">
             <tr>

@@ -29,7 +29,7 @@ function NotificationBell() {
   useEffect(() => {
     if (!enabled) return undefined
     window.setTimeout(loadNotifications, 0)
-    const timer = window.setInterval(loadNotifications, 15000)
+    const timer = window.setInterval(loadNotifications, 10000)
     return () => window.clearInterval(timer)
   }, [enabled, loadNotifications])
 

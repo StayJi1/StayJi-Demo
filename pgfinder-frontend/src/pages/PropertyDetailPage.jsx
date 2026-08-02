@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { FiArrowLeft, FiClock, FiColumns, FiMessageSquare, FiShield, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome, FiStar, FiShare2, FiFlag } from 'react-icons/fi'
 import Loader from '../components/common/Loader'
 import Button from '../components/common/Button'
+import SEO from '../components/SEO'
 import PropertyMap from '../components/map/PropertyMap'
 import GalleryTrigger from '../components/gallery/GalleryTrigger'
 import propertyService from '../services/propertyService'
@@ -10,6 +11,7 @@ import { useAuth } from '../context/AuthContext'
 import useCurrentLocation from '../hooks/useCurrentLocation'
 import { formatDistance, getDistanceKm } from '../utils/distance'
 import { readCompareIds, writeCompareIds } from '../utils/compareStorage'
+import { breadcrumbSchema, faqSchema, graphSchema, propertySchema, propertySeo } from '../utils/seoSchemas'
 
 const getAmenityIcon = (amenity) => {
   const value = amenity.toLowerCase()
@@ -387,9 +389,34 @@ function PropertyDetailPage() {
     ...(property.acAvailable ? ['AC rooms'] : []),
     ...(property.mealsAvailable || []),
   ].filter(Boolean))]
+  const propertyPath = `/properties/${property.id || property._id || activePropertyId}`
+  const seo = propertySeo(property)
+  const propertyFaqs = [
+    [`Is ${seo.name} a verified PG in ${seo.area}?`, `${seo.name} is listed on StayJi with location, rent, amenities, vacancy, and owner contact workflow. Check the page for current verification and approval status.`],
+    [`What is the rent for ${seo.name}?`, property.rent ? `${seo.name} is listed at ₹${property.rent} per month. Final rent can vary by sharing type, meals, deposit, and availability.` : `Rent details for ${seo.name} are updated from owner listing data on StayJi.`],
+    [`Does ${seo.name} have food and WiFi?`, `Check the amenities and food sections for ${seo.name}. StayJi shows owner-provided details such as WiFi, meals, parking, AC, laundry, and security where available.`],
+  ]
+  const schema = graphSchema([
+    propertySchema(property, propertyPath),
+    breadcrumbSchema([
+      { name: 'Home', path: '/' },
+      { name: 'Bangalore PGs', path: '/properties' },
+      { name: seo.name, path: propertyPath },
+    ]),
+    faqSchema(propertyFaqs),
+  ])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl overflow-x-hidden px-4 py-8 sm:px-6 lg:px-8">
+      <SEO
+        title={seo.title}
+        description={seo.description}
+        path={propertyPath}
+        keywords={[seo.name, `${seo.type} in ${seo.area}`, `PG in ${seo.area} Bangalore`, 'PG in Bangalore', 'StayJi']}
+        schema={schema}
+        image={property.image || property.propertyImage || property.propertyImageUrls?.[0]}
+        type="product"
+      />
       <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-accent-500">
           <FiArrowLeft /> Back
@@ -402,44 +429,44 @@ function PropertyDetailPage() {
 
       <div className="grid gap-8 lg:grid-cols-[1.25fr_0.75fr]">
         <section className="space-y-8">
-          <div className="overflow-hidden rounded-[2rem] bg-slate-950/90 shadow-card">
+          <div className="overflow-hidden rounded-2xl bg-slate-950/90 shadow-card">
             <GalleryTrigger property={property} />
           </div>
 
           {property.videoUrl ? (
-            <div className="overflow-hidden rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-4 shadow-card">
-              <video src={property.videoUrl} controls className="max-h-[420px] w-full rounded-[1.5rem] bg-slate-950" />
+          <div className="overflow-hidden rounded-2xl border border-slate-800/80 bg-surface-800/90 p-3 shadow-card sm:p-4">
+              <video src={property.videoUrl} controls className="max-h-[420px] w-full rounded-xl bg-slate-950 sm:rounded-[1.5rem]" />
             </div>
           ) : null}
 
-          <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
+          <div className="rounded-2xl border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:p-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm uppercase tracking-[0.28em] text-accent-400">{property.propertyType || property.category || property.type || 'PG'}</p>
-                <h1 className="mt-3 text-4xl font-semibold text-white">{property.name}</h1>
+                <p className="text-sm uppercase tracking-[0.16em] text-accent-400 sm:tracking-[0.28em]">{property.propertyType || property.category || property.type || 'PG'}</p>
+                <h1 className="mt-3 break-words text-3xl font-semibold leading-tight text-white sm:text-4xl">{property.name}</h1>
                 <p className="mt-3 text-sm text-slate-400">{property.locationLabel || property.area || property.city}</p>
               </div>
-              <p className="rounded-3xl bg-brand-500/10 px-5 py-3 text-2xl font-semibold text-brand-100">₹{property.rent || '8,500'}/mo</p>
+              <p className="w-max max-w-full rounded-2xl bg-brand-500/10 px-4 py-3 text-xl font-semibold text-brand-100 sm:rounded-3xl sm:px-5 sm:text-2xl">₹{property.rent || '8,500'}/mo</p>
             </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
-                <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Property type</p>
+              <div className="min-w-0 rounded-2xl bg-slate-950/80 p-4 text-slate-300 sm:rounded-3xl sm:p-5">
+                <p className="text-sm uppercase tracking-[0.12em] text-slate-500 sm:tracking-[0.24em]">Property type</p>
                 <p className="mt-2 text-base text-white">{property.propertyType || property.category || property.type || 'PG'}</p>
               </div>
-              <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
-                <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Gender type</p>
+              <div className="min-w-0 rounded-2xl bg-slate-950/80 p-4 text-slate-300 sm:rounded-3xl sm:p-5">
+                <p className="text-sm uppercase tracking-[0.12em] text-slate-500 sm:tracking-[0.24em]">Gender type</p>
                 <p className="mt-2 text-base text-white">{property.gender || 'Co-ed'}</p>
               </div>
-              <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
-                <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Food</p>
+              <div className="min-w-0 rounded-2xl bg-slate-950/80 p-4 text-slate-300 sm:rounded-3xl sm:p-5">
+                <p className="text-sm uppercase tracking-[0.12em] text-slate-500 sm:tracking-[0.24em]">Food</p>
                 <p className="mt-2 text-base text-white">{property.mealsAvailable?.length ? property.mealsAvailable.join(', ') : property.foodIncluded ? 'Included' : 'Optional'}</p>
               </div>
-              <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
-                <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Deposit</p>
+              <div className="min-w-0 rounded-2xl bg-slate-950/80 p-4 text-slate-300 sm:rounded-3xl sm:p-5">
+                <p className="text-sm uppercase tracking-[0.12em] text-slate-500 sm:tracking-[0.24em]">Deposit</p>
                 <p className="mt-2 text-base text-white">₹{property.depositAmount || '0'}</p>
               </div>
-              <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300 sm:col-span-2">
-                <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Sharing options</p>
+              <div className="min-w-0 rounded-2xl bg-slate-950/80 p-4 text-slate-300 sm:col-span-2 sm:rounded-3xl sm:p-5">
+                <p className="text-sm uppercase tracking-[0.12em] text-slate-500 sm:tracking-[0.24em]">Sharing options</p>
                 <p className="mt-2 text-base text-white">{property.sharingAvailability || property.sharing || 'Sharing availability will be confirmed by owner.'}</p>
                 {property.roomInventory?.length ? (
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -449,7 +476,7 @@ function PropertyDetailPage() {
                           <p className="font-semibold text-white">{row.sharingType || 'Shared room'}</p>
                           {row.monthlyRent ? <span className="text-brand-100">₹{row.monthlyRent}</span> : null}
                         </div>
-                        <p className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+                          <p className="mt-2 text-xs uppercase tracking-[0.1em] text-slate-500 sm:tracking-[0.2em]">
                           {row.vacantRooms || row.vacantBeds ? `${row.vacantRooms || 0} rooms · ${row.vacantBeds || 0} beds vacant` : `${row.totalRooms || 0} rooms listed`}
                         </p>
                         {(row.bathroom || row.gender || row.foodPreference || row.ac) ? (
@@ -462,8 +489,8 @@ function PropertyDetailPage() {
                   </div>
                 ) : null}
               </div>
-              <div className="rounded-3xl bg-slate-950/80 p-5 text-slate-300">
-                <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Daily stay</p>
+              <div className="min-w-0 rounded-2xl bg-slate-950/80 p-4 text-slate-300 sm:rounded-3xl sm:p-5">
+                <p className="text-sm uppercase tracking-[0.12em] text-slate-500 sm:tracking-[0.24em]">Daily stay</p>
                 <p className="mt-2 text-base text-white">
                   {property.perDayCheckIn ? `Available${property.dailyRate ? ` at ₹${property.dailyRate}/day` : ''}` : 'Not available'}
                 </p>
@@ -473,19 +500,19 @@ function PropertyDetailPage() {
               <p>{property.description || 'A thoughtfully curated PG with modern rooms, fast WiFi, and a friendly atmosphere near campuses.'}</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-3xl bg-slate-950/80 p-4">
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Occupancy</p>
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500 sm:tracking-[0.24em]">Occupancy</p>
                   <p className="mt-2 text-sm text-white">{property.vacancyStatus || property.occupancy || 'Live availability'}</p>
                 </div>
                 <div className="rounded-3xl bg-slate-950/80 p-4">
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Rating</p>
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500 sm:tracking-[0.24em]">Rating</p>
                   <p className="mt-2 text-sm text-white">{property.rating || '4.8/5'}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
-            <div className="flex items-center gap-4 text-slate-200">
+          <div className="rounded-2xl border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:p-8">
+            <div className="flex items-start gap-4 text-slate-200">
               <FiShield className="text-accent-400" size={24} />
               <div>
                 <p className="font-semibold text-white">Verified host details</p>
@@ -567,8 +594,8 @@ function PropertyDetailPage() {
           </div>
 
           {isConsumerView ? (
-            <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
-              <p className="text-sm uppercase tracking-[0.28em] text-emerald-300">Verified move-in</p>
+            <div className="rounded-2xl border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:p-8">
+              <p className="text-sm uppercase tracking-[0.14em] text-emerald-300 sm:tracking-[0.28em]">Verified move-in</p>
               <h2 className="mt-3 text-2xl font-semibold text-white">Moved In Successfully</h2>
               <p className="mt-3 text-sm leading-6 text-slate-400">
                 Submit proof only after joining. StayJi verifies payment proof, owner confirmation, and occupancy before marking a lead converted, generating owner commission, or processing user cashback.
@@ -587,11 +614,11 @@ function PropertyDetailPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="text-sm text-slate-300">
                     Payment screenshot
-                    <input type="file" accept="image/*" onChange={(event) => setMoveInForm((current) => ({ ...current, paymentScreenshot: event.target.files?.[0] || null }))} className="mt-2 block w-full text-sm text-slate-300 file:mr-4 file:rounded-full file:border-0 file:bg-accent-500 file:px-4 file:py-2 file:font-semibold file:text-slate-950" />
+                    <input type="file" accept="image/*" onChange={(event) => setMoveInForm((current) => ({ ...current, paymentScreenshot: event.target.files?.[0] || null }))} className="mt-2 block w-full text-sm text-slate-300 file:mb-2 file:mr-4 file:rounded-full file:border-0 file:bg-accent-500 file:px-4 file:py-2 file:font-semibold file:text-slate-950 sm:file:mb-0" />
                   </label>
                   <label className="text-sm text-slate-300">
                     Room image optional
-                    <input type="file" accept="image/*" onChange={(event) => setMoveInForm((current) => ({ ...current, roomImage: event.target.files?.[0] || null }))} className="mt-2 block w-full text-sm text-slate-300 file:mr-4 file:rounded-full file:border-0 file:bg-accent-500 file:px-4 file:py-2 file:font-semibold file:text-slate-950" />
+                    <input type="file" accept="image/*" onChange={(event) => setMoveInForm((current) => ({ ...current, roomImage: event.target.files?.[0] || null }))} className="mt-2 block w-full text-sm text-slate-300 file:mb-2 file:mr-4 file:rounded-full file:border-0 file:bg-accent-500 file:px-4 file:py-2 file:font-semibold file:text-slate-950 sm:file:mb-0" />
                   </label>
                 </div>
                 <label className="text-sm text-slate-300">
@@ -605,11 +632,11 @@ function PropertyDetailPage() {
           ) : null}
 
           {isConsumerView ? (
-            <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
-              <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Resident reviews</p>
+            <div className="rounded-2xl border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:p-8">
+              <p className="text-sm uppercase tracking-[0.14em] text-accent-400 sm:tracking-[0.28em]">Resident reviews</p>
               <h2 className="mt-3 text-2xl font-semibold text-white">Rate and review this stay</h2>
               <form onSubmit={handleSubmitReview} className="mt-6 grid gap-4">
-                <div className="grid gap-4 sm:grid-cols-[0.35fr_1fr]">
+                <div className="grid gap-4 lg:grid-cols-[0.35fr_1fr]">
                   <div className="text-sm text-slate-300">
                     Rating
                     <StarRating value={reviewForm.rating} onChange={(rating) => setReviewForm((current) => ({ ...current, rating }))} />
@@ -651,8 +678,8 @@ function PropertyDetailPage() {
         </section>
 
         <aside className="space-y-6">
-          <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
-            <p className="text-sm uppercase tracking-[0.28em] text-accent-500">Live vacancy</p>
+          <div className="rounded-2xl border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:p-6">
+            <p className="text-sm uppercase tracking-[0.14em] text-accent-500 sm:tracking-[0.28em]">Live vacancy</p>
             <div className="mt-5 grid gap-3">
               <div className="rounded-3xl bg-emerald-500/10 p-4 text-emerald-100">
                 <p className="text-2xl font-semibold">{property.availableBeds || 0}</p>
@@ -674,10 +701,10 @@ function PropertyDetailPage() {
               ) : null}
             </div>
           </div>
-          <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
-            <p className="text-sm uppercase tracking-[0.28em] text-accent-500">Location</p>
+          <div className="rounded-2xl border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:p-6">
+            <p className="text-sm uppercase tracking-[0.14em] text-accent-500 sm:tracking-[0.28em]">Location</p>
             {distanceKm !== null ? <p className="mt-3 text-sm text-slate-300">{formatDistance(distanceKm)} from your current location</p> : null}
-            <div className="mt-6 rounded-[1.75rem] overflow-hidden border border-slate-700/80 bg-slate-950/80">
+            <div className="mt-6 overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-950/80 sm:rounded-[1.75rem]">
               <div className="h-80 w-full">
                 <PropertyMap
                   center={coordinates}
@@ -700,22 +727,22 @@ function PropertyDetailPage() {
             <p className="mt-2 text-sm text-slate-400">Nearby landmark: {property.areaName || property.locationLabel || property.city || 'central locality'}</p>
             {locationError ? <p className="mt-3 text-sm text-rose-300">{locationError}</p> : null}
           </div>
-          <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
-            <p className="text-sm uppercase tracking-[0.28em] text-accent-500">Amenities</p>
+          <div className="rounded-2xl border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:p-6">
+            <p className="text-sm uppercase tracking-[0.14em] text-accent-500 sm:tracking-[0.28em]">Amenities</p>
             <ul className="mt-6 grid gap-3 sm:grid-cols-2 text-slate-300">
               {(amenityItems.length ? amenityItems : ['WiFi', '24/7 Security', 'Kitchen access']).map((item) => (
-                <li key={item} className="flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950/80 p-4 transition hover:border-accent-500/60 hover:bg-slate-900">
+                <li key={item} className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/80 p-3 transition hover:border-accent-500/60 hover:bg-slate-900 sm:rounded-3xl sm:p-4">
                   <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-accent-500/10 text-xl">{getAmenityEmoji(item)}</span>
                   <span className="text-accent-300">{getAmenityIcon(item)}</span>
-                  <span>{item}</span>
+                  <span className="min-w-0 break-words">{item}</span>
                 </li>
               ))}
             </ul>
           </div>
           {property.menuPhoto ? (
-            <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
-              <p className="text-sm uppercase tracking-[0.28em] text-accent-500">Menu</p>
-              <img src={property.menuPhoto} alt={`${property.name} menu`} className="mt-5 max-h-80 w-full rounded-[1.5rem] object-cover" />
+            <div className="rounded-2xl border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:p-6">
+              <p className="text-sm uppercase tracking-[0.14em] text-accent-500 sm:tracking-[0.28em]">Menu</p>
+              <img src={property.menuPhoto} alt={`${property.name} menu`} className="mt-5 max-h-80 w-full rounded-xl object-cover sm:rounded-[1.5rem]" />
             </div>
           ) : null}
         </aside>

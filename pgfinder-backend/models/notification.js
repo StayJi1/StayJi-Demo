@@ -7,7 +7,7 @@ var notificationSchema = mongoose.Schema({
     },
     recipientRole:{
         type:String,
-        enum:["user","vendor","admin","all"],
+        enum:["user","owner","vendor","admin","all"],
         default:"user"
     },
     actorId:{
@@ -46,5 +46,9 @@ var notificationSchema = mongoose.Schema({
         default:true
     }
 });
+
+notificationSchema.index({ recipientId: 1, isActive: 1, readAt: 1, addedOn: -1 });
+notificationSchema.index({ recipientRole: 1, isActive: 1, addedOn: -1 });
+notificationSchema.index({ type: 1, addedOn: -1 });
 
 module.exports = mongoose.model('notification', notificationSchema);

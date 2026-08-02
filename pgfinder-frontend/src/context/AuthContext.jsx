@@ -164,7 +164,7 @@ export const AuthProvider = ({ children }) => {
       setStatus('success')
       return { ...response, user: { ...normalizedUser, role: nextRole } }
     } catch (err) {
-      setError(err?.response?.data?.message || err.message || 'Login failed')
+      setError(err?.response?.data?.msg || err?.response?.data?.message || err.message || 'Login failed')
       setStatus('error')
       throw err
     }
@@ -199,7 +199,7 @@ export const AuthProvider = ({ children }) => {
       setStatus('success')
       return { ...response, user: { ...normalizedUser, role: nextRole } }
     } catch (err) {
-      setError(err?.response?.data?.message || err.message || 'Signup failed')
+      setError(err?.response?.data?.msg || err?.response?.data?.message || err.message || 'Signup failed')
       setStatus('error')
       throw err
     }

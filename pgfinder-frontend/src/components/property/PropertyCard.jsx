@@ -81,8 +81,10 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSa
         <img
           src={property.image || 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=80'}
           alt={property.name}
+          title={`${property.name || 'StayJi PG'} in ${property.area || property.locationLabel || property.city || 'Bangalore'}`}
           loading="lazy"
-          className="h-64 w-full object-cover transition duration-500 group-hover:scale-105"
+          sizes="(min-width: 1024px) 50vw, 100vw"
+          className="h-52 w-full object-cover transition duration-500 group-hover:scale-105 sm:h-64"
         />
       </div>
       <div className="space-y-4 p-5 sm:p-6">
@@ -110,12 +112,12 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSa
           <span className="truncate">{property.locationLabel || property.city}</span>
           {property.distanceKm !== undefined ? <span>• {formatDistance(property.distanceKm)}</span> : null}
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-3">
           <span className="rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">{property.gender || 'Co-ed'}</span>
           <span className="rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">{property.rent ? `₹${property.rent}/mo` : '₹8,500'}</span>
           <span className="rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">{property.depositAmount ? `₹${property.depositAmount} deposit` : 'No deposit'}</span>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2">
           <span className="rounded-3xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
             {property.vacancyStatus || (property.availableBeds ? `${property.availableBeds} beds available` : 'Live vacancy')}
           </span>

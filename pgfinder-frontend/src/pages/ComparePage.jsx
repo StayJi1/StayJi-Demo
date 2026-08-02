@@ -116,9 +116,9 @@ function ComparePage() {
   if (!isAuthenticated) {
     return (
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="rounded-[2rem] border border-slate-800 bg-surface-800/90 p-8 shadow-card sm:p-10">
-          <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Compare stays</p>
-          <h1 className="mt-3 text-4xl font-semibold text-white">Compare up to 3 PGs side by side</h1>
+        <div className="rounded-2xl border border-slate-800 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-10">
+          <p className="text-sm uppercase tracking-[0.16em] text-accent-400 sm:tracking-[0.28em]">Compare stays</p>
+          <h1 className="mt-3 text-3xl font-semibold leading-tight text-white sm:text-4xl">Compare up to 3 PGs side by side</h1>
           <p className="mt-4 max-w-3xl text-lg text-slate-400">
             Compare rent, food, sharing, vacancy, amenities, and resident score before you book a visit. Sign in to save your shortlist and open the full comparison view.
           </p>
@@ -133,11 +133,11 @@ function ComparePage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl overflow-x-hidden px-4 py-10 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Compare stays</p>
-          <h1 className="mt-3 text-4xl font-semibold text-white">Side-by-side property comparison</h1>
+          <p className="text-sm uppercase tracking-[0.16em] text-accent-400 sm:tracking-[0.28em]">Compare stays</p>
+          <h1 className="mt-3 text-3xl font-semibold leading-tight text-white sm:text-4xl">Side-by-side property comparison</h1>
           <p className="mt-3 text-slate-400">Compare rent, food, sharing, vacancy, amenities, and resident score before contacting an owner.</p>
         </div>
         <Link to="/properties"><Button variant="secondary">Add more stays</Button></Link>
@@ -152,8 +152,8 @@ function ComparePage() {
           <div className="mt-6"><Link to="/properties"><Button>Browse stays</Button></Link></div>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-[2rem] border border-slate-800 bg-surface-800/90 shadow-card">
-          <div className="grid min-w-[860px]" style={{ gridTemplateColumns: `190px repeat(${properties.length}, minmax(220px, 1fr))` }}>
+        <div className="overflow-x-auto overscroll-x-contain rounded-2xl border border-slate-800 bg-surface-800/90 shadow-card sm:rounded-[2rem]">
+          <div className="grid min-w-[720px] sm:min-w-[860px]" style={{ gridTemplateColumns: `minmax(150px,190px) repeat(${properties.length}, minmax(180px, 1fr))` }}>
             <div className="border-b border-slate-800 p-5 text-sm uppercase tracking-[0.22em] text-slate-500">Feature</div>
             {properties.map((property) => {
               const id = property.id || property._id

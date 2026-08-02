@@ -41,7 +41,7 @@ function Sidebar() {
   }
 
   return (
-    <aside className="sticky top-0 z-30 flex flex-col border-b border-slate-800/90 bg-surface-900 p-4 text-slate-200 lg:min-h-screen lg:border-b-0 lg:border-r lg:p-6">
+    <aside className="sticky top-0 z-30 flex min-w-0 flex-col border-b border-slate-800/90 bg-surface-900 p-4 text-slate-200 lg:min-h-screen lg:border-b-0 lg:border-r lg:p-6">
       <div className="mb-0 flex items-center gap-3 lg:mb-10">
         <div className="inline-flex h-12 w-12 overflow-hidden rounded-3xl bg-white shadow-glow">
           <img src="/stayji-logo.png" alt="StayJi" className="h-full w-full object-cover" />
@@ -55,13 +55,13 @@ function Sidebar() {
         </div>
       </div>
 
-      <nav className="fixed inset-x-3 bottom-3 z-40 flex gap-1 overflow-x-auto rounded-3xl border border-white/10 bg-slate-950/95 p-2 shadow-card backdrop-blur-xl lg:static lg:block lg:space-y-2 lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+      <nav className="fixed inset-x-2 bottom-2 z-40 flex gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-card backdrop-blur-xl sm:inset-x-3 sm:bottom-3 sm:rounded-3xl lg:static lg:block lg:space-y-2 lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
         {links.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}
             className={({ isActive }) =>
-              `flex min-w-[4.75rem] flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-center text-[11px] font-medium transition lg:min-w-0 lg:flex-row lg:justify-start lg:gap-3 lg:rounded-3xl lg:px-4 lg:py-3 lg:text-left lg:text-sm ${
+              `flex min-w-[4.25rem] flex-1 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-center text-[10px] font-medium transition sm:min-w-[4.75rem] sm:rounded-2xl sm:text-[11px] lg:min-w-0 lg:flex-row lg:justify-start lg:gap-3 lg:rounded-3xl lg:px-4 lg:py-3 lg:text-left lg:text-sm ${
                 isActive ? 'bg-brand-500/15 text-white' : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
               }`
             }

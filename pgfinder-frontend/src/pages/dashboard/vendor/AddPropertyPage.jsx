@@ -423,11 +423,11 @@ function AddPropertyPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <header className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
+    <div className="min-w-0 space-y-8">
+      <header className="rounded-2xl border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
         <div>
-          <p className="text-sm uppercase tracking-[0.28em] text-accent-400">New listing</p>
-          <h1 className="mt-3 text-4xl font-semibold text-white">{isEditMode ? 'Edit property details' : 'Add a stay property'}</h1>
+          <p className="text-sm uppercase tracking-[0.14em] text-accent-400 sm:tracking-[0.28em]">New listing</p>
+          <h1 className="mt-3 text-3xl font-semibold leading-tight text-white sm:text-4xl">{isEditMode ? 'Edit property details' : 'Add a stay property'}</h1>
         </div>
       </header>
 
@@ -492,7 +492,7 @@ function AddPropertyPage() {
             <Input label="Address" name="address" value={form.address} onChange={handleChange} required />
             <Input label="Monthly price" name="rent" type="number" value={form.rent} onChange={handleChange} required />
           </div>
-          <div className="grid gap-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
             <Input label="Latitude" name="latitude" type="number" step="any" value={form.latitude} onChange={handleChange} placeholder="12.9716" required />
             <Input label="Longitude" name="longitude" type="number" step="any" value={form.longitude} onChange={handleChange} placeholder="77.5946" required />
             <button
@@ -512,16 +512,16 @@ function AddPropertyPage() {
             <Input label="Beds / rooms available" name="availableBeds" type="number" value={form.availableBeds} onChange={handleChange} placeholder="10" />
             <Input label="Available from" name="availableFrom" type="date" value={form.availableFrom} onChange={handleChange} />
           </div>
-          <div className="rounded-[1.75rem] border border-slate-800 bg-slate-950/70 p-5">
+          <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 sm:rounded-[1.75rem] sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-accent-400">Sharing-wise vacancy</p>
+                <p className="text-sm font-semibold uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.22em]">Sharing-wise vacancy</p>
                 <button type="button" onClick={addSharingBlock} className="inline-flex items-center gap-2 rounded-full border border-accent-500/60 px-4 py-2 text-sm text-accent-200">
                   <FiPlus /> Add sharing
                 </button>
               </div>
             <div className="mt-5 grid gap-4">
               {form.roomInventory.map((row, index) => (
-                <div key={`${row.sharingType}-${index}`} className="grid gap-3 rounded-3xl border border-slate-800 bg-slate-900/60 p-4 md:grid-cols-4 xl:grid-cols-6">
+                <div key={`${row.sharingType}-${index}`} className="grid min-w-0 gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-3 sm:p-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">
                   <Input label="Type" value={row.sharingType} onChange={(event) => handleRoomInventoryChange(index, 'sharingType', event.target.value)} />
                   <Input label="Total rooms" type="number" value={row.totalRooms} onChange={(event) => handleRoomInventoryChange(index, 'totalRooms', event.target.value)} />
                   <Input label="Occupied rooms" type="number" value={row.occupiedRooms || Math.max(0, Number(row.totalRooms || 0) - Number(row.vacantRooms || 0))} onChange={(event) => handleRoomInventoryChange(index, 'occupiedRooms', event.target.value)} />
@@ -574,8 +574,8 @@ function AddPropertyPage() {
               ))}
             </div>
           </div>
-          <div className="rounded-[1.75rem] border border-slate-800 bg-slate-950/70 p-5">
-            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-accent-400">Amenities</p>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 sm:rounded-[1.75rem] sm:p-5">
+            <p className="text-sm font-semibold uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.22em]">Amenities</p>
             <div className="mt-4 flex flex-wrap gap-3">
               {predefinedAmenities.map((amenity) => (
                 <button
@@ -611,8 +611,8 @@ function AddPropertyPage() {
               </div>
             ) : null}
           </div>
-          <div className="rounded-[1.75rem] border border-slate-800 bg-slate-950/70 p-5">
-            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-accent-400">Custom features</p>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 sm:rounded-[1.75rem] sm:p-5">
+            <p className="text-sm font-semibold uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.22em]">Custom features</p>
             <textarea name="customFeatures" value={form.customFeatures} onChange={handleChange} placeholder="Gym, study room, rooftop access, biometric access, EV charging, gaming zone, shuttle service" className="mt-4 min-h-24 w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
@@ -632,8 +632,8 @@ function AddPropertyPage() {
             </label>
             <Input label="Sharing availability" name="sharingAvailability" value={form.sharingAvailability} onChange={handleChange} placeholder="2 double-sharing, 5 single-sharing" />
           </div>
-          <div className="grid gap-3 rounded-[1.75rem] border border-emerald-500/30 bg-emerald-500/10 p-5 text-sm text-emerald-100">
-            <p className="font-semibold uppercase tracking-[0.18em]">Owner activation agreements</p>
+          <div className="grid gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100 sm:rounded-[1.75rem] sm:p-5">
+            <p className="font-semibold uppercase tracking-[0.1em] sm:tracking-[0.18em]">Owner activation agreements</p>
             <label className="flex items-start gap-3"><input type="checkbox" name="referralAgreementAccepted" checked={form.referralAgreementAccepted} onChange={handleChange} /> I accept the property referral agreement.</label>
             <label className="flex items-start gap-3"><input type="checkbox" name="leadPricingAccepted" checked={form.leadPricingAccepted} onChange={handleChange} /> I accept qualified lead pricing and conversion charges.</label>
             <label className="flex items-start gap-3"><input type="checkbox" name="ownerTermsAccepted" checked={form.ownerTermsAccepted} onChange={handleChange} /> I accept StayJi owner terms and property approval rules.</label>
@@ -691,8 +691,8 @@ function AddPropertyPage() {
               className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-4 text-sm text-slate-100 outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
             />
           </label>
-          <div className="rounded-[1.75rem] border border-dashed border-slate-800/70 bg-slate-950/80 p-6 text-slate-300">
-            <div className="flex items-center gap-4">
+          <div className="rounded-2xl border border-dashed border-slate-800/70 bg-slate-950/80 p-4 text-slate-300 sm:rounded-[1.75rem] sm:p-6">
+            <div className="flex items-start gap-4">
               <FiUpload className="h-6 w-6 text-accent-400" />
               <div>
                 <p className="font-semibold text-white">Property photos and video</p>
@@ -702,7 +702,7 @@ function AddPropertyPage() {
             <div className="mt-5 grid gap-5">
               <label className="block rounded-3xl border border-dashed border-slate-700 bg-slate-900/70 p-5 text-sm text-slate-200">
                 <span className="mb-2 block text-slate-300">Upload images</span>
-                <input type="file" accept="image/*" capture="environment" multiple onChange={handleImageFiles} className="block w-full text-sm text-slate-300 file:mr-4 file:rounded-full file:border-0 file:bg-accent-500 file:px-4 file:py-2 file:font-semibold file:text-slate-950" />
+                <input type="file" accept="image/*" capture="environment" multiple onChange={handleImageFiles} className="block w-full text-sm text-slate-300 file:mb-2 file:mr-4 file:rounded-full file:border-0 file:bg-accent-500 file:px-4 file:py-2 file:font-semibold file:text-slate-950 sm:file:mb-0" />
               </label>
               {imageFiles.length ? (
                 <div className="grid gap-3 sm:grid-cols-4">
@@ -730,7 +730,7 @@ function AddPropertyPage() {
               ) : null}
               <label className="block rounded-3xl border border-dashed border-slate-700 bg-slate-900/70 p-5 text-sm text-slate-200">
                 <span className="mb-2 block text-slate-300">Upload room video</span>
-                <input type="file" accept="video/*" capture="environment" onChange={handleVideoFile} className="block w-full text-sm text-slate-300 file:mr-4 file:rounded-full file:border-0 file:bg-accent-500 file:px-4 file:py-2 file:font-semibold file:text-slate-950" />
+                <input type="file" accept="video/*" capture="environment" onChange={handleVideoFile} className="block w-full text-sm text-slate-300 file:mb-2 file:mr-4 file:rounded-full file:border-0 file:bg-accent-500 file:px-4 file:py-2 file:font-semibold file:text-slate-950 sm:file:mb-0" />
                 {videoFile ? <span className="mt-3 block text-slate-400">{videoFile.name}</span> : null}
               </label>
               {uploadProgress > 0 ? (
