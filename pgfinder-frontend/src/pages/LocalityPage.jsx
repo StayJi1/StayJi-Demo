@@ -6,7 +6,8 @@ import Loader from '../components/common/Loader'
 import PropertyCard from '../components/property/PropertyCard'
 import PropertyMap from '../components/map/PropertyMap'
 import propertyService from '../services/propertyService'
-import { bangaloreLocalities, blogPosts, getFaqRecords, recommendationPosts, siteConfig } from '../data/seoContent'
+import { bangaloreLocalities, blogPosts, getFaqRecords, recommendationPosts } from '../data/seoContent'
+import { localitySchema } from '../utils/seoSchemas'
 
 const bangaloreOverview = {
   slug: '',
@@ -88,19 +89,7 @@ export default function LocalityPage() {
     .slice(0, 8)
   const relatedBlogs = blogPosts.filter((post) => post.locality === locality.name || post.locality === 'Bangalore').slice(0, 4)
   const relatedRecommendations = recommendationPosts.filter((post) => post.locality === locality.name).slice(0, 4)
-  const schema = {
-    '@context': 'https://schema.org',
-    '@type': 'CollectionPage',
-    name: `${siteConfig.name} - ${locality.title}`,
-    url: `${siteConfig.domain}${path}`,
-    about: locality.overview,
-    mainEntity: visibleProperties.map((property) => ({
-      '@type': 'Accommodation',
-      name: property.name,
-      address: property.address,
-      aggregateRating: { '@type': 'AggregateRating', ratingValue: property.rating || 4.6, reviewCount: 1 },
-    })),
-  }
+  const schema = localitySchema(locality, visibleProperties, path)
 
   return (
     <main className="bg-white text-slate-900">
@@ -117,8 +106,8 @@ export default function LocalityPage() {
             <Link to="/" className="hover:text-white">Home</Link> / <Link to="/bangalore" className="hover:text-white">Bangalore</Link>{locality.slug ? ` / ${locality.name}` : ''}
           </nav>
           <div className="mt-8 max-w-4xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-cyan-300">Dynamic Bangalore locality marketplace</p>
-            <h1 className="mt-4 text-4xl font-semibold sm:text-6xl">{locality.title}</h1>
+            <p className="text-sm font-semibold uppercase tracking-[0.12em] text-cyan-300 sm:tracking-[0.24em]">Dynamic Bangalore locality marketplace</p>
+            <h1 className="mt-4 text-3xl font-semibold leading-tight sm:text-6xl">{locality.title}</h1>
             <p className="mt-5 text-lg leading-8 text-slate-300">{locality.overview}</p>
           </div>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -129,7 +118,7 @@ export default function LocalityPage() {
               ['Boys PG options', boysCount || colivingCount],
             ].map(([label, value]) => (
               <div key={label} className="rounded-2xl border border-white/10 bg-white/10 p-5">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{label}</p>
+                <p className="text-xs uppercase tracking-[0.1em] text-slate-400 sm:tracking-[0.2em]">{label}</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
               </div>
             ))}
@@ -138,7 +127,7 @@ export default function LocalityPage() {
       </section>
 
       <section className="px-4 py-10 sm:px-6 lg:px-8">
-        <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1fr_380px]">
+        <div className="mx-auto grid max-w-7xl min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
           <div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="grid gap-3 sm:grid-cols-4">

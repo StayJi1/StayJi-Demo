@@ -40,7 +40,7 @@ const authService = {
   googleSignup: async (payload) => {
     const res = await authApi.googleAuth(payload)
     if (res && res.result === 'success') {
-      return { token: null, user: res.data }
+      return { token: res.token || null, user: res.data, role: res.role }
     }
     const message = res?.msg || 'Google signup failed'
     const err = new Error(message)

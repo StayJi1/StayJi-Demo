@@ -104,20 +104,20 @@ function MessagesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
         <div className="flex items-center gap-3">
           <FiMessageSquare className="text-accent-400" />
-          <div>
-            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Messages</p>
-            <h1 className="mt-2 text-3xl font-semibold text-white">{normalizedRole === 'owner' ? 'Reply to users' : 'Talk to property owners'}</h1>
+          <div className="min-w-0">
+            <p className="text-sm uppercase tracking-[0.14em] text-accent-400 sm:tracking-[0.24em]">Messages</p>
+            <h1 className="mt-2 text-2xl font-semibold leading-tight text-white sm:text-3xl">{normalizedRole === 'owner' ? 'Reply to users' : 'Talk to property owners'}</h1>
           </div>
         </div>
       </header>
 
       {error ? <p className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">{error}</p> : null}
 
-      <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
         <Card className="p-0">
           <div className="border-b border-slate-800 p-4">
             <p className="text-sm font-semibold text-white">{conversations.reduce((sum, item) => sum + (Number(normalizedRole === 'owner' ? item.unreadByOwner : item.unreadByUser) || 0), 0)} unread</p>
@@ -153,15 +153,15 @@ function MessagesPage() {
           </div>
         </Card>
 
-        <Card className="flex min-h-[620px] flex-col p-0">
+        <Card className="flex min-h-[70vh] flex-col p-0 sm:min-h-[620px]">
           {activeConversation ? (
             <>
               <div className="border-b border-slate-800 p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-center gap-4">
-                    <img src={propertyImage(activeConversation)} alt={propertyName(activeConversation.property || activeConversation.propertyId)} className="h-20 w-20 rounded-2xl object-cover" />
+                    <img src={propertyImage(activeConversation)} alt={propertyName(activeConversation.property || activeConversation.propertyId)} className="h-16 w-16 shrink-0 rounded-2xl object-cover sm:h-20 sm:w-20" />
                     <div className="min-w-0">
-                      <p className="text-sm uppercase tracking-[0.2em] text-accent-400">{propertyName(activeConversation.property || activeConversation.propertyId)}</p>
+                      <p className="text-xs uppercase tracking-[0.12em] text-accent-400 sm:text-sm sm:tracking-[0.2em]">{propertyName(activeConversation.property || activeConversation.propertyId)}</p>
                       <h2 className="mt-2 text-xl font-semibold text-white">{personName(normalizedRole === 'owner' ? activeConversation.userId : activeConversation.ownerId)}</h2>
                       <p className="mt-1 text-sm text-slate-400">Owner: {personName(activeConversation.ownerId)}</p>
                     </div>
@@ -176,7 +176,7 @@ function MessagesPage() {
                   const mine = message.senderRole === normalizedRole
                   return (
                     <div key={message.id || message._id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm ${mine ? 'bg-accent-500 text-slate-950' : 'bg-slate-950 text-slate-200'}`}>
+                      <div className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm sm:max-w-[82%] ${mine ? 'bg-accent-500 text-slate-950' : 'bg-slate-950 text-slate-200'}`}>
                         <p>{message.text}</p>
                         <p className={`mt-2 text-[11px] ${mine ? 'text-slate-800' : 'text-slate-500'}`}>{message.addedOn ? new Date(message.addedOn).toLocaleString() : ''}</p>
                       </div>
@@ -191,7 +191,7 @@ function MessagesPage() {
                   onChange={(event) => setDraft(event.target.value)}
                   maxLength={1000}
                   placeholder={normalizedRole === 'owner' ? 'Reply to this user' : 'Message the owner'}
-                  className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400"
+                  className="min-w-0 rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400 sm:rounded-3xl"
                 />
                 <Button type="submit" disabled={!draft.trim() || sending}><FiSend /> Send</Button>
               </form>

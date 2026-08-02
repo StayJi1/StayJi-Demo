@@ -130,12 +130,12 @@ function UserDashboard() {
   const totalCoins = overview?.wallet?.totalCoins ?? approvedRewards.reduce((sum, item) => sum + (Number(item.rewardCoins || item.cashbackAmount) || 0), 0)
 
   return (
-    <div className="space-y-8">
+    <div className="min-w-0 space-y-8">
       <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-accent-400">User dashboard</p>
-            <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">Track your shortlist, visits, and messages</h1>
+          <div className="min-w-0">
+            <p className="text-sm uppercase tracking-[0.14em] text-accent-400 sm:tracking-[0.28em]">User dashboard</p>
+            <h1 className="mt-3 text-3xl font-semibold leading-tight text-white sm:text-4xl">Track your shortlist, visits, and messages</h1>
             <p className="mt-2 text-xs text-slate-500">StayJi ID: {user?._id ? `SJ-${user._id.toString().slice(-6).toUpperCase()}` : '-'}</p>
           </div>
           <Link to="/properties">
@@ -144,7 +144,7 @@ function UserDashboard() {
         </div>
       </header>
 
-      <div className="grid gap-6 xl:grid-cols-4">
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {loading ? (
           <Card className="p-8">Loading overview…</Card>
         ) : (
@@ -160,11 +160,11 @@ function UserDashboard() {
               onClick={() => document.getElementById(item.target)?.scrollIntoView({ behavior: 'smooth' })}
               className="text-left"
             >
-              <Card className="h-full p-6 transition hover:border-accent-500">
-              <div className="flex items-center justify-between gap-4 text-slate-300">
+              <Card className="h-full p-4 transition hover:border-accent-500 sm:p-6">
+              <div className="flex min-w-0 items-center justify-between gap-4 text-slate-300">
                 <span className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-950 text-accent-400">{item.icon}</span>
-                <div className="text-right">
-                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">{item.label}</p>
+                <div className="min-w-0 text-right">
+                  <p className="text-sm uppercase tracking-[0.12em] text-slate-500 sm:tracking-[0.24em]">{item.label}</p>
                   <p className="mt-3 text-3xl font-semibold text-white">{item.value}</p>
                 </div>
               </div>
@@ -177,7 +177,7 @@ function UserDashboard() {
       <div className="grid gap-6 xl:grid-cols-2">
         <Card id="user-wishlist">
           <div>
-            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Your interests</p>
+            <p className="text-sm uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.24em]">Your interests</p>
             <h2 className="mt-3 text-2xl font-semibold text-white">Wishlisted stays</h2>
           </div>
           <div className="mt-6 space-y-4">
@@ -210,7 +210,7 @@ function UserDashboard() {
 
         <Card id="user-messages">
           <div>
-            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Messages</p>
+            <p className="text-sm uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.24em]">Messages</p>
             <h2 className="mt-3 text-2xl font-semibold text-white">Owner conversations</h2>
           </div>
           <div className="mt-6 space-y-3">
@@ -227,7 +227,7 @@ function UserDashboard() {
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-4">
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { title: 'Visit bookings', text: `${visits.length} visits across pending, approved, rejected, cancelled, and completed states.`, target: 'visit-bookings' },
           { title: 'Inquiry history', text: `${inquiries.length} inquiries with owner replies and lead timeline context.`, target: 'inquiry-history' },
@@ -241,9 +241,9 @@ function UserDashboard() {
             <button
               type="button"
               onClick={() => item.href ? window.location.assign(item.href) : document.getElementById(item.target)?.scrollIntoView({ behavior: 'smooth' })}
-              className="h-full w-full p-6 text-left transition hover:bg-slate-900/50"
+              className="h-full w-full p-4 text-left transition hover:bg-slate-900/50 sm:p-6"
             >
-            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">{item.title}</p>
+            <p className="text-sm uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.24em]">{item.title}</p>
             <p className="mt-4 text-slate-300">{item.text}</p>
             </button>
           </Card>
@@ -252,7 +252,7 @@ function UserDashboard() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card id="visit-bookings">
-          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Visit bookings</p>
+          <p className="text-sm uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.24em]">Visit bookings</p>
           <h2 className="mt-3 text-2xl font-semibold text-white">Upcoming and historical visits</h2>
           <div className="mt-5 space-y-3">
             {visits.slice(0, 8).map((visit) => {
@@ -262,7 +262,7 @@ function UserDashboard() {
                 <Link to={`/properties/${visit.property?._id || visit.property?.id || visit.propertyIDFK?._id || visit.propertyIDFK}`} className="font-semibold text-white hover:text-accent-300">{visit.property?.name || visit.propertyIDFK?.propertyName || 'StayJi property'}</Link>
                 <p className="mt-1">{visit.statusLabel || visit.status || 'Pending'} · {visit.visitDate ? new Date(visit.visitDate).toLocaleString() : 'Date pending'} {visit.visitTime || ''}</p>
                 <p className="mt-1 text-slate-500">Move-in: {visit.moveInPreference || '-'} · Admin verification visible in notifications.</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_0.8fr_auto_auto]">
+                <div className="mt-3 grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_auto_auto]">
                   <input
                     type="date"
                     value={visitEdits[visitId]?.visitDate || ''}
@@ -285,7 +285,7 @@ function UserDashboard() {
         </Card>
 
         <Card id="inquiry-history">
-          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Inquiry history</p>
+          <p className="text-sm uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.24em]">Inquiry history</p>
           <h2 className="mt-3 text-2xl font-semibold text-white">Owner replies and lead timeline</h2>
           <div className="mt-5 space-y-3">
             {inquiries.slice(0, 8).map((inquiry) => (
@@ -302,7 +302,7 @@ function UserDashboard() {
 
       <div className="grid gap-6 xl:grid-cols-3">
         <Card id="viewed-properties">
-          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Viewed properties</p>
+          <p className="text-sm uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.24em]">Viewed properties</p>
           <div className="mt-5 space-y-3">
             {viewedProperties.slice(0, 6).map((item) => (
               <Link key={`${item.propertyId}-${item.viewedOn}`} to={`/properties/${item.propertyId}`} className="block rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300 hover:border-accent-500">
@@ -314,7 +314,7 @@ function UserDashboard() {
           </div>
         </Card>
         <Card id="saved-searches">
-          <p className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.24em] text-accent-400"><FiSearch /> Saved searches</p>
+          <p className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.24em]"><FiSearch /> Saved searches</p>
           <div className="mt-5 space-y-3">
             {savedSearches.slice(0, 6).map((item) => (
               <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
@@ -339,7 +339,7 @@ function UserDashboard() {
           </div>
         </Card>
         <Card id="comparison-history">
-          <p className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.24em] text-accent-400"><FiColumns /> Comparison history</p>
+          <p className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.24em]"><FiColumns /> Comparison history</p>
           <div className="mt-5 space-y-3">
             {comparisonHistory.slice(0, 6).map((item) => {
               const ids = (item.propertyIds || (item.properties || []).map((property) => property.propertyId)).filter(Boolean)
@@ -356,7 +356,7 @@ function UserDashboard() {
           </div>
         </Card>
         <Card id="notifications">
-          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Notifications</p>
+          <p className="text-sm uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.24em]">Notifications</p>
           <div className="mt-5 space-y-3">
             {notifications.slice(0, 8).map((item) => (
               <Link key={item._id} to={item.link || '/dashboard/user'} className="block rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300 hover:border-accent-500">
@@ -370,11 +370,11 @@ function UserDashboard() {
       </div>
 
       <Card id="login-history">
-        <p className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.24em] text-accent-400"><FiClock /> Login history</p>
-        <div className="mt-5 overflow-x-auto">
+        <p className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.24em]"><FiClock /> Login history</p>
+        <div className="mt-5 overflow-x-auto overscroll-x-contain">
           {loginHistory.length ? (
-            <table className="min-w-[760px] w-full text-left text-sm text-slate-300">
-              <thead className="text-xs uppercase tracking-[0.2em] text-slate-500">
+            <table className="w-full min-w-[680px] text-left text-sm text-slate-300 sm:min-w-[760px]">
+              <thead className="text-xs uppercase tracking-[0.1em] text-slate-500 sm:tracking-[0.2em]">
                 <tr>
                   <th className="border-b border-slate-800 p-3">Browser</th>
                   <th className="border-b border-slate-800 p-3">Device</th>
@@ -408,7 +408,7 @@ function UserDashboard() {
       </Card>
 
       <Card id="rental-history">
-        <p className="text-sm uppercase tracking-[0.24em] text-accent-400">StayJi Coins wallet</p>
+        <p className="text-sm uppercase tracking-[0.12em] text-accent-400 sm:tracking-[0.24em]">StayJi Coins wallet</p>
         <h2 className="mt-3 text-2xl font-semibold text-white">Rewards and cashback verification</h2>
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -434,15 +434,15 @@ function UserDashboard() {
           ))}
           {!moveIns.length ? <p className="text-slate-300">After joining a property, use “Moved In Successfully” on the property page to submit verification proof.</p> : null}
         </div>
-        <form onSubmit={submitPayout} className="mt-6 grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 sm:grid-cols-[1fr_1fr_auto]">
+        <form onSubmit={submitPayout} className="mt-6 grid min-w-0 gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <input value={payout.upiId} onChange={(event) => setPayout((current) => ({ ...current, upiId: event.target.value }))} placeholder="UPI ID for cashback payout" className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
           <input value={payout.bankDetails} onChange={(event) => setPayout((current) => ({ ...current, bankDetails: event.target.value }))} placeholder='Optional bank JSON, e.g. {"account":"..."}' className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
           <label className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-300">
             UPI QR optional
-            <input type="file" accept="image/*" onChange={(event) => setPayout((current) => ({ ...current, upiQr: event.target.files?.[0] || null }))} className="mt-2 block w-full text-xs text-slate-400 file:mr-3 file:rounded-full file:border-0 file:bg-accent-500 file:px-3 file:py-2 file:font-semibold file:text-slate-950" />
+            <input type="file" accept="image/*" onChange={(event) => setPayout((current) => ({ ...current, upiQr: event.target.files?.[0] || null }))} className="mt-2 block w-full text-xs text-slate-400 file:mb-2 file:mr-3 file:rounded-full file:border-0 file:bg-accent-500 file:px-3 file:py-2 file:font-semibold file:text-slate-950 sm:file:mb-0" />
           </label>
           <Button type="submit" disabled={!payout.upiId.trim()}>Request payout</Button>
-          {payoutMessage ? <p className="text-sm text-emerald-300 sm:col-span-3">{payoutMessage}</p> : null}
+          {payoutMessage ? <p className="text-sm text-emerald-300 lg:col-span-3">{payoutMessage}</p> : null}
         </form>
       </Card>
     </div>

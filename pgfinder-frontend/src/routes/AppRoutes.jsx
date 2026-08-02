@@ -18,6 +18,7 @@ const FAQPage = lazy(() => import('../pages/FAQPage'))
 const FAQDetailPage = lazy(() => import('../pages/FAQDetailPage'))
 const LocalityPage = lazy(() => import('../pages/LocalityPage'))
 const LegalPage = lazy(() => import('../pages/LegalPage'))
+const SeoArticlePage = lazy(() => import('../pages/SeoArticlePage'))
 const AdminDashboard = lazy(() => import('../pages/dashboard/admin/AdminDashboard'))
 const VendorDashboard = lazy(() => import('../pages/dashboard/vendor/VendorDashboard'))
 const UserDashboard = lazy(() => import('../pages/dashboard/user/UserDashboard'))
@@ -54,12 +55,12 @@ function AppRoutes() {
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/faq/:category" element={<FAQPage />} />
           <Route path="/faq/:category/:faqSlug" element={<FAQDetailPage />} />
-          <Route path="/blog" element={<Navigate to="/bangalore" replace />} />
-          <Route path="/blog/:slug" element={<Navigate to="/bangalore" replace />} />
-          <Route path="/blogs" element={<Navigate to="/bangalore" replace />} />
-          <Route path="/blogs/:slug" element={<Navigate to="/bangalore" replace />} />
+          <Route path="/blog" element={<Navigate to="/blogs/bangalore-rental-guide" replace />} />
+          <Route path="/blog/:slug" element={<SeoArticlePage />} />
+          <Route path="/blogs" element={<Navigate to="/blogs/bangalore-rental-guide" replace />} />
+          <Route path="/blogs/:slug" element={<SeoArticlePage />} />
           <Route path="/recommendations" element={<Navigate to="/properties" replace />} />
-          <Route path="/recommendations/:slug" element={<Navigate to="/properties" replace />} />
+          <Route path="/recommendations/:slug" element={<SeoArticlePage type="recommendation" />} />
           <Route path="/terms-and-conditions" element={<LegalPage />} />
           <Route path="/privacy-policy" element={<LegalPage />} />
           <Route path="/refund-policy" element={<LegalPage />} />

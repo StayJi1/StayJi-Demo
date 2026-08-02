@@ -6,7 +6,7 @@ function PageLayout() {
   return (
     <div className="min-h-screen bg-surface-900 text-slate-100">
       <Navbar />
-      <main className="relative overflow-hidden">
+      <main className="relative min-w-0 overflow-x-clip">
         <Outlet />
       </main>
       <Footer />

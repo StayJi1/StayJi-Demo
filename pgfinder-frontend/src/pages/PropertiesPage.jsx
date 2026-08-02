@@ -517,7 +517,7 @@ function PropertiesPage() {
   }, [filteredProperties, properties])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl overflow-x-hidden px-4 py-8 sm:px-6 lg:px-8">
       <SEO
         title="Search PG in Bangalore"
         description="Search verified PGs, boys PG, girls PG, hostels, and co-living rooms across Bangalore localities with filters, maps, wishlist, and visit booking."
@@ -527,22 +527,22 @@ function PropertiesPage() {
       <div className="grid gap-10 lg:grid-cols-[0.95fr_0.45fr]">
         <section>
           <SectionHeading title="Search Bangalore PGs" description="Explore Bangalore PGs, hostels, and co-living rooms with price filters, maps, and visit requests." />
-          <div className="mt-6 grid gap-4 md:grid-cols-4">
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { label: 'Live listings', value: filteredProperties.length },
               { label: 'Vacant now', value: filteredProperties.filter((item) => item.status === 'Available').length },
               { label: 'Avg. rating', value: filteredProperties.length ? (filteredProperties.reduce((sum, item) => sum + (Number(item.rating) || 0), 0) / filteredProperties.length).toFixed(1) : '4.6' },
               { label: 'Nearby radius', value: `${searchRadiusKm} km` },
             ].map((item) => (
-              <div key={item.label} className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card">
-                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{item.label}</p>
+              <div key={item.label} className="min-w-0 rounded-2xl border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:p-5">
+                <p className="text-xs uppercase tracking-[0.14em] text-slate-500 sm:tracking-[0.22em]">{item.label}</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{item.value}</p>
               </div>
             ))}
           </div>
-          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="mt-8 rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-8 shadow-card">
+          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="mt-8 rounded-2xl border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:p-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-1 items-center gap-3 rounded-3xl border border-slate-700/80 bg-slate-950/80 px-4 py-3">
+              <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-slate-700/80 bg-slate-950/80 px-4 py-3 sm:rounded-3xl">
                 <FiSearch className="text-accent-400" />
                 <input
                   type="search"
@@ -576,7 +576,7 @@ function PropertiesPage() {
                 className="w-full rounded-3xl border border-slate-700/80 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20"
               />
               <Button variant="secondary" className="w-full" onClick={handleSearchLocation} disabled={mapSearchLoading}>
-                {mapSearchLoading ? 'Searching location…' : 'Search on map'}
+                {mapSearchLoading ? 'Searching location...' : 'Search on map'}
               </Button>
             </div>
             {mapSearchError ? <p className="mt-3 text-sm text-rose-300">{mapSearchError}</p> : null}
@@ -617,7 +617,7 @@ function PropertiesPage() {
             {hasUserLocation && nearbyMode && nearbyCount === 0 && searchRadiusKm === defaultNearbyRadiusKm ? (
               <div className="mt-4 rounded-3xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-100">
                 No stays found within 5 km. Increase range to 25 km for wider discovery.
-                <button type="button" onClick={() => setSearchRadiusKm(expandedNearbyRadiusKm)} className="ml-3 rounded-full bg-amber-400 px-3 py-1 font-semibold text-slate-950">
+                <button type="button" onClick={() => setSearchRadiusKm(expandedNearbyRadiusKm)} className="mt-3 rounded-full bg-amber-400 px-3 py-1 font-semibold text-slate-950 sm:ml-3 sm:mt-0">
                   Increase range
                 </button>
               </div>
@@ -676,7 +676,7 @@ function PropertiesPage() {
                       )
                       setPage(1)
                     }}
-                    className={`rounded-full border px-4 py-2 text-sm transition ${
+                    className={`max-w-full rounded-full border px-3 py-2 text-sm transition sm:px-4 ${
                       active
                         ? 'border-accent-400 bg-accent-500/10 text-accent-200'
                         : 'border-slate-700/80 text-slate-300 hover:border-accent-500 hover:text-white'
@@ -691,7 +691,7 @@ function PropertiesPage() {
           </motion.div>
 
           {compareIds.size ? (
-            <div className="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-5xl flex-col gap-3 rounded-[1.5rem] border border-cyan-400/30 bg-slate-950/95 p-4 text-sm text-cyan-100 shadow-card backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+            <div className="fixed inset-x-3 bottom-3 z-50 mx-auto flex max-h-[45vh] max-w-5xl flex-col gap-3 overflow-y-auto rounded-2xl border border-cyan-400/30 bg-slate-950/95 p-4 text-sm text-cyan-100 shadow-card backdrop-blur-xl sm:inset-x-4 sm:bottom-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <p className="font-semibold">{compareIds.size}/3 properties selected for comparison</p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -716,7 +716,7 @@ function PropertiesPage() {
 
           <div className="mt-10 grid gap-6 lg:grid-cols-2">
             {loading ? (
-              <Loader message="Fetching properties…" />
+              <Loader message="Fetching properties..." />
             ) : filteredProperties.length ? (
               filteredProperties.map((property) => (
                 <PropertyCard

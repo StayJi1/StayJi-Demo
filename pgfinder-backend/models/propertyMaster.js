@@ -34,6 +34,10 @@ propertySchema = mongoose.Schema({
         type:String,
         index:true
     },
+    duplicateKey:{
+        type:String,
+        index:true
+    },
     cityName:{
         type:String
     },
@@ -321,4 +325,13 @@ propertySchema.index({ isVerified: 1 });
 propertySchema.index({ status: 1 });
 propertySchema.index({ approvalStatus: 1 });
 propertySchema.index({ isPremium: -1, priority: -1, addedOn: -1 });
+propertySchema.index({ duplicateKey: 1 }, { unique: true, partialFilterExpression: { duplicateKey: { $type: 'string' } } });
+
+propertySchema.pre('validate', function buildDuplicateKey(next) {
+    const ownerId = (this.vendorId || this.userIDFK || '').toString();
+    const parts = [ownerId, this.propertyName, this.address, this.areaName, this.cityName]
+        .map((value) => (value || '').toString().trim().toLowerCase().replace(/\s+/g, ' '));
+    this.duplicateKey = parts.every(Boolean) ? parts.join('|').replace(/[^\w| -]/g, '') : undefined;
+    next();
+});
 module.exports = mongoose.model('propertyMaster',propertySchema);

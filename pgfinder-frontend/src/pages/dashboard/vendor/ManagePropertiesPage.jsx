@@ -101,16 +101,16 @@ function ManagePropertiesPage() {
   }, [filters, properties])
 
   return (
-    <div className="space-y-8">
+    <div className="min-w-0 space-y-8">
       <header className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">
         <div>
-          <p className="text-sm uppercase tracking-[0.28em] text-accent-400">Property management</p>
-          <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">Your active listings</h1>
+          <p className="text-sm uppercase tracking-[0.14em] text-accent-400 sm:tracking-[0.28em]">Property management</p>
+          <h1 className="mt-3 text-3xl font-semibold leading-tight text-white sm:text-4xl">Your active listings</h1>
         </div>
       </header>
 
       <Card>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr_0.65fr_0.65fr_0.65fr_auto]">
+        <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_0.65fr_0.65fr_0.65fr_auto]">
           <input
             type="search"
             value={filters.search}
@@ -179,7 +179,7 @@ function ManagePropertiesPage() {
       )}
       {quickEdit ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4">
-          <form onSubmit={submitQuickEdit} className="w-full max-w-2xl rounded-[2rem] border border-slate-800 bg-surface-900 p-6 shadow-card">
+          <form onSubmit={submitQuickEdit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-surface-900 p-4 shadow-card sm:rounded-[2rem] sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Quick property edit</p>

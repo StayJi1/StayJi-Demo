@@ -1,5 +1,5 @@
 function Card({ children, className = '', ...props }) {
-  return <div {...props} className={`rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card ${className}`}>{children}</div>
+  return <div {...props} className={`min-w-0 rounded-2xl border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:rounded-[2rem] sm:p-6 ${className}`}>{children}</div>
 }
 
 export default Card

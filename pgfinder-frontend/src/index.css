@@ -29,6 +29,8 @@ body {
 
 #root {
   min-height: 100vh;
+  width: 100%;
+  overflow-x: clip;
 }
 
 button,
@@ -36,6 +38,7 @@ input,
 textarea,
 select {
   font: inherit;
+  min-width: 0;
 }
 
 img,
@@ -49,6 +52,19 @@ svg {
   box-sizing: border-box;
 }
 
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+a,
+span,
+button {
+  overflow-wrap: anywhere;
+}
+
 table {
   border-collapse: collapse;
 }
@@ -59,7 +75,30 @@ textarea {
   max-width: 100%;
 }
 
+a,
+button {
+  min-width: 0;
+}
+
+input[type='file'] {
+  max-width: 100%;
+}
+
+.leaflet-container,
+.recharts-wrapper,
+.recharts-surface {
+  max-width: 100%;
+}
+
 @media (max-width: 640px) {
+  body {
+    min-width: 320px;
+  }
+
+  [class*='tracking-'] {
+    letter-spacing: 0.08em;
+  }
+
   .recharts-wrapper,
   .recharts-surface {
     max-width: 100%;

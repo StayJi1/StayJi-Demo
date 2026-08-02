@@ -198,7 +198,7 @@ userSchema = mongoose.Schema({
     }
 });
 
-userSchema.index({ userEmail: 1, userType: 1 }, { collation: { locale: 'en', strength: 2 } });
+userSchema.index({ userEmail: 1, userType: 1 }, { unique: true, collation: { locale: 'en', strength: 2 }, partialFilterExpression: { userEmail: { $type: 'string' }, userType: { $type: 'string' } } });
 userSchema.index({ userType: 1 });
 userSchema.index({ city: 1 });
 userSchema.index({ state: 1 });

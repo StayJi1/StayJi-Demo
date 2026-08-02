@@ -29,6 +29,7 @@ var CityState = require("../models/cityStateMaster");
 var WalletPayout = require("../models/walletPayout");
 var PropertyUpdateRequest = require("../models/propertyUpdateRequest");
 const { hashPassword, isHashedPassword, verifyPassword } = require('../utils/security');
+const { syncRegistration } = require('../utils/googleRegistrationSync');
 const { validateObjectIdParam } = require('../middleware/resilience');
 const messageSecret = crypto.createHash('sha256').update(process.env.MESSAGE_SECRET || process.env.SESSION_SECRET || 'stayji-local-message-secret').digest()
 const jwtSecret = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'stayji-local-jwt-secret'
@@ -511,6 +512,35 @@ const createLeadEvent = async (payload = {}) => {
     }
 }
 
+const syncRegistrationRecord = async (user, options = {}) => {
+    try {
+        const result = await syncRegistration(user, options)
+        if (result?.skipped) {
+            await recordAudit({
+                action: 'registration_sync_skipped',
+                entityType: 'user',
+                entityId: user._id,
+                metadata: { reason: result.reason, loginMethod: options.loginMethod || 'Password' },
+            })
+        }
+    } catch (error) {
+        await recordAudit({
+            action: 'registration_sync_failed',
+            entityType: 'user',
+            entityId: user._id,
+            metadata: { message: error.message, loginMethod: options.loginMethod || 'Password' },
+        })
+        await notifyAdmins({
+            actorId: user._id,
+            type: 'system_error',
+            title: 'Registration sync failed',
+            message: `Google Sheets/Drive sync failed for ${user.userEmail || 'a new account'}.`,
+            link: '/dashboard/admin/users',
+            metadata: { error: error.message },
+        })
+    }
+}
+
 const notifyAdmins = async (payload = {}) => {
     const admins = await User.find({ userType: { $in: accountTypeVariants('Admin') }, isActive: true }).select('_id userType')
     await Promise.all(admins.map((admin) => createNotification({ ...payload, recipientId: admin._id, recipientRole: 'admin' })))
@@ -860,14 +890,16 @@ var storage = multer.diskStorage({
     },
 
     filename: function (req, file, cb) {
-        cb(null, file.originalname)
+        const extension = (file.originalname || '').split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin'
+        const uniqueName = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}.${extension}`
+        cb(null, uniqueName)
     }
 });
 const fileFilter = (req, file, cb) => {
     if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg' || file.mimetype === 'image/png' || file.mimetype === 'image/webp' || file.mimetype === 'video/mp4' || file.mimetype === 'video/webm' || file.mimetype === 'video/quicktime') {
         cb(null, true);
     } else {
-        cb(null, false);
+        cb(new Error('Only JPEG, PNG, WebP, MP4, WebM, and MOV uploads are allowed.'));
     }
 
 }
@@ -883,12 +915,16 @@ var upload = multer({
 
 router.post('/addUser', async (req, res) => {
     if (!toBoolean(req.body.acceptTerms) || !toBoolean(req.body.acceptPrivacy)) {
-        return res.json({ result: "failure", msg: "Accept StayJi Terms & Conditions and Privacy Policy to continue.", data: 0 });
+        return res.status(422).json({ result: "failure", msg: "Accept StayJi Terms & Conditions and Privacy Policy to continue.", data: 0 });
     }
     const consentMetadata = requestConsentMetadata(req, 'public_signup')
 
     if (!strongPasswordPattern.test(req.body.userPassword || '')) {
-        return res.json({ result: "failure", msg: "Password must be at least 8 characters and include uppercase, lowercase, and a number.", data: 0 });
+        return res.status(422).json({ result: "failure", msg: "Password must be at least 8 characters and include uppercase, lowercase, and a number.", data: 0 });
+    }
+    const signupEmail = normalizeText(req.body.userEmail || '').toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupEmail)) {
+        return res.status(422).json({ result: "failure", msg: "Enter a valid email address.", data: 0 });
     }
     const signupCity = canonicalLocationName(req.body.city || req.body.cityName || MVP_CITY)
     const signupState = normalizeText(req.body.state || req.body.stateName || MVP_STATE)
@@ -900,19 +936,19 @@ router.post('/addUser', async (req, res) => {
     }
 
     if (req.body.contact && suspiciousPhonePattern.test(req.body.contact.toString().replace(/\D/g, ''))) {
-        return res.json({ result: "failure", msg: "Enter a valid phone number for account verification.", data: 0 });
+        return res.status(422).json({ result: "failure", msg: "Enter a valid phone number for account verification.", data: 0 });
     }
 
     const officialRole = officialRoleName(req.body.userType || 'User')
     const normalizedNewRole = normalizeAccountType(officialRole)
     const roleVariants = accountTypeVariants(officialRole)
     const existingUser = await User.findOne({
-        userEmail: new RegExp(`^${req.body.userEmail}$`, 'i'),
+        userEmail: new RegExp(`^${escapeRegex(signupEmail)}$`, 'i'),
         userType: { $in: roleVariants },
     });
 
     if (existingUser) {
-        return res.json({
+        return res.status(409).json({
             result: "failure",
             msg: "An account already exists with this email for the selected account type.",
             data: 0
@@ -920,10 +956,10 @@ router.post('/addUser', async (req, res) => {
     }
 
     var objUser = new User();
-    objUser.userName = "",
+        objUser.userName = "",
         objUser.userFname = req.body.userFname,
         objUser.userLname = req.body.userLname,
-        objUser.userEmail = req.body.userEmail,
+        objUser.userEmail = signupEmail,
         objUser.userPassword = hashPassword(req.body.userPassword),
         objUser.dob = "",
         objUser.gender = req.body.gender,
@@ -954,23 +990,32 @@ router.post('/addUser', async (req, res) => {
 
     if (inserted != null) {
         await recordAudit({ action: 'account_created', entityType: 'user', entityId: inserted._id, updatedValue: { userType: officialRole, approvalStatus: objUser.approvalStatus }, metadata: { source: 'public_signup' } })
-        res.json({ result: "success", msg: normalizedNewRole === 'owner' ? "Owner account created. Admin approval is required before listing properties." : "User Inserted", data: 1 });
+        await syncRegistrationRecord(inserted, { loginMethod: 'Password' })
+        await notifyAdmins({
+            actorId: inserted._id,
+            type: normalizedNewRole === 'owner' ? 'new_owner' : 'new_user',
+            title: normalizedNewRole === 'owner' ? 'New owner registration' : 'New user registration',
+            message: `${inserted.userFname || inserted.userEmail} registered as ${officialRole}.`,
+            link: '/dashboard/admin/users',
+            metadata: { role: officialRole, email: inserted.userEmail },
+        })
+        res.status(201).json({ result: "success", msg: normalizedNewRole === 'owner' ? "Owner account created. Admin approval is required before listing properties." : "User Inserted", data: 1 });
     } else {
-        res.json({ result: "failure", msg: "User Not Inserted", data: 0 });
+        res.status(500).json({ result: "failure", msg: "User Not Inserted", data: 0 });
     }
 });
 
 router.post('/googleAuth', async (req, res) => {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     if (!clientId) {
-        return res.json({ result: "failure", msg: "Google sign up is not configured", data: 0 });
+        return res.status(503).json({ result: "failure", msg: "Google sign up is not configured", data: 0 });
     }
 
     if (!req.body.credential || !req.body.contact) {
-        return res.json({ result: "failure", msg: "Google account and phone number are required", data: 0 });
+        return res.status(422).json({ result: "failure", msg: "Google account and phone number are required", data: 0 });
     }
     if (!toBoolean(req.body.acceptTerms) || !toBoolean(req.body.acceptPrivacy)) {
-        return res.json({ result: "failure", msg: "Accept StayJi Terms & Conditions and Privacy Policy to continue.", data: 0 });
+        return res.status(422).json({ result: "failure", msg: "Accept StayJi Terms & Conditions and Privacy Policy to continue.", data: 0 });
     }
     const consentMetadata = requestConsentMetadata(req, 'google_signup')
 
@@ -979,13 +1024,21 @@ router.post('/googleAuth', async (req, res) => {
         const googleUser = await verifyResponse.json();
 
         if (!verifyResponse.ok || googleUser.aud !== clientId || !googleUser.email_verified) {
-            return res.json({ result: "failure", msg: "Google verification failed", data: 0 });
+            return res.status(401).json({ result: "failure", msg: "Google verification failed", data: 0 });
         }
 
-        const existingUser = await User.findOne({ userEmail: new RegExp(`^${googleUser.email}$`, 'i'), isActive: true });
+        const googleEmail = normalizeText(googleUser.email || '').toLowerCase()
+        const officialGoogleRole = officialRoleName(req.body.userType || "User");
+        const normalizedGoogleRole = normalizeAccountType(officialGoogleRole);
+        const existingUser = await User.findOne({
+            userEmail: new RegExp(`^${escapeRegex(googleEmail)}$`, 'i'),
+            userType: { $in: accountTypeVariants(officialGoogleRole) },
+            isActive: true,
+        });
         if (existingUser) {
+            const token = signAuthToken(existingUser)
             existingUser.userPassword = undefined;
-            return res.json({ result: "success", msg: "login Successfully", data: existingUser });
+            return res.json({ result: "success", msg: "login Successfully", data: existingUser, token, role: tokenRoleName(existingUser.userType) });
         }
 
         const fullName = (googleUser.name || '').trim().split(/\s+/);
@@ -993,13 +1046,11 @@ router.post('/googleAuth', async (req, res) => {
         objUser.userName = googleUser.name || "";
         objUser.userFname = googleUser.given_name || fullName[0] || "";
         objUser.userLname = googleUser.family_name || fullName.slice(1).join(' ') || "";
-        objUser.userEmail = googleUser.email;
+        objUser.userEmail = googleEmail;
         objUser.userPassword = hashPassword(crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${googleUser.sub}`);
         objUser.gender = req.body.gender || "";
         objUser.contact = req.body.contact;
         objUser.occupation = "";
-        const officialGoogleRole = officialRoleName(req.body.userType || "User");
-        const normalizedGoogleRole = normalizeAccountType(officialGoogleRole);
         const googleCity = canonicalLocationName(req.body.city || req.body.cityName || MVP_CITY);
         const googleState = normalizeText(req.body.state || req.body.stateName || MVP_STATE);
         if (!assertBangaloreRequest(res, googleCity, googleState)) return
@@ -1031,10 +1082,21 @@ router.post('/googleAuth', async (req, res) => {
         objUser.isActive = true;
 
         const inserted = await objUser.save();
+        await recordAudit({ action: 'account_created', entityType: 'user', entityId: inserted._id, updatedValue: { userType: officialGoogleRole, approvalStatus: objUser.approvalStatus }, metadata: { source: 'google_signup' } })
+        await syncRegistrationRecord(inserted, { loginMethod: 'Google' })
+        await notifyAdmins({
+            actorId: inserted._id,
+            type: normalizedGoogleRole === 'owner' ? 'new_owner' : 'new_user',
+            title: normalizedGoogleRole === 'owner' ? 'New owner registration' : 'New user registration',
+            message: `${inserted.userFname || inserted.userEmail} registered with Google as ${officialGoogleRole}.`,
+            link: '/dashboard/admin/users',
+            metadata: { role: officialGoogleRole, email: inserted.userEmail, loginMethod: 'Google' },
+        })
+        const token = signAuthToken(inserted)
         inserted.userPassword = undefined;
-        res.json({ result: "success", msg: "Google signup successful", data: inserted });
+        res.status(201).json({ result: "success", msg: "Google signup successful", data: inserted, token, role: tokenRoleName(inserted.userType) });
     } catch (error) {
-        res.json({ result: "failure", msg: "Google verification failed", data: 0 });
+        res.status(401).json({ result: "failure", msg: "Google verification failed", data: 0 });
     }
 });
 
@@ -1052,23 +1114,27 @@ router.get('/getUserList', attachAuthenticatedUser, requireRoles(['admin']), asy
 
 router.post('/loginByUser', async (req, res) => {
 
-    const objUser = await User.findOne({ userEmail: req.body.userEmail, isActive: true });
+    const loginEmail = normalizeText(req.body.userEmail || '').toLowerCase()
+    if (!loginEmail || !req.body.userPassword) {
+        return res.status(422).json({ result: "failure", msg: "Email and password are required.", data: null });
+    }
+    const objUser = await User.findOne({ userEmail: new RegExp(`^${escapeRegex(loginEmail)}$`, 'i'), isActive: true });
 
     if (objUser != null && verifyPassword(req.body.userPassword, objUser.userPassword)) {
         if (['suspended', 'blocked'].includes(objUser.accountStatus)) {
-            return res.json({ result: "fail", msg: "This account is not active. Contact StayJi admin support.", data: null });
+            return res.status(403).json({ result: "fail", msg: "This account is not active. Contact StayJi admin support.", data: null });
         }
         const actualRole = normalizeAccountType(objUser.userType)
         const requestedRole = normalizeAccountType(req.body.accountType || req.body.role || req.body.userType)
         const portal = (req.body.authPortal || 'public').toString().toLowerCase()
         if (portal === 'public' && actualRole === 'admin') {
-            return res.json({ result: "fail", msg: "Use the dedicated admin login portal.", data: null });
+            return res.status(403).json({ result: "fail", msg: "Use the dedicated admin login portal.", data: null });
         }
         if (portal === 'admin' && actualRole !== 'admin') {
-            return res.json({ result: "fail", msg: "Only Admin accounts can use this portal.", data: null });
+            return res.status(403).json({ result: "fail", msg: "Only Admin accounts can use this portal.", data: null });
         }
         if (requestedRole && actualRole !== requestedRole) {
-            return res.json({ result: "fail", msg: "Account type mismatch. Select the correct account type to continue.", data: null });
+            return res.status(403).json({ result: "fail", msg: "Account type mismatch. Select the correct account type to continue.", data: null });
         }
         if (!isHashedPassword(objUser.userPassword) || !objUser.userPassword.startsWith('$2')) {
             await User.updateOne({ _id: objUser._id }, { userPassword: hashPassword(req.body.userPassword) })
@@ -1088,7 +1154,7 @@ router.post('/loginByUser', async (req, res) => {
         res.json({ result: "success", msg: "login Successfully", data: objUser, token, role: tokenRoleName(objUser.userType) });
     }
     else {
-        res.json({ result: "fail", msg: "login UnSuccessfuly", data: objUser });
+        res.status(401).json({ result: "fail", msg: "Invalid email or password.", data: null });
     }
 });
 
@@ -2167,16 +2233,30 @@ router.post('/addProperty', attachAuthenticatedUser, requireRoles(['owner']), up
     const primaryImage = uploadedImages[0]
         ? uploadedImages[0]
         : (req.body.propertyImage || imageUrls[0] || 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80')
+    const propertyName = normalizeText(req.body.propertyName)
+    const propertyAddress = normalizeText(req.body.address)
+    const propertyArea = normalizeText(req.body.areaName)
+    const duplicateProperty = await Property.findOne({
+        $or: [{ userIDFK: ownerId }, { vendorId: ownerId }],
+        propertyName: new RegExp(`^${escapeRegex(propertyName)}$`, 'i'),
+        address: new RegExp(`^${escapeRegex(propertyAddress)}$`, 'i'),
+        areaName: new RegExp(`^${escapeRegex(propertyArea)}$`, 'i'),
+        cityName: MVP_CITY_REGEX,
+        status: { $ne: 'archived' },
+    }).select('_id')
+    if (duplicateProperty) {
+        return res.status(409).json({ result: "failure", msg: "This property already exists for your owner account.", data: duplicateProperty._id });
+    }
     var objProperty = new Property({ userIDFK: req.body.userIDFK, vendorId: req.body.vendorId || req.body.userIDFK });
     objProperty.userIDFK = req.body.userIDFK,
         objProperty.vendorId = req.body.vendorId || req.body.userIDFK,
-        objProperty.propertyName = normalizeText(req.body.propertyName),
+        objProperty.propertyName = propertyName,
         objProperty.description = normalizeText(req.body.description),
-        objProperty.address = normalizeText(req.body.address),
+        objProperty.address = propertyAddress,
         objProperty.rent = req.body.rent,
         objProperty.sharing = req.body.sharing,
         objProperty.genderType = req.body.genderType,
-        objProperty.areaName = normalizeText(req.body.areaName),
+        objProperty.areaName = propertyArea,
         objProperty.localitySlug = req.body.localitySlug || slugify(req.body.areaName),
         objProperty.cityName = canonicalLocationName(req.body.cityName),
         objProperty.stateName = normalizeText(req.body.stateName || req.body.state || owner?.assignedState || owner?.state || ""),
@@ -2232,9 +2312,18 @@ router.post('/addProperty', attachAuthenticatedUser, requireRoles(['owner']), up
     if (inserted != null) {
         await User.updateOne({ _id: req.body.userIDFK }, { $set: { userType: "Owner", city: owner?.city || objProperty.cityName, state: owner?.state || objProperty.stateName, assignedCity: owner?.assignedCity || objProperty.cityName, assignedState: owner?.assignedState || objProperty.stateName } });
         await recordAudit({ performerId: req.body.userIDFK, performerRole: 'Owner', action: 'property_submitted', entityType: 'property', entityId: inserted._id, updatedValue: { approvalStatus: 'Pending', isDummy: inserted.isDummy }, city: inserted.cityName, state: objProperty.stateName })
-        res.json({ result: "success", msg: "Property Inserted", data: inserted._id });
+        await notifyAdmins({
+            actorId: req.body.userIDFK,
+            propertyId: inserted._id,
+            type: 'new_property',
+            title: 'New property submitted',
+            message: `${inserted.propertyName} is waiting for admin review.`,
+            link: `/dashboard/admin/properties/${inserted._id}`,
+            metadata: { approvalStatus: inserted.approvalStatus, city: inserted.cityName },
+        })
+        res.status(201).json({ result: "success", msg: "Property Inserted", data: inserted._id });
     } else {
-        res.json({ result: "failure", msg: "Property Not Inserted", data: 0 });
+        res.status(500).json({ result: "failure", msg: "Property Not Inserted", data: 0 });
     }
 
 });
@@ -2746,6 +2835,17 @@ router.post('/updateProperty', attachAuthenticatedUser, requireRoles(['owner', '
     const updated = await Property.updateOne(propertyQuery, { $set: updateFields })
     if (updated.modifiedCount > 0) {
         const objProperty = await Property.findOne({ _id: req.body.id, isActive: true }).populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact']).populate('propertyTypeIDFK', ['typeName'])
+        if (req.auth.role !== 'admin') {
+            await notifyAdmins({
+                actorId: req.auth.user._id,
+                propertyId: req.body.id,
+                type: 'property_updated',
+                title: 'Property updated',
+                message: `${existingForGovernance.propertyName || 'A property'} was updated by its owner.`,
+                link: `/dashboard/admin/properties/${req.body.id}`,
+                metadata: { changedFields: Object.keys(updateFields) },
+            })
+        }
         res.json({ result: "success", msg: "Property Updated", data: objProperty })
     } else {
         const existingProperty = await Property.findOne({ _id: req.body.id, isActive: true })
@@ -2788,6 +2888,15 @@ router.post('/deleteProperty', attachAuthenticatedUser, requireRoles(['owner', '
     }
     const objDeleteProperty = await Property.updateOne(propertyQuery, { isActive: false })
     if (objDeleteProperty.modifiedCount > 0) {
+        await notifyAdmins({
+            actorId: req.auth.user._id,
+            propertyId: property._id,
+            type: 'property_deleted',
+            title: 'Property deleted',
+            message: `${property.propertyName || 'A property'} was deleted or hidden.`,
+            link: `/dashboard/admin/properties/${property._id}`,
+            metadata: { previousStatus: property.status, deletedBy: req.auth.role },
+        })
         res.json({ result: "success", msg: "Property deleted successfully", data: 1 })
     } else {
         res.json({ result: "failure", msg: "Property could not be deleted", data: 0 })

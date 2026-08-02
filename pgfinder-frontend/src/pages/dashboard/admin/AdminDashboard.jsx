@@ -32,12 +32,12 @@ function AdminDashboard() {
   const debouncedSearch = useDebouncedValue(filters.search)
 
   const propertyParams = useMemo(() => ({ ...filters, search: debouncedSearch, limit: 30 }), [debouncedSearch, filters])
-  const { data: analytics, isLoading: analyticsLoading } = useQuery({ queryKey: ['admin-analytics', propertyParams], queryFn: () => adminApi.analytics(propertyParams), refetchInterval: 30_000 })
-  const { data: propertiesData, isFetching: propertiesLoading, error } = useQuery({ queryKey: ['admin-properties', propertyParams], queryFn: () => adminApi.properties(propertyParams), refetchInterval: 30_000 })
+  const { data: analytics, isLoading: analyticsLoading } = useQuery({ queryKey: ['admin-analytics', propertyParams], queryFn: () => adminApi.analytics(propertyParams), refetchInterval: 10_000 })
+  const { data: propertiesData, isFetching: propertiesLoading, error } = useQuery({ queryKey: ['admin-properties', propertyParams], queryFn: () => adminApi.properties(propertyParams), refetchInterval: 10_000 })
   const { data: ownerData } = useQuery({ queryKey: ['admin-owners', debouncedSearch], queryFn: () => adminApi.owners({ search: debouncedSearch, limit: 8 }), enabled: Boolean(debouncedSearch) })
-  const { data: moveIns = [] } = useQuery({ queryKey: ['admin-move-ins'], queryFn: () => adminApi.moveIns({ limit: 12 }), refetchInterval: 30_000 })
-  const { data: payouts = [] } = useQuery({ queryKey: ['admin-wallet-payouts'], queryFn: () => adminApi.walletPayouts({ limit: 12 }), refetchInterval: 30_000 })
-  const { data: updateRequests = [] } = useQuery({ queryKey: ['admin-property-update-requests'], queryFn: () => adminApi.propertyUpdateRequests({ status: 'Pending', limit: 12 }), refetchInterval: 30_000 })
+  const { data: moveIns = [] } = useQuery({ queryKey: ['admin-move-ins'], queryFn: () => adminApi.moveIns({ limit: 12 }), refetchInterval: 10_000 })
+  const { data: payouts = [] } = useQuery({ queryKey: ['admin-wallet-payouts'], queryFn: () => adminApi.walletPayouts({ limit: 12 }), refetchInterval: 10_000 })
+  const { data: updateRequests = [] } = useQuery({ queryKey: ['admin-property-update-requests'], queryFn: () => adminApi.propertyUpdateRequests({ status: 'Pending', limit: 12 }), refetchInterval: 10_000 })
 
   const properties = propertiesData?.items || []
   const summary = analytics?.summary || {}
