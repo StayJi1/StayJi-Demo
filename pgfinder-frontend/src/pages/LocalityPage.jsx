@@ -8,6 +8,7 @@ import PropertyMap from '../components/map/PropertyMap'
 import propertyService from '../services/propertyService'
 import { bangaloreLocalities, blogPosts, getFaqRecords, recommendationPosts } from '../data/seoContent'
 import { localitySchema } from '../utils/seoSchemas'
+import AdSlot from '../components/ads/AdSlot'
 
 const bangaloreOverview = {
   slug: '',
@@ -67,6 +68,8 @@ export default function LocalityPage() {
       .filter((property) => (gender ? property.gender === gender : true))
       .filter((property) => (category ? property.category === category || property.type === category : true))
       .sort((a, b) => {
+        if (Boolean(a.isPremium) !== Boolean(b.isPremium)) return a.isPremium ? -1 : 1
+        if ((Number(a.priority) || 0) !== (Number(b.priority) || 0)) return (Number(b.priority) || 0) - (Number(a.priority) || 0)
         if (sortBy === 'price-low') return (Number(a.rent) || 0) - (Number(b.rent) || 0)
         if (sortBy === 'price-high') return (Number(b.rent) || 0) - (Number(a.rent) || 0)
         if (sortBy === 'rating') return (Number(b.rating) || 0) - (Number(a.rating) || 0)
@@ -190,6 +193,7 @@ export default function LocalityPage() {
                 <p className="mt-3 text-sm leading-6 text-slate-600">{text}</p>
               </article>
             ))}
+            <AdSlot placement="locality-sidebar" />
           </aside>
         </div>
       </section>

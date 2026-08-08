@@ -10,6 +10,7 @@ import useCurrentLocation from '../hooks/useCurrentLocation'
 import { useAuth } from '../context/AuthContext'
 import SEO from '../components/SEO'
 import { bangaloreLocalities } from '../data/seoContent'
+import AdSlot from '../components/ads/AdSlot'
 
 const cities = [
   { name: 'Whitefield', slug: 'whitefield', count: 'PGs near ITPL', tone: 'from-blue-600 to-cyan-500' },
@@ -210,6 +211,10 @@ function HomePage() {
           </motion.div>
         </div>
       </section>
+
+      <aside className="fixed top-32 z-20 hidden w-56 min-[1800px]:block" style={{ right: 'calc((100vw - 80rem) / 2 - 15rem)' }} aria-label="Home page sponsored advertisements">
+        <AdSlot placement="home" className="max-h-[calc(100vh-9rem)] overflow-y-auto pr-1" />
+      </aside>
 
       <section className="bg-white px-4 py-16 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">

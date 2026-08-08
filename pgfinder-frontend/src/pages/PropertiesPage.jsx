@@ -7,6 +7,7 @@ import Button from '../components/common/Button'
 import Loader from '../components/common/Loader'
 import PropertyCard from '../components/property/PropertyCard'
 import PropertyMap from '../components/map/PropertyMap'
+import AdSlot from '../components/ads/AdSlot'
 import propertyService from '../services/propertyService'
 import dashboardService from '../services/dashboardService'
 import useCurrentLocation from '../hooks/useCurrentLocation'
@@ -832,6 +833,7 @@ function PropertiesPage() {
               <p>• Shared and private rooms</p>
             </div>
           </div>
+          <AdSlot placement="browse-sidebar" />
         </aside>
       </div>
     </div>

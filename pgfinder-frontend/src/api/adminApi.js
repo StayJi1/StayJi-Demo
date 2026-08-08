@@ -59,7 +59,11 @@ const adminApi = {
   owners: (params) => axiosClient.get('/api/admin/vendors', { params: paramsWithDefaults(params) }).then((res) => unwrap(res, { items: [] })),
   vendorDetail: (id) => axiosClient.get(`/api/admin/vendors/${id}`).then((res) => unwrap(res, null)),
   ownerDetail: (id) => axiosClient.get(`/api/admin/vendors/${id}`).then((res) => unwrap(res, null)),
-  users: (params) => axiosClient.get('/api/admin/users', { params: paramsWithDefaults(params) }).then((res) => (unwrap(res, []) || []).map(normalizeUser)),
+  users: (params) => axiosClient.get('/api/admin/users', { params: paramsWithDefaults(params) }).then((res) => {
+    const payload = unwrap(res, { items: [] })
+    const items = Array.isArray(payload) ? payload : payload?.items || []
+    return items.map(normalizeUser)
+  }),
   updateUser: (id, payload) => axiosClient.post(`/api/admin/users/${id}`, payload).then((res) => normalizeUser(unwrap(res, null))),
   updateUserStatus: (id, payload) => axiosClient.post(`/api/admin/users/${id}/status`, payload).then((res) => normalizeUser(unwrap(res, null))),
   leads: (params) => axiosClient.get('/api/admin/leads', { params: paramsWithDefaults(params) }).then((res) => unwrap(res, { items: [] })),
@@ -76,6 +80,10 @@ const adminApi = {
   reviewWalletPayout: (id, payload) => axiosClient.post(`/client/wallet/payouts/${id}/review`, payload).then((res) => unwrap(res, null)),
   propertyUpdateRequests: (params) => axiosClient.get('/client/property-update-requests', { params: paramsWithDefaults(params) }).then((res) => unwrap(res, [])),
   reviewPropertyUpdateRequest: (id, payload) => axiosClient.post(`/client/property-update-requests/${id}/review`, payload).then((res) => unwrap(res, null)),
+  ads: () => axiosClient.get('/api/admin/admin-ads').then((res) => unwrap(res, [])),
+  createAd: (payload) => axiosClient.post('/api/admin/admin-ads', payload).then((res) => unwrap(res, null)),
+  updateAd: (id, payload) => axiosClient.put(`/api/admin/admin-ads/${id}`, payload).then((res) => unwrap(res, null)),
+  archiveAd: (id) => axiosClient.delete(`/api/admin/admin-ads/${id}`).then((res) => unwrap(res, null)),
 }
 
 export default adminApi
