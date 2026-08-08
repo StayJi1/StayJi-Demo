@@ -1,6 +1,14 @@
 {
   "buildCommand": "cd pgfinder-frontend && npm install && npm run build",
   "outputDirectory": "pgfinder-frontend/dist",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.stayji.com" }],
+      "destination": "https://stayji.com/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",

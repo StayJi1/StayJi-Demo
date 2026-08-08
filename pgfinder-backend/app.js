@@ -43,14 +43,16 @@ app.use(timeoutHandler());
 |--------------------------------------------------------------------------
 */
 
+const configuredCorsOrigins = (process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean);
 const corsOrigins = [
     "http://localhost:5173",
     "http://localhost:3000",
     "https://pg-finder-alpha.vercel.app",
     "https://stayji-stayji.vercel.app",
     "https://stayji.com",
-    "https://www.stayji.com"
-];
+    "https://www.stayji.com",
+    ...configuredCorsOrigins
+].filter((origin, index, origins) => origins.indexOf(origin) === index);
 
 const isLocalDevOrigin = (origin) => /^http:\/\/(localhost|127\.0\.0\.1):517\d$/.test(origin);
 
