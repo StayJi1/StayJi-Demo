@@ -28,6 +28,7 @@ var AuditLog = require("../models/auditLog");
 var CityState = require("../models/cityStateMaster");
 var WalletPayout = require("../models/walletPayout");
 var PropertyUpdateRequest = require("../models/propertyUpdateRequest");
+var Advertisement = require('../models/advertisement');
 const { hashPassword, isHashedPassword, verifyPassword } = require('../utils/security');
 const { syncRegistration } = require('../utils/googleRegistrationSync');
 const { validateObjectIdParam } = require('../middleware/resilience');
@@ -469,10 +470,16 @@ const createNotification = async (payload = {}) => {
         const recipientId = asObjectId(payload.recipientId)
         const actorId = asObjectId(payload.actorId)
         const propertyId = asObjectId(payload.propertyId)
-        if (!recipientId && !payload.recipientRole) return null
+        // Notifications are private profile data. Never persist a broadcast
+        // notification without a concrete recipient account.
+        if (!recipientId) return null
+        const recipientRole = normalizeAccountType(payload.recipientRole || 'user') === 'vendor'
+            ? 'owner'
+            : normalizeAccountType(payload.recipientRole || 'user')
+        if (!['user', 'owner', 'admin'].includes(recipientRole)) return null
         return Notification.create({
             recipientId,
-            recipientRole: payload.recipientRole || 'user',
+            recipientRole,
             actorId,
             propertyId,
             type: payload.type || 'general',
@@ -3236,7 +3243,7 @@ router.get('/user/overview', attachAuthenticatedUser, requireRoles(['user', 'adm
         Visit.find({ userIDFK: userId, isActive: true }).populate('propertyIDFK').sort({ addedOn: -1 }).limit(50),
         Inquiry.find({ userIDFK: userId, isActive: true }).populate('propertyIDFK').sort({ addedOn: -1 }).limit(50),
         MoveInConfirmation.find({ userId, isActive: true }).populate('propertyId').sort({ addedOn: -1 }).limit(30),
-        Notification.find({ isActive: true, recipientId: userId }).sort({ addedOn: -1 }).limit(30),
+        Notification.find({ isActive: true, recipientId: userId, recipientRole: { $in: ['user'] } }).sort({ addedOn: -1 }).limit(30),
         Conversation.find({ userId, isActive: true }).populate('ownerId', ['userFname', 'userLname', 'userEmail', 'contact', 'userType']).populate('propertyId', ['propertyName cityName areaName']).sort({ lastMessageAt: -1 }).limit(60),
         LeadEvent.find({ userId, isActive: true }).populate('propertyId').sort({ addedOn: -1 }).limit(60),
         UserReview.find({ userIDFK: userId, isActive: true }).populate('propertyIDFK').sort({ addedOn: -1 }).limit(20),
@@ -4122,7 +4129,18 @@ router.post('/users/:id/reset-password', requireAdminGovernance, async (req, res
 router.get('/analytics', async (req, res) => {
     try {
         const dataMode = req.query.demoLive === 'demo' ? 'demo' : req.query.demoLive === 'live' ? 'real' : (req.query.mode || req.query.analyticsMode || 'real')
-        const dataScope = dataMode === 'combined' ? {} : { isDummy: dataMode === 'demo' }
+        // Older records were created before isDummy was added, so a strict
+        // { isDummy: false } query silently hides valid production data.
+        // Treat missing isDummy values as real records for backwards compatibility.
+        const dataScope = dataMode === 'combined'
+            ? {}
+            : dataMode === 'demo'
+                ? { isDummy: true }
+                : { isDummy: { $ne: true } }
+        // Users are account records, not marketplace inventory. Legacy user
+        // documents may have an incorrect or missing demo flag, so do not
+        // hide them from the admin user totals in real mode.
+        const userDataScope = dataMode === 'demo' ? { isDummy: true } : {}
         const propertyCityScope = adminCityScope(req)
         const userCityScope = adminUserCityScope(req)
         if (req.query.city) propertyCityScope.cityName = new RegExp(req.query.city, 'i')
@@ -4200,9 +4218,9 @@ router.get('/analytics', async (req, res) => {
             trendRows,
             latestActivities,
         ] = await Promise.all([
-            User.countDocuments({ userType: { $nin: accountTypeVariants('Admin') }, ...dataScope, ...userCityScope }),
-            User.countDocuments({ isActive: true, userType: { $nin: accountTypeVariants('Admin') }, ...dataScope, ...userCityScope }),
-            User.countDocuments({ isActive: true, userType: { $in: accountTypeVariants('Owner') }, ...dataScope, ...userCityScope }),
+            User.countDocuments({ userType: { $nin: accountTypeVariants('Admin') }, ...userDataScope, ...userCityScope }),
+            User.countDocuments({ isActive: true, userType: { $nin: accountTypeVariants('Admin') }, ...userDataScope, ...userCityScope }),
+            User.countDocuments({ isActive: true, userType: { $in: accountTypeVariants('Owner') }, ...userDataScope, ...userCityScope }),
             Property.countDocuments(activePropertyScope),
             Property.countDocuments({ isDummy: true, ...propertyCityScope }),
             Property.countDocuments({ isDummy: false, ...propertyCityScope }),
@@ -4211,7 +4229,7 @@ router.get('/analytics', async (req, res) => {
             Property.countDocuments({ approvalStatus: 'Pending', ...dataScope, ...propertyCityScope }),
             Property.countDocuments({ approvalStatus: { $in: ['Approved', 'Verified'] }, ...dataScope, ...propertyCityScope }),
             Property.countDocuments({ approvalStatus: 'Rejected', ...dataScope, ...propertyCityScope }),
-            User.countDocuments({ addedOn: { $gte: todayStart }, userType: { $nin: accountTypeVariants('Admin') }, ...dataScope, ...userCityScope }),
+            User.countDocuments({ addedOn: { $gte: todayStart }, userType: { $nin: accountTypeVariants('Admin') }, ...userDataScope, ...userCityScope }),
             Visit.countDocuments(visitDateOrAddedOnScope(todayStart)),
             Visit.countDocuments(visitDateOrAddedOnScope(monthStart)),
             Visit.countDocuments(activeLeadScope),
@@ -4225,7 +4243,7 @@ router.get('/analytics', async (req, res) => {
                 { $match: activeConversationScope },
                 { $group: { _id: null, conversations: { $sum: 1 }, unreadMessages: { $sum: { $add: ['$unreadByUser', '$unreadByOwner'] } } } },
             ]),
-            Payment.aggregate([{ $match: { isActive: true } }, { $group: { _id: null, total: { $sum: { $toDouble: '$amount' } } } }]),
+            Payment.aggregate([{ $match: { isActive: true } }, { $group: { _id: null, total: { $sum: { $convert: { input: '$amount', to: 'double', onError: 0, onNull: 0 } } } } }]),
             Property.aggregate([{ $match: activePropertyScope }, { $group: { _id: '$cityName', listings: { $sum: 1 }, vacancies: { $sum: { $cond: ['$isAvailable', 1, 0] } } } }, { $sort: { listings: -1 } }, { $limit: 12 }]),
             Inquiry.aggregate([
                 { $match: activeLeadScope },
@@ -4876,10 +4894,70 @@ router.post('/vendors/:id/messages/:messageId/delete', attachAuthenticatedUser, 
     res.json({ result: message ? 'success' : 'failure', msg: message ? 'Message deleted.' : 'Message not found.', data: message })
 })
 
+router.get('/ads', async (req, res) => {
+    const placement = req.query.placement || 'both'
+    const now = new Date()
+    const items = await Advertisement.find({
+        isActive: true,
+        placement: { $in: [placement, 'both', placement === 'browse-sidebar' ? 'listing-sidebar' : placement === 'listing-sidebar' ? 'browse-sidebar' : ''] },
+        startAt: { $lte: now },
+        $or: [{ endAt: null }, { endAt: { $exists: false } }, { endAt: { $gte: now } }],
+    }).sort({ priority: -1, createdAt: -1 }).limit(Math.min(10, Math.max(1, Number(req.query.limit || 4)))).lean()
+    res.json({ result: 'success', msg: 'Advertisements found', data: items })
+})
+
+router.post('/ads/:id/impression', async (req, res) => {
+    await Advertisement.findOneAndUpdate({ _id: req.params.id, isActive: true }, { $inc: { impressions: 1 } })
+    res.status(204).end()
+})
+
+router.post('/ads/:id/click', async (req, res) => {
+    await Advertisement.findOneAndUpdate({ _id: req.params.id, isActive: true }, { $inc: { clicks: 1 } })
+    res.status(204).end()
+})
+
+router.get('/admin-ads', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
+    const items = await Advertisement.find({}).sort({ isActive: -1, priority: -1, createdAt: -1 }).limit(200).lean()
+    res.json({ result: 'success', msg: 'Advertisements found', data: items })
+})
+
+router.post('/admin-ads', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
+    const ad = await Advertisement.create({
+        agencyName: req.body.agencyName,
+        title: req.body.title,
+        description: req.body.description || '',
+        imageUrl: req.body.imageUrl || '',
+        targetUrl: req.body.targetUrl || '',
+        placement: req.body.placement || 'both',
+        startAt: req.body.startAt || new Date(),
+        endAt: req.body.endAt || null,
+        priority: Number(req.body.priority) || 0,
+        price: Number(req.body.price) || 0,
+        billingStatus: req.body.billingStatus || 'unbilled',
+        notes: req.body.notes || '',
+        isActive: req.body.isActive !== false,
+        createdBy: req.auth.user._id,
+    })
+    res.status(201).json({ result: 'success', msg: 'Advertisement created', data: ad })
+})
+
+router.put('/admin-ads/:id', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
+    const allowed = ['agencyName', 'title', 'description', 'imageUrl', 'targetUrl', 'placement', 'startAt', 'endAt', 'priority', 'isActive', 'price', 'billingStatus', 'notes']
+    const update = Object.fromEntries(allowed.filter((key) => req.body[key] !== undefined).map((key) => [key, ['priority', 'price'].includes(key) ? Number(req.body[key]) || 0 : req.body[key]]))
+    const ad = await Advertisement.findByIdAndUpdate(req.params.id, { $set: update }, { new: true, runValidators: true })
+    res.json({ result: ad ? 'success' : 'failure', msg: ad ? 'Advertisement updated' : 'Advertisement not found', data: ad })
+})
+
+router.delete('/admin-ads/:id', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
+    const ad = await Advertisement.findByIdAndUpdate(req.params.id, { $set: { isActive: false } }, { new: true })
+    res.json({ result: ad ? 'success' : 'failure', msg: ad ? 'Advertisement archived' : 'Advertisement not found', data: ad })
+})
+
 router.get('/notifications', attachAuthenticatedUser, requireRoles(['user', 'owner', 'admin']), async (req, res) => {
     const userId = req.auth.user._id
+    const recipientRoles = req.auth.role === 'owner' ? ['owner', 'vendor'] : [req.auth.role]
     const limit = Math.min(50, Math.max(1, Number(req.query.limit || 20)))
-    const filters = { isActive: true, recipientId: userId }
+    const filters = { isActive: true, recipientId: userId, recipientRole: { $in: recipientRoles } }
     if (req.query.unreadOnly === 'true') filters.readAt = { $exists: false }
 
     const [items, unreadCount] = await Promise.all([
@@ -4895,6 +4973,7 @@ router.post('/notifications/:id/read', attachAuthenticatedUser, requireRoles(['u
             _id: req.params.id,
             isActive: true,
             recipientId: req.auth.user._id,
+            recipientRole: { $in: req.auth.role === 'owner' ? ['owner', 'vendor'] : [req.auth.role] },
         },
         { $set: { readAt: new Date() } },
         { new: true },
@@ -4903,7 +4982,8 @@ router.post('/notifications/:id/read', attachAuthenticatedUser, requireRoles(['u
 })
 
 router.post('/notifications/mark-read', attachAuthenticatedUser, requireRoles(['user', 'owner', 'admin']), async (req, res) => {
-    const result = await Notification.updateMany({ isActive: true, readAt: { $exists: false }, recipientId: req.auth.user._id }, { $set: { readAt: new Date() } })
+    const recipientRoles = req.auth.role === 'owner' ? ['owner', 'vendor'] : [req.auth.role]
+    const result = await Notification.updateMany({ isActive: true, readAt: { $exists: false }, recipientId: req.auth.user._id, recipientRole: { $in: recipientRoles } }, { $set: { readAt: new Date() } })
     res.json({ result: 'success', msg: 'Notifications marked as read', data: { modifiedCount: result.modifiedCount || 0 } })
 })
 

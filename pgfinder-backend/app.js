@@ -249,6 +249,11 @@ app.use('/api/properties', clientController);
 
 app.use('/api/vendors', clientController);
 
+app.use('/api/ads', (req, res, next) => {
+    req.url = req.url === '/' ? '/ads' : `/ads${req.url}`;
+    clientController(req, res, next);
+});
+
 app.use('/api/admin', clientController);
 
 app.use('/api/leads', (req, res, next) => {

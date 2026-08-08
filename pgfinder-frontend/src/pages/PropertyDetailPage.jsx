@@ -12,6 +12,7 @@ import useCurrentLocation from '../hooks/useCurrentLocation'
 import { formatDistance, getDistanceKm } from '../utils/distance'
 import { readCompareIds, writeCompareIds } from '../utils/compareStorage'
 import { breadcrumbSchema, faqSchema, graphSchema, propertySchema, propertySeo } from '../utils/seoSchemas'
+import AdSlot from '../components/ads/AdSlot'
 
 const getAmenityIcon = (amenity) => {
   const value = amenity.toLowerCase()
@@ -745,6 +746,7 @@ function PropertyDetailPage() {
               <img src={property.menuPhoto} alt={`${property.name} menu`} className="mt-5 max-h-80 w-full rounded-xl object-cover sm:rounded-[1.5rem]" />
             </div>
           ) : null}
+          <AdSlot placement="property-sidebar" />
         </aside>
       </div>
     </div>

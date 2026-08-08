@@ -22,6 +22,7 @@ function Sidebar() {
   if (normalizedRole === 'admin') {
     links.push({ label: 'Manage users', to: '/dashboard/admin/users', icon: <FiUsers /> })
     links.push({ label: 'Manage properties', to: '/dashboard/admin', icon: <FiShield /> })
+    links.push({ label: 'Manage ads', to: '/dashboard/admin/ads', icon: <FiLayers /> })
   }
 
   if (normalizedRole === 'owner') {
@@ -41,7 +42,7 @@ function Sidebar() {
   }
 
   return (
-    <aside className="sticky top-0 z-30 flex min-w-0 flex-col border-b border-slate-800/90 bg-surface-900 p-4 text-slate-200 lg:min-h-screen lg:border-b-0 lg:border-r lg:p-6">
+    <aside className="sticky top-0 z-[1000] flex min-w-0 flex-col border-b border-slate-800/90 bg-surface-900 p-4 text-slate-200 lg:min-h-screen lg:border-b-0 lg:border-r lg:p-6">
       <div className="mb-0 flex items-center gap-3 lg:mb-10">
         <div className="inline-flex h-12 w-12 overflow-hidden rounded-3xl bg-white shadow-glow">
           <img src="/stayji-logo.png" alt="StayJi" className="h-full w-full object-cover" />

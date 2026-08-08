@@ -14,7 +14,7 @@ function ManageUsersPage() {
   const queryClient = useQueryClient()
   const { role: currentRole } = useAuth()
   const initialRole = searchParams.get('role') || 'all'
-  const [filters, setFilters] = useState({ search: '', role: initialRole, ownerType: 'all', city: '', status: 'active' })
+  const [filters, setFilters] = useState({ search: '', role: initialRole, ownerType: 'all', city: '', status: 'all' })
   const [selectedUser, setSelectedUser] = useState(null)
   const [editUser, setEditUser] = useState(null)
   const [error, setError] = useState('')

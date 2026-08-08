@@ -27,6 +27,7 @@ const AddPropertyPage = lazy(() => import('../pages/dashboard/vendor/AddProperty
 const ManagePropertiesPage = lazy(() => import('../pages/dashboard/vendor/ManagePropertiesPage'))
 const VendorLeadsPage = lazy(() => import('../pages/dashboard/vendor/VendorLeadsPage'))
 const ManageUsersPage = lazy(() => import('../pages/dashboard/admin/ManageUsersPage'))
+const AdminAdsPage = lazy(() => import('../pages/dashboard/admin/AdminAdsPage'))
 const AdminVendorDetailPage = lazy(() => import('../pages/dashboard/admin/AdminVendorDetailPage'))
 const AdminPropertyDetailPage = lazy(() => import('../pages/dashboard/admin/AdminPropertyDetailPage'))
 const MessagesPage = lazy(() => import('../pages/dashboard/MessagesPage'))
@@ -97,6 +98,14 @@ function AppRoutes() {
           element={
             <RoleProtectedRoute role="admin">
               <ManageUsersPage />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/ads"
+          element={
+            <RoleProtectedRoute role="admin">
+              <AdminAdsPage />
             </RoleProtectedRoute>
           }
         />
