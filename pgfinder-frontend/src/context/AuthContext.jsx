@@ -63,6 +63,18 @@ const normalizeUser = (user) => {
   return { ...user, firstName, lastName, name, role }
 }
 
+const persistAuthSession = (user, token, role) => {
+  const serialized = JSON.stringify({
+    user,
+    token,
+    role,
+    expiresAt: Date.now() + Math.min(sessionDurationMs, inactivityTimeoutMs),
+  })
+  sessionStorage.setItem(storageKey, serialized)
+  localStorage.setItem(storageKey, serialized)
+  axiosClient.defaults.headers.common.Authorization = `Bearer ${token}`
+}
+
 export const AuthProvider = ({ children }) => {
   const [storedAuth] = useState(readStoredAuth)
   const storedUser = storedAuth?.user ? normalizeUser(storedAuth.user) : null
@@ -102,14 +114,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (user && role && token) {
-      const serialized = JSON.stringify({
-        user,
-        token,
-        role,
-        expiresAt: Date.now() + Math.min(sessionDurationMs, inactivityTimeoutMs),
-      })
-      sessionStorage.setItem(storageKey, serialized)
-      localStorage.setItem(storageKey, serialized)
+      persistAuthSession(user, token, role)
     } else {
       sessionStorage.removeItem(storageKey)
       localStorage.removeItem(storageKey)
@@ -177,6 +182,7 @@ export const AuthProvider = ({ children }) => {
       if (requestedRole && requestedRole !== nextRole) {
         throw new Error('Account type mismatch. Select the correct account type to continue.')
       }
+      persistAuthSession(normalizedUser, response.token, nextRole)
       setUser(normalizedUser)
       setToken(response.token)
       setRole(nextRole)
@@ -212,6 +218,7 @@ export const AuthProvider = ({ children }) => {
       const response = await authService.signup(mapped)
       const normalizedUser = normalizeUser(response.user)
       const nextRole = normalizedUser.role || payload.role || 'user'
+      persistAuthSession(normalizedUser, response.token, nextRole)
       setUser(normalizedUser)
       setToken(response.token)
       setRole(nextRole)
@@ -242,6 +249,7 @@ export const AuthProvider = ({ children }) => {
       })
       const normalizedUser = normalizeUser(response.user)
       const nextRole = normalizedUser.role || payload.role || 'user'
+      persistAuthSession(normalizedUser, response.token, nextRole)
       setUser(normalizedUser)
       setToken(response.token)
       setRole(nextRole)
