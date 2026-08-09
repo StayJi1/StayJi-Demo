@@ -54,7 +54,11 @@ function AdminDashboard() {
 
   const statusMutation = useMutation({
     mutationFn: ({ id, payload }) => adminApi.updatePropertyStatus(id, payload),
-    onSuccess: refreshAdmin,
+    onSuccess: (result, variables) => {
+      refreshAdmin()
+      setToast(variables.payload?.premiumAction === 'extend' ? 'Premium listing extended by 30 days.' : result?.msg || 'Property updated successfully.')
+    },
+    onError: (mutationError) => setToast(mutationError?.message || 'Unable to update property.'),
   })
 
   const bulkMutation = useMutation({

@@ -18,6 +18,7 @@ function ManageUsersPage() {
   const [selectedUser, setSelectedUser] = useState(null)
   const [editUser, setEditUser] = useState(null)
   const [error, setError] = useState('')
+  const [passwordMessage, setPasswordMessage] = useState('')
   const debouncedSearch = useDebouncedValue(filters.search)
   const canManageAdminScope = currentRole === 'admin'
 
@@ -44,6 +45,14 @@ function ManageUsersPage() {
       setEditUser(null)
     },
     onError: (err) => setError(err?.message || 'Unable to update user.'),
+  })
+  const resetPasswordMutation = useMutation({
+    mutationFn: (user) => adminApi.resetUserPassword(user.id || user._id, {}),
+    onSuccess: (result) => {
+      setPasswordMessage(`Temporary password for ${result?.user?.userEmail || 'the user'}: ${result?.temporaryPassword || 'Unavailable'}. Copy it now; it will not be shown again.`)
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+    },
+    onError: (err) => setError(err?.message || 'Unable to reset password.'),
   })
 
   const handleStatus = async (user, isActive) => {
@@ -259,8 +268,9 @@ function ManageUsersPage() {
             <div className="mt-6 flex flex-wrap gap-3">
               <button type="button" onClick={() => setEditUser(selectedUser)} className="rounded-full border border-cyan-500/60 px-4 py-2 text-sm text-cyan-200">Edit profile</button>
               <button type="button" onClick={() => handleStatus(selectedUser, !selectedUser.isActive)} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200">{selectedUser.isActive ? 'Suspend account' : 'Activate account'}</button>
-              <button type="button" onClick={() => setError('Password reset handoff uses the secure OTP flow from login; direct admin password mutation is intentionally blocked.')} className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200">Reset password</button>
+              <button type="button" onClick={() => { setError(''); setPasswordMessage(''); resetPasswordMutation.mutate(selectedUser) }} disabled={resetPasswordMutation.isPending} className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200">{resetPasswordMutation.isPending ? 'Resetting…' : 'Generate temporary password'}</button>
             </div>
+            {passwordMessage ? <p className="mt-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">{passwordMessage}</p> : null}
           </div>
         </div>
       ) : null}

@@ -4216,6 +4216,7 @@ router.get('/analytics', async (req, res) => {
             cityHeatmap,
             topProperties,
             trendRows,
+            trendVisitRows,
             latestActivities,
         ] = await Promise.all([
             User.countDocuments({ userType: { $nin: accountTypeVariants('Admin') }, ...userDataScope, ...userCityScope }),
@@ -4256,6 +4257,7 @@ router.get('/analytics', async (req, res) => {
                 { $project: { propertyId: '$_id', name: '$property.propertyName', city: '$property.cityName', inquiries: 1 } },
             ]),
             Inquiry.find(activeLeadScope).select('addedOn isConverted').lean(),
+            Visit.find(activeLeadScope).select('addedOn visitDate isConverted').lean(),
             AuditLog.find(auditScope).sort({ addedOn: -1, createdAt: -1 }).limit(12).lean(),
         ])
         const leads = Math.max(visitLeads + inquiryLeads, leadEvents)
@@ -4263,8 +4265,8 @@ router.get('/analytics', async (req, res) => {
         const liveVacancies = cityHeatmap.reduce((sum, row) => sum + (row.vacancies || 0), 0)
         const occupancyRate = activeListings ? Math.round(((activeListings - liveVacancies) / activeListings) * 100) : 0
         const trendMap = new Map()
-        trendRows.forEach((lead) => {
-            const date = new Date(lead.addedOn)
+        ;[...trendRows, ...trendVisitRows].forEach((lead) => {
+            const date = new Date(lead.addedOn || lead.visitDate)
             const key = Number.isNaN(date.getTime()) ? 'Unknown' : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
             if (!trendMap.has(key)) trendMap.set(key, { month: key, leads: 0, conversions: 0 })
             const row = trendMap.get(key)
@@ -4420,8 +4422,11 @@ router.post('/properties/:id/status', async (req, res) => {
             if (req.body.priority === undefined) update.priority = 0
         }
         if (action === 'extend') {
+            const currentProperty = await Property.findOne({ _id: req.params.id, ...adminCityScope(req) }).select('premiumEndDate').lean()
+            const currentEnd = currentProperty?.premiumEndDate ? new Date(currentProperty.premiumEndDate) : new Date()
+            const extensionBase = Number.isNaN(currentEnd.getTime()) ? new Date() : new Date(Math.max(Date.now(), currentEnd.getTime()))
             update.isPremium = true
-            update.premiumEndDate = req.body.premiumEndDate ? new Date(req.body.premiumEndDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+            update.premiumEndDate = req.body.premiumEndDate ? new Date(req.body.premiumEndDate) : new Date(extensionBase.getTime() + 30 * 24 * 60 * 60 * 1000)
             if (req.body.priority !== undefined) update.priority = toNumberOrUndefined(req.body.priority) || 100
         }
     }
@@ -4432,7 +4437,7 @@ router.post('/properties/:id/status', async (req, res) => {
         update.assignedAdmin = new mongoose.Types.ObjectId(req.body.assignedAdmin)
     }
     if (!Object.keys(update).length) return res.json({ result: 'failure', msg: 'No status update supplied', data: null })
-    const previous = await Property.findOne({ _id: req.params.id, ...adminCityScope(req) }).select('approvalStatus isActive isAvailable isVerified status propertyName cityName areaName')
+    const previous = await Property.findOne({ _id: req.params.id, ...adminCityScope(req) }).select('approvalStatus isActive isAvailable isVerified status propertyName cityName areaName isPremium premiumEndDate')
     const updated = await Property.findOneAndUpdate({ _id: req.params.id, ...adminCityScope(req) }, { $set: update }, { new: true }).populate(propertyPopulate())
     if (updated) {
         await recordAudit({ performerId: req.body.adminId, performerRole: req.body.performerRole || 'Admin', action: 'property_status_changed', entityType: 'property', entityId: updated._id, previousValue: previous?.toObject?.() || previous || {}, updatedValue: update, city: updated.cityName })
