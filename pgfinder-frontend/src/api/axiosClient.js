@@ -40,12 +40,7 @@ axiosClient.interceptors.request.use((config) => {
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    const requestHeaders = error.config?.headers
-    const sentAuthorization = typeof requestHeaders?.get === 'function'
-      ? requestHeaders.get('Authorization')
-      : requestHeaders?.Authorization || requestHeaders?.authorization
-
-    if (error.response?.status === 401 && sentAuthorization && typeof window !== 'undefined') {
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
       sessionStorage.removeItem('stayji-auth')
       localStorage.removeItem('stayji-auth')
       delete axiosClient.defaults.headers.common.Authorization
