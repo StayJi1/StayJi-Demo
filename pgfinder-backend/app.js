@@ -43,7 +43,10 @@ app.use(timeoutHandler());
 |--------------------------------------------------------------------------
 */
 
-const configuredCorsOrigins = (process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean);
+const configuredCorsOrigins = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
 const corsOrigins = [
     "http://localhost:5173",
     "http://localhost:3000",
@@ -63,7 +66,7 @@ app.use(cors({
             return callback(null, true);
         }
 
-        if (corsOrigins.indexOf(origin) !== -1 || isLocalDevOrigin(origin)) {
+        if (corsOrigins.indexOf(origin.replace(/\/$/, '')) !== -1 || isLocalDevOrigin(origin)) {
             callback(null, true);
         } else {
             callback(new Error("CORS Not Allowed"));

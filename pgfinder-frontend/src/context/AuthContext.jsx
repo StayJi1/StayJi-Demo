@@ -17,6 +17,12 @@ const readStoredAuth = () => {
     if (!savedRaw) return null
 
     const parsed = JSON.parse(savedRaw)
+    // Never restore a user without the JWT required by protected API routes.
+    if (!parsed?.token) {
+      sessionStorage.removeItem(storageKey)
+      localStorage.removeItem(storageKey)
+      return null
+    }
     if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
       sessionStorage.removeItem(storageKey)
       localStorage.removeItem(storageKey)
@@ -87,15 +93,18 @@ export const AuthProvider = ({ children }) => {
   }, [token])
 
   useEffect(() => {
-    if (user && role) {
-      sessionStorage.setItem(storageKey, JSON.stringify({
+    if (user && role && token) {
+      const serialized = JSON.stringify({
         user,
         token,
         role,
         expiresAt: Date.now() + Math.min(sessionDurationMs, inactivityTimeoutMs),
-      }))
+      })
+      sessionStorage.setItem(storageKey, serialized)
+      localStorage.setItem(storageKey, serialized)
     } else {
       sessionStorage.removeItem(storageKey)
+      localStorage.removeItem(storageKey)
     }
   }, [user, token, role])
 
@@ -107,10 +116,12 @@ export const AuthProvider = ({ children }) => {
       lastActivityRef.current = Date.now()
       const saved = readStoredAuth()
       if (saved?.user) {
-        sessionStorage.setItem(storageKey, JSON.stringify({
+        const serialized = JSON.stringify({
           ...saved,
           expiresAt: Date.now() + Math.min(sessionDurationMs, inactivityTimeoutMs),
-        }))
+        })
+        sessionStorage.setItem(storageKey, serialized)
+        localStorage.setItem(storageKey, serialized)
       }
     }
 
@@ -256,7 +267,7 @@ export const AuthProvider = ({ children }) => {
   }, [role, user])
 
   const value = useMemo(
-    () => ({ user, token, role, isAuthenticated: Boolean(user), status, error, login, signup, googleSignup, updateProfile, logout }),
+    () => ({ user, token, role, isAuthenticated: Boolean(user && token), status, error, login, signup, googleSignup, updateProfile, logout }),
     [user, token, role, status, error, logout, updateProfile],
   )
 
