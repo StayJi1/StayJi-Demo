@@ -6,6 +6,9 @@ const authService = {
     const res = await authApi.login(credentials)
     // backend responds with { result: "success"|"fail", msg: string, data: <user|null> }
     if (res && (res.result === 'success' || res.result === 'login Successfully')) {
+      if (!res.token || !res.data) {
+        throw new Error('Login succeeded but the server did not return an authentication token.')
+      }
       return { token: res.token || null, user: res.data || res.user, role: res.role }
     }
     const message = res?.msg || 'Login failed'
@@ -26,10 +29,10 @@ const authService = {
         authPortal: 'public',
       }
       const loginRes = await authApi.login(loginPayload)
-      if (loginRes && loginRes.result === 'success') {
+      if (loginRes && loginRes.result === 'success' && loginRes.token && loginRes.data) {
         return { token: loginRes.token || null, user: loginRes.data, role: loginRes.role }
       }
-      return { token: null, user: null }
+      throw new Error('Signup succeeded but the server did not return an authentication token.')
     }
     const message = res?.msg || 'Signup failed'
     const err = new Error(message)
@@ -39,7 +42,7 @@ const authService = {
 
   googleSignup: async (payload) => {
     const res = await authApi.googleAuth(payload)
-    if (res && res.result === 'success') {
+    if (res && res.result === 'success' && res.token && res.data) {
       return { token: res.token || null, user: res.data, role: res.role }
     }
     const message = res?.msg || 'Google signup failed'

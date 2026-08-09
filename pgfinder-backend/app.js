@@ -43,14 +43,19 @@ app.use(timeoutHandler());
 |--------------------------------------------------------------------------
 */
 
+const configuredCorsOrigins = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
 const corsOrigins = [
     "http://localhost:5173",
     "http://localhost:3000",
     "https://pg-finder-alpha.vercel.app",
     "https://stayji-stayji.vercel.app",
     "https://stayji.com",
-    "https://www.stayji.com"
-];
+    "https://www.stayji.com",
+    ...configuredCorsOrigins
+].filter((origin, index, origins) => origins.indexOf(origin) === index);
 
 const isLocalDevOrigin = (origin) => /^http:\/\/(localhost|127\.0\.0\.1):517\d$/.test(origin);
 
@@ -61,7 +66,7 @@ app.use(cors({
             return callback(null, true);
         }
 
-        if (corsOrigins.indexOf(origin) !== -1 || isLocalDevOrigin(origin)) {
+        if (corsOrigins.indexOf(origin.replace(/\/$/, '')) !== -1 || isLocalDevOrigin(origin)) {
             callback(null, true);
         } else {
             callback(new Error("CORS Not Allowed"));
