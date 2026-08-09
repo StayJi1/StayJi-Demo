@@ -81,8 +81,12 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => storedUser)
   const [token, setToken] = useState(() => storedAuth?.token || null)
   const [role, setRole] = useState(() => normalizeRole(storedAuth?.role || storedUser?.role || 'user'))
-  // Storage restoration is synchronous, so the initial state is ready before routes render.
-  const authReady = true
+  const [authReady] = useState(() => {
+    if (storedAuth?.token) {
+      axiosClient.defaults.headers.common.Authorization = `Bearer ${storedAuth.token}`
+    }
+    return true
+  })
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState(null)
   const lastActivityRef = useRef(0)
