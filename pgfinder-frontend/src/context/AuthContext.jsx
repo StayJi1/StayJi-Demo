@@ -63,12 +63,26 @@ const normalizeUser = (user) => {
   return { ...user, firstName, lastName, name, role }
 }
 
+const persistAuthSession = (user, token, role) => {
+  const serialized = JSON.stringify({
+    user,
+    token,
+    role,
+    expiresAt: Date.now() + Math.min(sessionDurationMs, inactivityTimeoutMs),
+  })
+  sessionStorage.setItem(storageKey, serialized)
+  localStorage.setItem(storageKey, serialized)
+  axiosClient.defaults.headers.common.Authorization = `Bearer ${token}`
+}
+
 export const AuthProvider = ({ children }) => {
-  const storedAuth = readStoredAuth()
+  const [storedAuth] = useState(readStoredAuth)
   const storedUser = storedAuth?.user ? normalizeUser(storedAuth.user) : null
   const [user, setUser] = useState(() => storedUser)
   const [token, setToken] = useState(() => storedAuth?.token || null)
   const [role, setRole] = useState(() => normalizeRole(storedAuth?.role || storedUser?.role || 'user'))
+  // Storage restoration is synchronous, so the initial state is ready before routes render.
+  const authReady = true
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState(null)
   const lastActivityRef = useRef(0)
@@ -85,6 +99,12 @@ export const AuthProvider = ({ children }) => {
   }, [])
 
   useEffect(() => {
+    const handleAuthExpired = () => logout()
+    window.addEventListener('stayji-auth-expired', handleAuthExpired)
+    return () => window.removeEventListener('stayji-auth-expired', handleAuthExpired)
+  }, [logout])
+
+  useEffect(() => {
     if (token) {
       axiosClient.defaults.headers.common.Authorization = `Bearer ${token}`
     } else {
@@ -94,14 +114,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (user && role && token) {
-      const serialized = JSON.stringify({
-        user,
-        token,
-        role,
-        expiresAt: Date.now() + Math.min(sessionDurationMs, inactivityTimeoutMs),
-      })
-      sessionStorage.setItem(storageKey, serialized)
-      localStorage.setItem(storageKey, serialized)
+      persistAuthSession(user, token, role)
     } else {
       sessionStorage.removeItem(storageKey)
       localStorage.removeItem(storageKey)
@@ -169,6 +182,7 @@ export const AuthProvider = ({ children }) => {
       if (requestedRole && requestedRole !== nextRole) {
         throw new Error('Account type mismatch. Select the correct account type to continue.')
       }
+      persistAuthSession(normalizedUser, response.token, nextRole)
       setUser(normalizedUser)
       setToken(response.token)
       setRole(nextRole)
@@ -204,6 +218,7 @@ export const AuthProvider = ({ children }) => {
       const response = await authService.signup(mapped)
       const normalizedUser = normalizeUser(response.user)
       const nextRole = normalizedUser.role || payload.role || 'user'
+      persistAuthSession(normalizedUser, response.token, nextRole)
       setUser(normalizedUser)
       setToken(response.token)
       setRole(nextRole)
@@ -234,6 +249,7 @@ export const AuthProvider = ({ children }) => {
       })
       const normalizedUser = normalizeUser(response.user)
       const nextRole = normalizedUser.role || payload.role || 'user'
+      persistAuthSession(normalizedUser, response.token, nextRole)
       setUser(normalizedUser)
       setToken(response.token)
       setRole(nextRole)
@@ -267,8 +283,8 @@ export const AuthProvider = ({ children }) => {
   }, [role, user])
 
   const value = useMemo(
-    () => ({ user, token, role, isAuthenticated: Boolean(user && token), status, error, login, signup, googleSignup, updateProfile, logout }),
-    [user, token, role, status, error, logout, updateProfile],
+    () => ({ user, token, role, authReady, isAuthenticated: Boolean(user && token), status, error, login, signup, googleSignup, updateProfile, logout }),
+    [user, token, role, authReady, status, error, logout, updateProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
