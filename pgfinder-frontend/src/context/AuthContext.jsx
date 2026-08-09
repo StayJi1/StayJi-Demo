@@ -64,11 +64,13 @@ const normalizeUser = (user) => {
 }
 
 export const AuthProvider = ({ children }) => {
-  const storedAuth = readStoredAuth()
+  const [storedAuth] = useState(readStoredAuth)
   const storedUser = storedAuth?.user ? normalizeUser(storedAuth.user) : null
   const [user, setUser] = useState(() => storedUser)
   const [token, setToken] = useState(() => storedAuth?.token || null)
   const [role, setRole] = useState(() => normalizeRole(storedAuth?.role || storedUser?.role || 'user'))
+  // Storage restoration is synchronous, so the initial state is ready before routes render.
+  const authReady = true
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState(null)
   const lastActivityRef = useRef(0)
@@ -83,6 +85,12 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem(storageKey)
     delete axiosClient.defaults.headers.common.Authorization
   }, [])
+
+  useEffect(() => {
+    const handleAuthExpired = () => logout()
+    window.addEventListener('stayji-auth-expired', handleAuthExpired)
+    return () => window.removeEventListener('stayji-auth-expired', handleAuthExpired)
+  }, [logout])
 
   useEffect(() => {
     if (token) {
@@ -267,8 +275,8 @@ export const AuthProvider = ({ children }) => {
   }, [role, user])
 
   const value = useMemo(
-    () => ({ user, token, role, isAuthenticated: Boolean(user && token), status, error, login, signup, googleSignup, updateProfile, logout }),
-    [user, token, role, status, error, logout, updateProfile],
+    () => ({ user, token, role, authReady, isAuthenticated: Boolean(user && token), status, error, login, signup, googleSignup, updateProfile, logout }),
+    [user, token, role, authReady, status, error, logout, updateProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
