@@ -137,7 +137,7 @@ function MessagesPage() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 gap-3">
-                      <img src={propertyImage(conversation)} alt={propertyName(conversation.property || conversation.propertyId)} className="h-14 w-14 rounded-2xl object-cover" />
+                      <img src={propertyImage(conversation)} alt={propertyName(conversation.property || conversation.propertyId)} loading="lazy" className="h-14 w-14 rounded-2xl object-cover" />
                       <div className="min-w-0">
                       <p className="truncate font-semibold text-white">{personName(otherPerson)}</p>
                       <p className="mt-1 truncate text-xs text-slate-500">{propertyName(conversation.property || conversation.propertyId)}</p>
@@ -159,7 +159,7 @@ function MessagesPage() {
               <div className="border-b border-slate-800 p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-center gap-4">
-                    <img src={propertyImage(activeConversation)} alt={propertyName(activeConversation.property || activeConversation.propertyId)} className="h-16 w-16 shrink-0 rounded-2xl object-cover sm:h-20 sm:w-20" />
+                    <img src={propertyImage(activeConversation)} alt={propertyName(activeConversation.property || activeConversation.propertyId)} loading="lazy" className="h-16 w-16 shrink-0 rounded-2xl object-cover sm:h-20 sm:w-20" />
                     <div className="min-w-0">
                       <p className="text-xs uppercase tracking-[0.12em] text-accent-400 sm:text-sm sm:tracking-[0.2em]">{propertyName(activeConversation.property || activeConversation.propertyId)}</p>
                       <h2 className="mt-2 text-xl font-semibold text-white">{personName(normalizedRole === 'owner' ? activeConversation.userId : activeConversation.ownerId)}</h2>

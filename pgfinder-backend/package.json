@@ -7,7 +7,8 @@
     "test": "node -c app.js && node -c controllers/clientController.js && node -c models/userMaster.js && node -c models/propertyMaster.js && node -c models/notification.js && node -c utils/googleRegistrationSync.js",
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "seed": "node scripts/seedData.js"
+    "seed": "node scripts/seedData.js",
+    "mark:current-dummy": "node scripts/markCurrentDataDummy.js"
   },
   "author": "",
   "license": "ISC",

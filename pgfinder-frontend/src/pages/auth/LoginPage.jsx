@@ -76,7 +76,7 @@ function LoginPage({ portal = 'public' }) {
       setResetMessage('')
       await authService.requestPasswordReset({ email: resetForm.email || form.email })
       setResetStep('otp')
-      setResetMessage('If the email exists, a verification code has been sent.')
+      setResetMessage('Account found. Enter the verification code to reset your password.')
     } catch (err) {
       setResetMessage(err?.message || 'Unable to start password reset.')
     }

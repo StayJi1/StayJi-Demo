@@ -119,7 +119,7 @@ function AdminOwnerDetailPage() {
           const image = toAssetUrl([].concat(parseAssetList(property.propertyImageUrls), property.propertyImage, property.image).filter(Boolean)[0])
           return (
             <Card key={property._id || property.id} className="overflow-hidden p-0">
-              {image ? <img src={image} alt={property.propertyName || property.name} className="h-44 w-full object-cover" /> : <div className="h-44 bg-slate-950" />}
+              {image ? <img src={image} alt={property.propertyName || property.name} loading="lazy" className="h-44 w-full object-cover" /> : <div className="h-44 bg-slate-950" />}
               <div className="p-5">
                 <p className="text-xs uppercase tracking-[0.2em] text-accent-400">{property.cityName || property.city || '-'} · {property.areaName || '-'}</p>
                 <h2 className="mt-2 text-xl font-semibold text-white">{property.propertyName || property.name}</h2>

@@ -111,7 +111,7 @@ function AdminPropertyDetailPage() {
       </header>
 
       <div className="grid gap-3 md:grid-cols-3">
-        {images.slice(0, 6).map((image) => <img key={image} src={image} alt={property.name} className="h-52 w-full rounded-2xl object-cover" />)}
+        {images.slice(0, 6).map((image) => <img key={image} src={image} alt={property.name} loading="lazy" className="h-52 w-full rounded-2xl object-cover" />)}
         {!images.length ? <Card className="p-8 text-slate-400">No media uploaded.</Card> : null}
       </div>
       {property.videoUrl ? <video src={property.videoUrl} controls className="max-h-[420px] w-full rounded-2xl bg-slate-950" /> : null}

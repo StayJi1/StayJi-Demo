@@ -40,6 +40,7 @@ function SignupPage() {
   const [form, setForm] = useState(() => readStoredSignupForm(requestedRole))
   const [localError, setLocalError] = useState('')
   const [cityOptions, setCityOptions] = useState(CITY_OPTIONS)
+  const [pendingGoogleCredential, setPendingGoogleCredential] = useState('')
 
   useEffect(() => {
     axiosClient.get('/client/city-options')
@@ -77,7 +78,8 @@ function SignupPage() {
         callback: async ({ credential }) => {
           setLocalError('')
           if (!form.contact.trim()) {
-            setLocalError('Enter your phone number before continuing with Google.')
+            setPendingGoogleCredential(credential)
+            setLocalError('Enter your phone number to finish Google signup.')
             return
           }
           if (!form.acceptTerms || !form.acceptPrivacy) {
@@ -147,6 +149,27 @@ function SignupPage() {
     }
     try {
       const response = await signup(form)
+      sessionStorage.removeItem(formStorageKey)
+      navigate(`/dashboard/${response.user?.role || form.role}`)
+    } catch {
+      // handled in context
+    }
+  }
+
+  const completeGoogleSignup = async () => {
+    setLocalError('')
+    if (!pendingGoogleCredential) return
+    if (!form.contact.trim()) {
+      setLocalError('Phone number is required to finish Google signup.')
+      return
+    }
+    if (!form.acceptTerms || !form.acceptPrivacy) {
+      setLocalError('Accept StayJi Terms & Conditions and Privacy Policy before continuing with Google.')
+      return
+    }
+    try {
+      const response = await googleSignup({ credential: pendingGoogleCredential, contact: form.contact, role: form.role, state: form.state, city: form.city, acceptTerms: form.acceptTerms, acceptPrivacy: form.acceptPrivacy })
+      setPendingGoogleCredential('')
       sessionStorage.removeItem(formStorageKey)
       navigate(`/dashboard/${response.user?.role || form.role}`)
     } catch {
@@ -232,6 +255,15 @@ function SignupPage() {
               or
               <span className="h-px flex-1 bg-slate-800" />
             </div>
+            {pendingGoogleCredential ? (
+              <div className="grid gap-3 rounded-3xl border border-accent-500/40 bg-accent-500/10 p-4">
+                <p className="text-sm text-accent-100">Google verified your email. Add your phone number to complete the account.</p>
+                <Input label="Phone number" name="contact" value={form.contact} onChange={handleChange} required />
+                <Button type="button" variant="secondary" onClick={completeGoogleSignup} disabled={status === 'loading'}>
+                  {status === 'loading' ? 'Finishing signup...' : 'Finish Google signup'}
+                </Button>
+              </div>
+            ) : null}
             {googleClientId ? (
               <div ref={googleButtonRef} className="min-h-10 w-full overflow-hidden rounded-3xl" />
             ) : (

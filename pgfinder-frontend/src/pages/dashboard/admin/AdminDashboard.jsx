@@ -15,10 +15,25 @@ const statusTone = {
   Approved: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200',
   Pending: 'border-amber-500/40 bg-amber-500/10 text-amber-200',
   Rejected: 'border-rose-500/40 bg-rose-500/10 text-rose-200',
+  'Partially Approved': 'border-cyan-500/40 bg-cyan-500/10 text-cyan-200',
+  Verified: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200',
+  Suspicious: 'border-amber-500/40 bg-amber-500/10 text-amber-200',
+  Paid: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200',
 }
 
 function formatNumber(value) {
   return Number(value || 0).toLocaleString('en-IN')
+}
+
+function formatDate(value) {
+  return value ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'
+}
+
+function valuePreview(value) {
+  if (Array.isArray(value)) return value.join(', ') || '-'
+  if (value && typeof value === 'object') return JSON.stringify(value)
+  if (value === undefined || value === null || value === '') return '-'
+  return String(value)
 }
 
 function AdminDashboard() {
@@ -29,6 +44,11 @@ function AdminDashboard() {
   const [filters, setFilters] = useState(emptyFilters)
   const [bulkRequest, setBulkRequest] = useState(null)
   const [toast, setToast] = useState('')
+  const [rewardTab, setRewardTab] = useState('Pending')
+  const [payoutTab, setPayoutTab] = useState('Pending')
+  const [updateTab, setUpdateTab] = useState('Pending')
+  const [adminPanelTab, setAdminPanelTab] = useState('finance')
+  const [acceptedUpdateFields, setAcceptedUpdateFields] = useState({})
   const debouncedSearch = useDebouncedValue(filters.search)
 
   const propertyParams = useMemo(() => ({ ...filters, search: debouncedSearch, limit: 30 }), [debouncedSearch, filters])
@@ -37,11 +57,18 @@ function AdminDashboard() {
   const { data: ownerData } = useQuery({ queryKey: ['admin-owners', debouncedSearch], queryFn: () => adminApi.owners({ search: debouncedSearch, limit: 8 }), enabled: Boolean(debouncedSearch) })
   const { data: moveIns = [] } = useQuery({ queryKey: ['admin-move-ins'], queryFn: () => adminApi.moveIns({ limit: 12 }), refetchInterval: 10_000 })
   const { data: payouts = [] } = useQuery({ queryKey: ['admin-wallet-payouts'], queryFn: () => adminApi.walletPayouts({ limit: 12 }), refetchInterval: 10_000 })
-  const { data: updateRequests = [] } = useQuery({ queryKey: ['admin-property-update-requests'], queryFn: () => adminApi.propertyUpdateRequests({ status: 'Pending', limit: 12 }), refetchInterval: 10_000 })
+  const { data: updateRequests = [] } = useQuery({ queryKey: ['admin-property-update-requests'], queryFn: () => adminApi.propertyUpdateRequests({ limit: 50 }), refetchInterval: 10_000 })
+  const { data: governance } = useQuery({ queryKey: ['admin-governance'], queryFn: () => adminApi.governance(), refetchInterval: 30_000 })
 
   const properties = propertiesData?.items || []
   const summary = analytics?.summary || {}
   const ownerMatches = ownerData?.items || []
+  const launchRows = governance?.cityRows || []
+  const rewardRows = moveIns.filter((item) => rewardTab === 'All' || (item.status || 'Pending') === rewardTab)
+  const payoutRows = payouts.filter((item) => payoutTab === 'All' || (item.status || 'Pending') === payoutTab)
+  const pendingUpdateRows = updateRequests.filter((item) => (item.status || 'Pending') === 'Pending')
+  const reviewedUpdateRows = updateRequests.filter((item) => (item.status || 'Pending') !== 'Pending')
+  const updateRows = updateTab === 'Pending' ? pendingUpdateRows : reviewedUpdateRows
 
   const refreshAdmin = () => {
     queryClient.invalidateQueries({ queryKey: ['admin-analytics'] })
@@ -50,6 +77,7 @@ function AdminDashboard() {
     queryClient.invalidateQueries({ queryKey: ['admin-move-ins'] })
     queryClient.invalidateQueries({ queryKey: ['admin-wallet-payouts'] })
     queryClient.invalidateQueries({ queryKey: ['admin-property-update-requests'] })
+    queryClient.invalidateQueries({ queryKey: ['admin-governance'] })
   }
 
   const statusMutation = useMutation({
@@ -69,6 +97,14 @@ function AdminDashboard() {
       setBulkRequest(null)
     },
   })
+  const launchMutation = useMutation({
+    mutationFn: ({ id, payload }) => adminApi.launchCity(id, payload),
+    onSuccess: (result) => {
+      refreshAdmin()
+      setToast(`${result?.city?.cityName || 'Launch area'} is live. Hidden demo properties: ${result?.demoModified || 0}. Hidden dummy users: ${result?.dummyUsersModified || 0}.`)
+    },
+    onError: (mutationError) => setToast(mutationError?.message || 'Unable to launch area.'),
+  })
   const moveInMutation = useMutation({
     mutationFn: ({ id, status }) => adminApi.reviewMoveIn(id, { status, adminId: user?._id }),
     onSuccess: refreshAdmin,
@@ -78,9 +114,24 @@ function AdminDashboard() {
     onSuccess: refreshAdmin,
   })
   const updateRequestMutation = useMutation({
-    mutationFn: ({ id, status }) => adminApi.reviewPropertyUpdateRequest(id, { status, adminId: user?._id, performerRole: user?.userType || 'Admin' }),
-    onSuccess: refreshAdmin,
+    mutationFn: ({ id, status, acceptedFields = [] }) => adminApi.reviewPropertyUpdateRequest(id, { status, acceptedFields, adminId: user?._id, performerRole: user?.userType || 'Admin' }),
+    onSuccess: (_result, variables) => {
+      setAcceptedUpdateFields((current) => {
+        const next = { ...current }
+        delete next[variables.id]
+        return next
+      })
+      refreshAdmin()
+    },
   })
+
+  const toggleAcceptedField = (requestId, field) => {
+    setAcceptedUpdateFields((current) => {
+      const currentFields = current[requestId] || []
+      const nextFields = currentFields.includes(field) ? currentFields.filter((item) => item !== field) : [...currentFields, field]
+      return { ...current, [requestId]: nextFields }
+    })
+  }
 
   const statCards = [
     { label: 'Total users', value: summary.totalUsers, icon: <FiUsers />, onClick: () => navigate('/dashboard/admin/users') },
@@ -238,6 +289,37 @@ function AdminDashboard() {
           </button>
         ))}
       </div>
+
+      {launchRows.length ? (
+        <Card className="p-4 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Area launch control</p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Turn off dummy data when real users arrive</h2>
+              <FieldNote>Launch hides dummy properties and dummy users for the area, keeps live records active, and refreshes public inventory caches.</FieldNote>
+            </div>
+            <Button variant="secondary" onClick={() => navigate('/dashboard/admin/users?demoLive=demo')}>Review dummy users</Button>
+          </div>
+          <div className="mt-5 grid gap-3">
+            {launchRows.map((row) => (
+              <div key={row.cityStateId || row.id || row.city} className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="font-semibold text-white">{row.city || 'Launch area'}{row.state ? `, ${row.state}` : ''}</p>
+                  <p className="mt-1 text-sm text-slate-400">Live {formatNumber(row.live)} · Real {formatNumber(row.real)} · Dummy {formatNumber(row.demo)} · Hidden {formatNumber(row.hidden)}</p>
+                </div>
+                <button
+                  type="button"
+                  disabled={!row.cityStateId || launchMutation.isPending}
+                  onClick={() => launchMutation.mutate({ id: row.cityStateId, payload: { hideDemo: true, hideDummyUsers: true } })}
+                  className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Launch and hide dummy data
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <div className="grid gap-5 xl:grid-cols-4">
         {[
@@ -421,8 +503,33 @@ function AdminDashboard() {
         </div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_0.65fr]">
-        <Card>
+      <section className="rounded-[1.5rem] border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:rounded-[2rem] sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Admin work queue</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">Finance, verification, and protected edits</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setAdminPanelTab('finance')}
+              className={`rounded-full border px-4 py-2 text-sm ${adminPanelTab === 'finance' ? 'border-accent-400 bg-accent-500/10 text-white' : 'border-slate-700 text-slate-300 hover:border-accent-500'}`}
+            >
+              Finance & verification
+            </button>
+            <button
+              type="button"
+              onClick={() => setAdminPanelTab('updates')}
+              className={`rounded-full border px-4 py-2 text-sm ${adminPanelTab === 'updates' ? 'border-accent-400 bg-accent-500/10 text-white' : 'border-slate-700 text-slate-300 hover:border-accent-500'}`}
+            >
+              Property edits
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <div className={`grid gap-6 ${adminPanelTab === 'finance' ? 'xl:grid-cols-[1fr_0.65fr]' : ''}`}>
+        {adminPanelTab === 'finance' ? <Card>
           <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Top lead generators</p>
           <div className="mt-5 space-y-3">
             {(analytics?.topProperties || []).map((item) => (
@@ -432,74 +539,175 @@ function AdminDashboard() {
               </button>
             ))}
           </div>
-        </Card>
-        <Card>
+        </Card> : null}
+        {adminPanelTab === 'finance' ? <Card>
           <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Move-in verification</p>
           <h2 className="mt-3 text-2xl font-semibold text-white">Cashback and commission queue</h2>
-          <div className="mt-5 space-y-3">
-            {moveIns.slice(0, 6).map((item) => (
-              <div key={item._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
-                <p className="font-semibold text-white">{item.propertyId?.propertyName || 'StayJi property'} · {item.status}</p>
-                <p className="mt-1">User: {[item.userId?.userFname, item.userId?.userLname].filter(Boolean).join(' ') || item.userId?.userEmail || '-'}</p>
-                <p className="mt-1">Commission ₹{item.commissionAmount || 0} · Cashback ₹{item.cashbackAmount || 0}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => moveInMutation.mutate({ id: item._id, status: 'Verified' })}
-                    disabled={!item.ownerConfirmed}
-                    title={!item.ownerConfirmed ? 'Owner must confirm tenant joined before reward approval.' : 'Approve reward'}
-                    className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Approve reward
-                  </button>
-                  <button type="button" onClick={() => moveInMutation.mutate({ id: item._id, status: 'Suspicious' })} className="rounded-full border border-amber-500/60 px-3 py-2 text-xs text-amber-200">Flag suspicious</button>
-                  <button type="button" onClick={() => moveInMutation.mutate({ id: item._id, status: 'Rejected' })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
-                </div>
-                {!item.ownerConfirmed ? <p className="mt-2 text-xs text-amber-200">Waiting for owner confirmation before reward approval.</p> : null}
-              </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {['Pending', 'Suspicious', 'Verified', 'Rejected', 'All'].map((tab) => (
+              <button key={tab} type="button" onClick={() => setRewardTab(tab)} className={`rounded-full border px-3 py-2 text-xs ${rewardTab === tab ? 'border-accent-400 bg-accent-500/10 text-white' : 'border-slate-700 text-slate-300'}`}>
+                {tab}
+              </button>
             ))}
-            {!moveIns.length ? <p className="text-sm text-slate-400">No move-in submissions yet.</p> : null}
           </div>
-        </Card>
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                <tr className="border-b border-slate-800">
+                  <th className="py-3 pr-4">Property</th>
+                  <th className="py-3 pr-4">User</th>
+                  <th className="py-3 pr-4">Money</th>
+                  <th className="py-3 pr-4">Status</th>
+                  <th className="py-3 pr-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 text-slate-300">
+                {rewardRows.map((item) => (
+                  <tr key={item._id}>
+                    <td className="py-3 pr-4 align-top">
+                      <p className="font-semibold text-white">{item.propertyId?.propertyName || 'StayJi property'}</p>
+                      <p className="mt-1 text-xs text-slate-500">Joined {item.joiningDate || '-'}</p>
+                    </td>
+                    <td className="py-3 pr-4 align-top">{[item.userId?.userFname, item.userId?.userLname].filter(Boolean).join(' ') || item.userId?.userEmail || '-'}</td>
+                    <td className="py-3 pr-4 align-top">Commission ₹{formatNumber(item.commissionAmount)}<br />Cashback ₹{formatNumber(item.cashbackAmount)}</td>
+                    <td className="py-3 pr-4 align-top">
+                      <span className={`rounded-full border px-3 py-1 text-xs ${statusTone[item.status] || statusTone.Pending}`}>{item.status || 'Pending'}</span>
+                      {!item.ownerConfirmed ? <p className="mt-2 text-xs text-amber-200">Owner confirmation pending</p> : null}
+                    </td>
+                    <td className="py-3 pr-4 align-top">
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => moveInMutation.mutate({ id: item._id, status: 'Verified' })} disabled={!item.ownerConfirmed} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50">Approve</button>
+                        <button type="button" onClick={() => moveInMutation.mutate({ id: item._id, status: 'Suspicious' })} className="rounded-full border border-amber-500/60 px-3 py-2 text-xs text-amber-200">Flag</button>
+                        <button type="button" onClick={() => moveInMutation.mutate({ id: item._id, status: 'Rejected' })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {!rewardRows.length ? <tr><td colSpan="5" className="py-8 text-center text-slate-400">No {rewardTab.toLowerCase()} move-in records.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+        </Card> : null}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card>
+      <div className={`grid gap-6 ${adminPanelTab === 'finance' ? '' : 'xl:grid-cols-1'}`}>
+        {adminPanelTab === 'finance' ? <Card>
           <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Finance panel</p>
           <h2 className="mt-3 text-2xl font-semibold text-white">User payouts and owner commission</h2>
-          <div className="mt-5 space-y-3">
-            {payouts.slice(0, 6).map((item) => (
-              <div key={item._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
-                <p className="font-semibold text-white">{item.userId?.userFname || item.userId?.userEmail || 'User'} · {item.status}</p>
-                <p className="mt-1">UPI {item.upiId || '-'} · Coins {item.coins || 0} · Amount ₹{item.amount || 0}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => payoutMutation.mutate({ id: item._id, status: 'Approved' })} className="rounded-full border border-cyan-500/60 px-3 py-2 text-xs text-cyan-200">Approve</button>
-                  <button type="button" onClick={() => payoutMutation.mutate({ id: item._id, status: 'Paid' })} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">Mark paid</button>
-                  <button type="button" onClick={() => payoutMutation.mutate({ id: item._id, status: 'Rejected' })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
-                </div>
-              </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {['Pending', 'Approved', 'Paid', 'Rejected', 'All'].map((tab) => (
+              <button key={tab} type="button" onClick={() => setPayoutTab(tab)} className={`rounded-full border px-3 py-2 text-xs ${payoutTab === tab ? 'border-accent-400 bg-accent-500/10 text-white' : 'border-slate-700 text-slate-300'}`}>
+                {tab}
+              </button>
             ))}
-            {!payouts.length ? <p className="text-sm text-slate-400">No payout requests yet.</p> : null}
           </div>
-        </Card>
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[680px] text-left text-sm">
+              <thead className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                <tr className="border-b border-slate-800">
+                  <th className="py-3 pr-4">User</th>
+                  <th className="py-3 pr-4">Payout details</th>
+                  <th className="py-3 pr-4">Status</th>
+                  <th className="py-3 pr-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 text-slate-300">
+                {payoutRows.map((item) => (
+                  <tr key={item._id}>
+                    <td className="py-3 pr-4 align-top">
+                      <p className="font-semibold text-white">{[item.userId?.userFname, item.userId?.userLname].filter(Boolean).join(' ') || item.userId?.userEmail || 'User'}</p>
+                      <p className="mt-1 text-xs text-slate-500">{item.userId?.contact || item.userId?.userEmail || '-'}</p>
+                    </td>
+                    <td className="py-3 pr-4 align-top">UPI {item.upiId || '-'}<br />Coins {formatNumber(item.coins)} · Amount ₹{formatNumber(item.amount)}</td>
+                    <td className="py-3 pr-4 align-top"><span className={`rounded-full border px-3 py-1 text-xs ${statusTone[item.status] || statusTone.Pending}`}>{item.status || 'Pending'}</span></td>
+                    <td className="py-3 pr-4 align-top">
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => payoutMutation.mutate({ id: item._id, status: 'Approved' })} className="rounded-full border border-cyan-500/60 px-3 py-2 text-xs text-cyan-200">Approve</button>
+                        <button type="button" onClick={() => payoutMutation.mutate({ id: item._id, status: 'Paid' })} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">Paid</button>
+                        <button type="button" onClick={() => payoutMutation.mutate({ id: item._id, status: 'Rejected' })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {!payoutRows.length ? <tr><td colSpan="4" className="py-8 text-center text-slate-400">No {payoutTab.toLowerCase()} payout requests.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+        </Card> : null}
 
-        <Card>
+        {adminPanelTab === 'updates' ? <Card>
           <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Property update approval</p>
           <h2 className="mt-3 text-2xl font-semibold text-white">Protected owner edits</h2>
-          <div className="mt-5 space-y-3">
-            {updateRequests.slice(0, 6).map((item) => (
-              <div key={item._id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
-                <p className="font-semibold text-white">{item.propertyId?.propertyName || 'Property'} · {item.status}</p>
-                <p className="mt-1 text-slate-400">Fields: {Object.keys(item.requestedChanges || {}).join(', ') || '-'}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => updateRequestMutation.mutate({ id: item._id, status: 'Approved' })} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">Approve</button>
-                  <button type="button" onClick={() => updateRequestMutation.mutate({ id: item._id, status: 'Rejected' })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
-                </div>
-              </div>
-            ))}
-            {!updateRequests.length ? <p className="text-sm text-slate-400">No protected edits pending.</p> : null}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" onClick={() => setUpdateTab('Pending')} className={`rounded-full border px-3 py-2 text-xs ${updateTab === 'Pending' ? 'border-accent-400 bg-accent-500/10 text-white' : 'border-slate-700 text-slate-300'}`}>
+              Pending ({pendingUpdateRows.length})
+            </button>
+            <button type="button" onClick={() => setUpdateTab('Reviewed')} className={`rounded-full border px-3 py-2 text-xs ${updateTab === 'Reviewed' ? 'border-accent-400 bg-accent-500/10 text-white' : 'border-slate-700 text-slate-300'}`}>
+              Reviewed ({reviewedUpdateRows.length})
+            </button>
           </div>
-        </Card>
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[920px] text-left text-sm">
+              <thead className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                <tr className="border-b border-slate-800">
+                  <th className="py-3 pr-4">Property</th>
+                  <th className="py-3 pr-4">Changed fields</th>
+                  <th className="py-3 pr-4">Status</th>
+                  <th className="py-3 pr-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 text-slate-300">
+                {updateRows.map((item) => {
+                  const fields = Object.keys(item.requestedChanges || {})
+                  const selectedFields = acceptedUpdateFields[item._id] || []
+                  return (
+                    <tr key={item._id}>
+                      <td className="py-3 pr-4 align-top">
+                        <p className="font-semibold text-white">{item.propertyId?.propertyName || 'Property'}</p>
+                        <p className="mt-1 text-xs text-slate-500">{item.propertyId?.areaName || '-'} · {item.propertyId?.cityName || '-'} · {formatDate(item.addedOn)}</p>
+                      </td>
+                      <td className="py-3 pr-4 align-top">
+                        <div className="grid gap-2">
+                          {fields.map((field) => (
+                            <label key={field} className="grid gap-1 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                              {item.status === 'Pending' ? (
+                                <span className="flex items-center gap-2 font-semibold text-white">
+                                  <input type="checkbox" checked={selectedFields.includes(field)} onChange={() => toggleAcceptedField(item._id, field)} />
+                                  {field}
+                                </span>
+                              ) : <span className="font-semibold text-white">{field}</span>}
+                              <span className="text-xs text-slate-500">Old: {valuePreview(item.previousValue?.[field])}</span>
+                              <span className="text-xs text-cyan-200">New: {valuePreview(item.requestedChanges?.[field])}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3 pr-4 align-top">
+                        <span className={`rounded-full border px-3 py-1 text-xs ${statusTone[item.status] || statusTone.Pending}`}>{item.status || 'Pending'}</span>
+                        {item.adminNote ? <p className="mt-2 text-xs text-slate-500">{item.adminNote}</p> : null}
+                      </td>
+                      <td className="py-3 pr-4 align-top">
+                        {item.status === 'Pending' ? (
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" onClick={() => updateRequestMutation.mutate({ id: item._id, status: 'Approved' })} className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">Approve all</button>
+                            <button type="button" onClick={() => updateRequestMutation.mutate({ id: item._id, status: 'Partially Approved', acceptedFields: selectedFields })} disabled={!selectedFields.length} className="rounded-full border border-cyan-500/60 px-3 py-2 text-xs text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50">Approve selected</button>
+                            <button type="button" onClick={() => updateRequestMutation.mutate({ id: item._id, status: 'Rejected' })} className="rounded-full border border-rose-500/60 px-3 py-2 text-xs text-rose-200">Reject</button>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-slate-400">
+                            <p>Approved: {Object.keys(item.approvedChanges || {}).join(', ') || '-'}</p>
+                            <p className="mt-1">Rejected: {Object.keys(item.rejectedChanges || {}).join(', ') || '-'}</p>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+                {!updateRows.length ? <tr><td colSpan="4" className="py-8 text-center text-slate-400">No {updateTab.toLowerCase()} protected edits.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+        </Card> : null}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.65fr]">

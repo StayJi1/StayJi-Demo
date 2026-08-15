@@ -23,9 +23,17 @@ propertyUpdateRequestSchema = mongoose.Schema({
     },
     status:{
         type:String,
-        enum:["Pending","Approved","Rejected"],
+        enum:["Pending","Approved","Partially Approved","Rejected"],
         default:"Pending",
         index:true
+    },
+    approvedChanges:{
+        type:Object,
+        default:{}
+    },
+    rejectedChanges:{
+        type:Object,
+        default:{}
     },
     adminId:{
         type:mongoose.Schema.Types.ObjectId,

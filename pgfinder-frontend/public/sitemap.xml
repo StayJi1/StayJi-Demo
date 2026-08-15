@@ -562,5 +562,6 @@
   <url><loc>https://stayji.com/privacy-policy</loc><changefreq>yearly</changefreq><priority>0.45</priority></url>
   <url><loc>https://stayji.com/refund-policy</loc><changefreq>yearly</changefreq><priority>0.45</priority></url>
   <url><loc>https://stayji.com/owner-policy</loc><changefreq>yearly</changefreq><priority>0.45</priority></url>
+  <url><loc>https://stayji.com/vendor-policy</loc><changefreq>yearly</changefreq><priority>0.45</priority></url>
   <url><loc>https://stayji.com/community-guidelines</loc><changefreq>yearly</changefreq><priority>0.45</priority></url>
 </urlset>

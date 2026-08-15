@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { FiColumns, FiMenu, FiX } from 'react-icons/fi'
+import { FiColumns, FiLogOut, FiMenu, FiX } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import NotificationBell from '../notifications/NotificationBell'
 
@@ -78,8 +78,9 @@ function Navbar() {
               </NavLink>
               <button
                 onClick={logout}
-                className="rounded-full border border-white/20 px-4 py-2 text-sm text-slate-200 transition hover:border-cyan-300 hover:text-white"
+                className="inline-flex items-center gap-2 rounded-full border border-rose-400/40 px-4 py-2 text-sm text-rose-100 transition hover:border-rose-300 hover:bg-rose-500/10 hover:text-white"
               >
+                <FiLogOut />
                 Sign out
               </button>
             </div>
@@ -136,8 +137,9 @@ function Navbar() {
                     logout()
                     setOpen(false)
                   }}
-                  className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-accent-500 hover:text-white"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-400/40 px-4 py-2 text-sm text-rose-100 hover:border-rose-300 hover:bg-rose-500/10 hover:text-white"
                 >
+                  <FiLogOut />
                   Sign out
                 </button>
               </>
