@@ -269,6 +269,10 @@ export const legalPages = {
     title: 'Owner Policy',
     summary: 'Owner rules for truthful listings, locality mapping, pricing, availability, image rights, lead handling, and review conduct.',
   },
+  'vendor-policy': {
+    title: 'Owner Policy',
+    summary: 'Owner rules for truthful listings, locality mapping, pricing, availability, image rights, lead handling, and review conduct.',
+  },
   'community-guidelines': {
     title: 'Community Guidelines',
     summary: 'Safety, respectful communication, anti-spam, anti-fraud, reporting, and moderation standards for StayJi users and owners.',

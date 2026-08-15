@@ -38,6 +38,11 @@ const MVP_CITY = 'Bangalore'
 const MVP_STATE = 'Karnataka'
 const MVP_CITY_REGEX = /^(bangalore|bengaluru)$/i
 
+// Simple in-memory cache for property lists to speed up repeated public requests.
+// Key: cacheKey derived from request query (page/limit/filters). Value: { ts, data, meta }
+const propertyListCache = new Map();
+const PROPERTY_CACHE_TTL_MS = Number(process.env.PROPERTY_LIST_CACHE_TTL_MS || 15000) // 15s default
+
 const wrapAsync = (handler) => (req, res, next) => {
     try {
         const result = handler(req, res, next)
@@ -553,6 +558,23 @@ const notifyAdmins = async (payload = {}) => {
     await Promise.all(admins.map((admin) => createNotification({ ...payload, recipientId: admin._id, recipientRole: 'admin' })))
 }
 
+// Server-Sent Events (SSE) broadcaster for new registrations
+const registrationSSEClients = new Set();
+const sendRegistrationEvent = (user) => {
+    try {
+        const payload = JSON.stringify({ id: user._id, name: [user.userFname, user.userLname].filter(Boolean).join(' ') || user.userName || '', email: user.userEmail, contact: user.contact, role: user.userType, addedOn: user.addedOn || user.createdAt });
+        registrationSSEClients.forEach((res) => {
+            try {
+                res.write(`event: registration\ndata: ${payload}\n\n`);
+            } catch (e) {
+                // ignore individual client errors
+            }
+        })
+    } catch (e) {
+        console.error('Failed to broadcast registration event:', e.message)
+    }
+}
+
 const recordAudit = async ({ performerId, performerRole, action, entityType, entityId, previousValue = {}, updatedValue = {}, metadata = {}, city, state } = {}) => {
     try {
         return AuditLog.create({
@@ -921,9 +943,10 @@ var upload = multer({
 });
 
 router.post('/addUser', async (req, res) => {
-    if (!toBoolean(req.body.acceptTerms) || !toBoolean(req.body.acceptPrivacy)) {
-        return res.status(422).json({ result: "failure", msg: "Accept StayJi Terms & Conditions and Privacy Policy to continue.", data: 0 });
-    }
+    try {
+        if (!toBoolean(req.body.acceptTerms) || !toBoolean(req.body.acceptPrivacy)) {
+            return res.status(422).json({ result: "failure", msg: "Accept StayJi Terms & Conditions and Privacy Policy to continue.", data: 0 });
+        }
     const consentMetadata = requestConsentMetadata(req, 'public_signup')
 
     if (!strongPasswordPattern.test(req.body.userPassword || '')) {
@@ -993,22 +1016,26 @@ router.post('/addUser', async (req, res) => {
         ],
         objUser.addedOn = new Date(),
         objUser.isActive = true;
-    const inserted = await objUser.save();
+        const inserted = await objUser.save();
 
-    if (inserted != null) {
-        await recordAudit({ action: 'account_created', entityType: 'user', entityId: inserted._id, updatedValue: { userType: officialRole, approvalStatus: objUser.approvalStatus }, metadata: { source: 'public_signup' } })
-        await syncRegistrationRecord(inserted, { loginMethod: 'Password' })
-        await notifyAdmins({
-            actorId: inserted._id,
-            type: normalizedNewRole === 'owner' ? 'new_owner' : 'new_user',
-            title: normalizedNewRole === 'owner' ? 'New owner registration' : 'New user registration',
-            message: `${inserted.userFname || inserted.userEmail} registered as ${officialRole}.`,
-            link: '/dashboard/admin/users',
-            metadata: { role: officialRole, email: inserted.userEmail },
-        })
-        res.status(201).json({ result: "success", msg: normalizedNewRole === 'owner' ? "Owner account created. Admin approval is required before listing properties." : "User Inserted", data: 1 });
-    } else {
-        res.status(500).json({ result: "failure", msg: "User Not Inserted", data: 0 });
+        if (inserted != null) {
+            await recordAudit({ action: 'account_created', entityType: 'user', entityId: inserted._id, updatedValue: { userType: officialRole, approvalStatus: objUser.approvalStatus }, metadata: { source: 'public_signup' } })
+            await syncRegistrationRecord(inserted, { loginMethod: 'Password' })
+            await notifyAdmins({
+                actorId: inserted._id,
+                type: normalizedNewRole === 'owner' ? 'new_owner' : 'new_user',
+                title: normalizedNewRole === 'owner' ? 'New owner registration' : 'New user registration',
+                message: `${inserted.userFname || inserted.userEmail} registered as ${officialRole}.`,
+                link: '/dashboard/admin/users',
+                metadata: { role: officialRole, email: inserted.userEmail },
+            })
+            try { sendRegistrationEvent(inserted) } catch (e) { console.error(JSON.stringify({ event: 'sse_broadcast_error', message: e?.message })) }
+            return res.status(201).json({ result: "success", msg: normalizedNewRole === 'owner' ? "Owner account created. Admin approval is required before listing properties." : "User Inserted", data: 1 });
+        }
+        return res.status(500).json({ result: "failure", msg: "User Not Inserted", data: 0 });
+    } catch (error) {
+        console.error(JSON.stringify({ event: 'addUser_error', message: error?.message, stack: error?.stack }))
+        return res.status(500).json({ result: 'failure', msg: 'Internal server error', data: null })
     }
 });
 
@@ -1099,6 +1126,7 @@ router.post('/googleAuth', async (req, res) => {
             link: '/dashboard/admin/users',
             metadata: { role: officialGoogleRole, email: inserted.userEmail, loginMethod: 'Google' },
         })
+        sendRegistrationEvent(inserted)
         const token = signAuthToken(inserted)
         inserted.userPassword = undefined;
         res.status(201).json({ result: "success", msg: "Google signup successful", data: inserted, token, role: tokenRoleName(inserted.userType) });
@@ -1119,15 +1147,65 @@ router.get('/getUserList', attachAuthenticatedUser, requireRoles(['admin']), asy
     }
 });
 
-router.post('/loginByUser', async (req, res) => {
-
-    const loginEmail = normalizeText(req.body.userEmail || '').toLowerCase()
-    if (!loginEmail || !req.body.userPassword) {
-        return res.status(422).json({ result: "failure", msg: "Email and password are required.", data: null });
+// SSE endpoint for admin dashboards to receive real-time registrations
+router.get('/admin/registrations/stream', (req, res) => {
+    // allow token via query for EventSource since browsers don't allow custom headers with EventSource
+    const token = req.query.token || getBearerToken(req)
+    if (!token) return res.status(401).end()
+    try {
+        const decoded = jwt.verify(token, jwtSecret)
+        // ensure the user exists and is admin
+        User.findOne({ _id: decoded.id || decoded.userId, isActive: true }).select('userType').then((user) => {
+            if (!user || normalizeAccountType(user.userType) !== 'admin') return res.status(403).end()
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.flushHeaders && res.flushHeaders();
+            // initial ping
+            res.write('retry: 10000\n\n');
+            registrationSSEClients.add(res);
+            req.on('close', () => {
+                registrationSSEClients.delete(res);
+            });
+        }).catch(() => res.status(401).end())
+    } catch (e) {
+        return res.status(401).end()
     }
-    const objUser = await User.findOne({ userEmail: new RegExp(`^${escapeRegex(loginEmail)}$`, 'i'), isActive: true });
+});
 
-    if (objUser != null && verifyPassword(req.body.userPassword, objUser.userPassword)) {
+// Export users as CSV for admin download (accepts token via query for direct browser download)
+router.get('/exportUsers', async (req, res) => {
+    const token = req.query.token || getBearerToken(req)
+    if (!token) return res.status(401).json({ result: 'failure', msg: 'Authentication required' })
+    let adminUser
+    try {
+        const decoded = jwt.verify(token, jwtSecret)
+        adminUser = await User.findOne({ _id: decoded.id || decoded.userId, isActive: true }).select('userType')
+    } catch (e) {
+        return res.status(401).json({ result: 'failure', msg: 'Invalid token' })
+    }
+    if (!adminUser || normalizeAccountType(adminUser.userType) !== 'admin') return res.status(403).json({ result: 'failure', msg: 'Admin access required' })
+    const users = await User.find(adminUserCityScope({})).select('-userPassword -resetOtp -resetOtpExpiresAt').lean();
+    const headers = ['id', 'stayjiId', 'name', 'email', 'contact', 'role', 'city', 'state', 'accountStatus', 'approvalStatus', 'verificationStatus', 'isVerified', 'isDummy', 'recordStatus', 'lastLogin', 'addedOn'];
+    const rows = users.map((u) => [u._id, stayjiIdFromObjectId(u._id), [u.userFname, u.userLname].filter(Boolean).join(' ') || u.userName || '', u.userEmail || '', u.contact || '', u.userType || '', u.city || u.assignedCity || '', u.state || u.assignedState || '', u.accountStatus || '', u.approvalStatus || '', u.verificationStatus || '', u.isVerified ? 'Yes' : 'No', u.isDummy ? 'Dummy' : 'Live', u.status || '', u.lastLogin || '', u.addedOn || u.createdAt || '']);
+    const csv = [headers.join(','), ...rows.map((r) => r.map((cell) => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','))].join('\n');
+    res.setHeader('Content-Disposition', `attachment; filename="users-${Date.now()}.csv"`);
+    res.setHeader('Content-Type', 'text/csv');
+    res.send(csv);
+});
+
+router.post('/loginByUser', async (req, res) => {
+    try {
+        const loginEmail = normalizeText(req.body.userEmail || '').toLowerCase()
+        if (!loginEmail || !req.body.userPassword) {
+            return res.status(422).json({ result: "failure", msg: "Email and password are required.", data: null });
+        }
+        const objUser = await User.findOne({ userEmail: new RegExp(`^${escapeRegex(loginEmail)}$`, 'i'), isActive: true });
+
+        if (!objUser) {
+            return res.status(404).json({ result: "fail", msg: "No active StayJi account was found with this email.", data: null });
+        }
+        if (verifyPassword(req.body.userPassword, objUser.userPassword)) {
         if (['suspended', 'blocked'].includes(objUser.accountStatus)) {
             return res.status(403).json({ result: "fail", msg: "This account is not active. Contact StayJi admin support.", data: null });
         }
@@ -1156,12 +1234,14 @@ router.post('/loginByUser', async (req, res) => {
         )
         objUser.lastLogin = loginEntry.loginAt
         objUser.loginHistory = [loginEntry, ...(objUser.loginHistory || [])].slice(0, 25)
-        const token = signAuthToken(objUser)
-        objUser.userPassword = undefined
-        res.json({ result: "success", msg: "login Successfully", data: objUser, token, role: tokenRoleName(objUser.userType) });
-    }
-    else {
-        res.status(401).json({ result: "fail", msg: "Invalid email or password.", data: null });
+            const token = signAuthToken(objUser)
+            objUser.userPassword = undefined
+            return res.json({ result: "success", msg: "login Successfully", data: objUser, token, role: tokenRoleName(objUser.userType) });
+        }
+        return res.status(401).json({ result: "fail", msg: "Password is incorrect for this StayJi account.", data: null });
+    } catch (error) {
+        console.error(JSON.stringify({ event: 'login_error', message: error?.message, stack: error?.stack }))
+        return res.status(500).json({ result: 'failure', msg: 'Internal server error', data: null })
     }
 });
 
@@ -1274,6 +1354,13 @@ router.get('/getPropertyList', async (req, res) => {
     if (req.query.status) publicFilters.status = req.query.status
     const cityGate = await publicCityGate()
     const filters = { $and: [publicPropertyQuery, publicFilters, ...(cityGate ? [cityGate] : [])] }
+    // Build a cache key consisting of filters, page and limit so identical requests are fast.
+    const cacheKey = JSON.stringify({ q: req.query, page, limit })
+    const cached = propertyListCache.get(cacheKey)
+    if (cached && (Date.now() - cached.ts) < PROPERTY_CACHE_TTL_MS) {
+        return res.json({ result: 'success', msg: 'Property List Found (cached)', data: cached.data, meta: cached.meta })
+    }
+
     const [total, objProperty] = await Promise.all([
         Property.countDocuments(filters),
         Property.find(filters)
@@ -1286,6 +1373,9 @@ router.get('/getPropertyList', async (req, res) => {
             .lean()
     ])
     if (objProperty != null) {
+        try {
+            propertyListCache.set(cacheKey, { ts: Date.now(), data: objProperty, meta: { page, limit, total, pages: Math.ceil(total / limit) } })
+        } catch (e) { /* ignore cache set failures */ }
         res.json({ result: "success", msg: "Property List Found", data: objProperty, meta: { page, limit, total, pages: Math.ceil(total / limit) } });
 
     } else {
@@ -2328,6 +2418,7 @@ router.post('/addProperty', attachAuthenticatedUser, requireRoles(['owner']), up
             link: `/dashboard/admin/properties/${inserted._id}`,
             metadata: { approvalStatus: inserted.approvalStatus, city: inserted.cityName },
         })
+        try { propertyListCache.clear() } catch (e) { }
         res.status(201).json({ result: "success", msg: "Property Inserted", data: inserted._id });
     } else {
         res.status(500).json({ result: "failure", msg: "Property Not Inserted", data: 0 });
@@ -2853,6 +2944,7 @@ router.post('/updateProperty', attachAuthenticatedUser, requireRoles(['owner', '
                 metadata: { changedFields: Object.keys(updateFields) },
             })
         }
+        try { propertyListCache.clear() } catch (e) { }
         res.json({ result: "success", msg: "Property Updated", data: objProperty })
     } else {
         const existingProperty = await Property.findOne({ _id: req.body.id, isActive: true })
@@ -2904,6 +2996,7 @@ router.post('/deleteProperty', attachAuthenticatedUser, requireRoles(['owner', '
             link: `/dashboard/admin/properties/${property._id}`,
             metadata: { previousStatus: property.status, deletedBy: req.auth.role },
         })
+        try { propertyListCache.clear() } catch (e) { }
         res.json({ result: "success", msg: "Property deleted successfully", data: 1 })
     } else {
         res.json({ result: "failure", msg: "Property could not be deleted", data: 0 })
@@ -3637,17 +3730,35 @@ router.get('/property-update-requests', attachAuthenticatedUser, requireRoles(['
 })
 
 router.post('/property-update-requests/:id/review', attachAuthenticatedUser, requireRoles(['admin']), async (req, res) => {
-    const status = ['Approved', 'Rejected'].includes(req.body.status) ? req.body.status : 'Rejected'
+    const status = ['Approved', 'Partially Approved', 'Rejected'].includes(req.body.status) ? req.body.status : 'Rejected'
     const request = await PropertyUpdateRequest.findOne({ _id: req.params.id, isActive: true })
     if (!request) return res.json({ result: 'failure', msg: 'Update request not found.', data: null })
     if (req.auth?.role === 'admin') {
         const property = await Property.findOne({ _id: request.propertyId, ...adminCityScope(req) }).select('_id')
         if (!property) return res.status(403).json({ result: 'failure', msg: 'Admins can only review Bangalore property update requests during the MVP launch.', data: null })
     }
-    if (status === 'Approved') await Property.updateOne({ _id: request.propertyId }, { $set: request.requestedChanges })
-    const updated = await PropertyUpdateRequest.findOneAndUpdate({ _id: request._id }, { $set: { status, adminId: req.body.adminId, adminNote: req.body.adminNote || '', reviewedOn: new Date() } }, { new: true })
-    await recordAudit({ performerId: req.body.adminId, performerRole: req.body.performerRole || 'Admin', action: 'property_update_request_reviewed', entityType: 'property', entityId: request.propertyId, previousValue: request.previousValue, updatedValue: status === 'Approved' ? request.requestedChanges : { rejected: request.requestedChanges } })
-    await createNotification({ recipientId: request.ownerId, recipientRole: 'vendor', propertyId: request.propertyId, type: 'property_update_request', title: `Update request ${status.toLowerCase()}`, message: status === 'Approved' ? 'Admin approved your protected property update.' : 'Admin rejected your protected property update.', link: `/dashboard/owner/properties/${request.propertyId}` })
+    const requestedChanges = request.requestedChanges || {}
+    const requestedKeys = Object.keys(requestedChanges)
+    const acceptedFields = Array.isArray(req.body.acceptedFields) ? req.body.acceptedFields.filter((field) => requestedKeys.includes(field)) : []
+    const approvedChanges = status === 'Approved'
+        ? requestedChanges
+        : status === 'Partially Approved'
+            ? acceptedFields.reduce((acc, field) => ({ ...acc, [field]: requestedChanges[field] }), {})
+            : {}
+    const rejectedChanges = status === 'Rejected'
+        ? requestedChanges
+        : requestedKeys.filter((field) => approvedChanges[field] === undefined).reduce((acc, field) => ({ ...acc, [field]: requestedChanges[field] }), {})
+    if (['Approved', 'Partially Approved'].includes(status) && Object.keys(approvedChanges).length) {
+        await Property.updateOne({ _id: request.propertyId }, { $set: approvedChanges })
+        try { propertyListCache.clear() } catch (e) { }
+    }
+    const updated = await PropertyUpdateRequest.findOneAndUpdate(
+        { _id: request._id },
+        { $set: { status, approvedChanges, rejectedChanges, adminId: req.body.adminId, adminNote: req.body.adminNote || '', reviewedOn: new Date() } },
+        { new: true }
+    ).populate('propertyId ownerId adminId', ['propertyName', 'cityName', 'areaName', 'userFname', 'userLname', 'userEmail'])
+    await recordAudit({ performerId: req.body.adminId, performerRole: req.body.performerRole || 'Admin', action: 'property_update_request_reviewed', entityType: 'property', entityId: request.propertyId, previousValue: request.previousValue, updatedValue: { status, approvedChanges, rejectedChanges } })
+    await createNotification({ recipientId: request.ownerId, recipientRole: 'vendor', propertyId: request.propertyId, type: 'property_update_request', title: `Update request ${status.toLowerCase()}`, message: status === 'Approved' ? 'Admin approved your protected property update.' : status === 'Partially Approved' ? 'Admin approved selected protected property updates.' : 'Admin rejected your protected property update.', link: `/dashboard/owner/properties/${request.propertyId}` })
     res.json({ result: 'success', msg: 'Property update request reviewed.', data: updated })
 })
 
@@ -3885,6 +3996,14 @@ const getAdminUsersHandler = async (req, res) => {
     const filters = {}
     if (req.query.status === 'inactive') filters.isActive = false
     else if (req.query.status !== 'all') filters.isActive = true
+    if (req.query.dummyMode === 'demo' || req.query.demoLive === 'demo' || req.query.userMode === 'dummy') filters.isDummy = true
+    if (req.query.dummyMode === 'real' || req.query.demoLive === 'live' || req.query.userMode === 'live') filters.isDummy = { $ne: true }
+    if (req.query.verificationStatus && req.query.verificationStatus !== 'all') {
+        if (req.query.verificationStatus === 'verified') Object.assign(filters, { isVerified: true, verificationStatus: 'Verified' })
+        else if (req.query.verificationStatus === 'unverified') filters.isVerified = { $ne: true }
+        else filters.verificationStatus = req.query.verificationStatus
+    }
+    if (req.query.approvalStatus && req.query.approvalStatus !== 'all') filters.approvalStatus = req.query.approvalStatus
     const requestedRole = req.query.role && req.query.role !== 'all' ? req.query.role : ''
     const protectedRoles = accountTypeVariants('Admin')
     if (requestedRole) filters.userType = { $in: accountTypeVariants(requestedRole) }
@@ -3961,6 +4080,11 @@ router.get('/getAdminUsers', getAdminUsersHandler)
 const updateUserStatusHandler = async (req, res) => {
     const updateFields = {}
     if (req.body.isActive !== undefined) updateFields.isActive = req.body.isActive === true || req.body.isActive === 'true'
+    if (req.body.isDummy !== undefined) {
+        updateFields.isDummy = toBoolean(req.body.isDummy)
+        updateFields.status = updateFields.isDummy ? 'demo' : 'active'
+    }
+    if (req.body.status !== undefined) updateFields.status = req.body.status
     if (req.body.verificationStatus !== undefined) updateFields.verificationStatus = req.body.verificationStatus
     if (req.body.approvalStatus !== undefined) updateFields.approvalStatus = req.body.approvalStatus
     if (req.body.accountStatus !== undefined) updateFields.accountStatus = req.body.accountStatus
@@ -4001,6 +4125,42 @@ const updateUserStatusHandler = async (req, res) => {
 }
 
 router.post('/updateUserStatus', updateUserStatusHandler)
+
+router.post('/users/bulk', async (req, res) => {
+    if (!isAdminRequest(req)) {
+        return res.status(403).json({ result: 'failure', msg: 'Only Admin can update users in bulk.', data: null })
+    }
+    const ids = (req.body.ids || []).filter((id) => mongoose.Types.ObjectId.isValid(id)).map((id) => new mongoose.Types.ObjectId(id))
+    const update = {}
+    if (req.body.action === 'mark_live') Object.assign(update, { isDummy: false, status: 'active', isActive: true })
+    if (req.body.action === 'mark_dummy' || req.body.action === 'mark_demo') Object.assign(update, { isDummy: true, status: 'demo', isActive: true })
+    if (req.body.action === 'suspend') Object.assign(update, { isActive: false, accountStatus: 'suspended', status: 'suspended', forceLogoutAt: new Date() })
+    if (req.body.action === 'activate') Object.assign(update, { isActive: true, accountStatus: 'active', status: 'active' })
+    if (req.body.action === 'archive_dummy') Object.assign(update, { isDummy: true, status: 'archived', isActive: false, forceLogoutAt: new Date() })
+    if (req.body.isDummy !== undefined) Object.assign(update, { isDummy: toBoolean(req.body.isDummy), status: toBoolean(req.body.isDummy) ? 'demo' : 'active' })
+    if (req.body.isActive !== undefined) update.isActive = toBoolean(req.body.isActive)
+    if (req.body.status) update.status = req.body.status
+    if (!ids.length || !Object.keys(update).length) return res.json({ result: 'failure', msg: 'No users selected', data: { modifiedCount: 0 } })
+
+    const protectedRoles = accountTypeVariants('Admin')
+    const scopedFilter = { _id: { $in: ids }, userType: { $nin: protectedRoles } }
+    const userScope = adminUserCityScope(req)
+    if (userScope.$or) scopedFilter.$and = [userScope]
+    const previousRows = await User.find(scopedFilter).select('_id userEmail userType city assignedCity assignedState isDummy status isActive accountStatus').lean()
+    const result = await User.updateMany(scopedFilter, { $set: update })
+    await recordAudit({
+        performerId: req.body.adminId || req.body.performerId || req.auth?.user?._id,
+        performerRole: req.body.performerRole || req.auth?.user?.userType || 'Admin',
+        action: `bulk_${req.body.action || 'user_update'}`,
+        entityType: 'user',
+        previousValue: { count: previousRows.length, sample: previousRows.slice(0, 5) },
+        updatedValue: update,
+        metadata: { ids: previousRows.map((row) => row._id), modifiedCount: result.modifiedCount || 0 },
+        city: adminAssignedCity(req) || req.body.city || previousRows[0]?.assignedCity || previousRows[0]?.city,
+        state: req.body.state || previousRows[0]?.assignedState,
+    })
+    res.json({ result: 'success', msg: 'Bulk user update complete', data: { modifiedCount: result.modifiedCount || 0 } })
+})
 
 router.post('/users/:id', async (req, res) => {
     const updateFields = {}
@@ -4044,6 +4204,7 @@ router.post('/users/:id', async (req, res) => {
         updateFields.isActive = req.body.accountStatus === 'active'
     }
     if (req.body.verificationStatus !== undefined) updateFields.verificationStatus = req.body.verificationStatus
+    if (req.body.approvalStatus !== undefined) updateFields.approvalStatus = req.body.approvalStatus
     if (!Object.keys(updateFields).length) return res.json({ result: 'failure', msg: 'No editable user fields supplied.', data: null })
 
     if (updateFields.userEmail) {
@@ -4078,12 +4239,12 @@ router.post('/users/:id', async (req, res) => {
 
 router.post('/requestPasswordReset', async (req, res) => {
     const email = (req.body.userEmail || req.body.email || '').trim()
+    if (!email) return res.status(422).json({ result: 'failure', msg: 'Enter your registered email address.', data: 0 })
     const user = await User.findOne({ userEmail: new RegExp(`^${email}$`, 'i'), isActive: true })
-    if (user) {
-        const otp = `${Math.floor(100000 + Math.random() * 900000)}`
-        await User.updateOne({ _id: user._id }, { resetOtp: hashPassword(otp), resetOtpExpiresAt: new Date(Date.now() + 10 * 60 * 1000) })
-    }
-    res.json({ result: 'success', msg: 'If this email exists, a verification code has been sent.', data: 1 })
+    if (!user) return res.status(404).json({ result: 'failure', msg: 'No active StayJi account was found with this email.', data: 0 })
+    const otp = `${Math.floor(100000 + Math.random() * 900000)}`
+    await User.updateOne({ _id: user._id }, { resetOtp: hashPassword(otp), resetOtpExpiresAt: new Date(Date.now() + 10 * 60 * 1000) })
+    res.json({ result: 'success', msg: 'Account found. A verification code has been generated for password reset.', data: 1 })
 })
 
 router.post('/resetPasswordWithOtp', async (req, res) => {
@@ -4454,6 +4615,7 @@ router.post('/properties/:id/status', async (req, res) => {
         if (update.approvalStatus && ['Approved', 'Verified'].includes(update.approvalStatus)) {
             await notifySavedSearchMatches(updated)
         }
+        try { propertyListCache.clear() } catch (e) { }
     }
     res.json({ result: updated ? 'success' : 'failure', msg: updated ? 'Property updated' : 'Property not found', data: updated ? propertyDto(updated) : null })
 })
@@ -4526,6 +4688,7 @@ router.post('/properties/bulk', async (req, res) => {
         message: `Admin updated ${row.propertyName}.`,
         link: `/dashboard/vendor/properties/${row._id}`,
     })))
+    try { propertyListCache.clear() } catch (e) { }
     res.json({ result: 'success', msg: 'Bulk property update complete', data: { modifiedCount: result.modifiedCount || 0 } })
 })
 
@@ -4752,15 +4915,24 @@ router.post('/city-states/:id/launch', requireAdminGovernance, async (req, res) 
     if (!isBangaloreValue(city.cityName)) return res.status(403).json({ result: 'failure', msg: 'StayJi MVP only supports Bangalore launch controls.', data: null })
 
     const cityFilter = { cityName: new RegExp(`^${city.cityName}$`, 'i') }
+    const userCityFilter = {
+        $or: [
+            { city: new RegExp(`^${city.cityName}$`, 'i') },
+            { assignedCity: new RegExp(`^${city.cityName}$`, 'i') },
+        ],
+        userType: { $nin: accountTypeVariants('Admin') },
+    }
     const [realListings, demoListings] = await Promise.all([
         Property.countDocuments({ ...cityFilter, isDummy: false }),
         Property.countDocuments({ ...cityFilter, isDummy: true }),
     ])
     const readiness = realListings + demoListings ? Math.min(100, Math.round((realListings / Math.max(realListings + demoListings, 1)) * 100)) : 0
     const hideDemo = req.body.hideDemo !== false
+    const hideDummyUsers = req.body.hideDummyUsers !== false
 
-    const [demoUpdate, realUpdate, updatedCity] = await Promise.all([
+    const [demoUpdate, dummyUserUpdate, realUpdate, updatedCity] = await Promise.all([
         hideDemo ? Property.updateMany({ ...cityFilter, isDummy: true }, { $set: { status: 'archived', isActive: false } }) : Promise.resolve({ modifiedCount: 0 }),
+        hideDemo && hideDummyUsers ? User.updateMany({ ...userCityFilter, isDummy: true }, { $set: { status: 'archived', isActive: false, forceLogoutAt: new Date() } }) : Promise.resolve({ modifiedCount: 0 }),
         Property.updateMany({ ...cityFilter, isDummy: false, status: { $nin: ['archived', 'suspended'] }, isActive: true }, { $set: { boostScore: 25 } }),
         CityState.findOneAndUpdate(
             { _id: city._id },
@@ -4776,15 +4948,16 @@ router.post('/city-states/:id/launch', requireAdminGovernance, async (req, res) 
         entityType: 'city_state',
         entityId: city._id,
         previousValue: { status: city.status || 'demo', dummyVisible: city.dummyVisible, realListings, demoListings },
-        updatedValue: { status: 'live', hideDemo, demoModified: demoUpdate.modifiedCount || 0, realModified: realUpdate.modifiedCount || 0, launchReadiness: readiness },
+        updatedValue: { status: 'live', hideDemo, hideDummyUsers, demoModified: demoUpdate.modifiedCount || 0, dummyUsersModified: dummyUserUpdate.modifiedCount || 0, realModified: realUpdate.modifiedCount || 0, launchReadiness: readiness },
         city: city.cityName,
         state: city.stateName,
     })
+    try { propertyListCache.clear() } catch (e) { }
 
     res.json({
         result: 'success',
-        msg: `${city.cityName} launched. Demo listings ${hideDemo ? 'hidden' : 'kept visible'} and real listings prioritized.`,
-        data: { city: updatedCity, demoModified: demoUpdate.modifiedCount || 0, realModified: realUpdate.modifiedCount || 0, launchReadiness: readiness },
+        msg: `${city.cityName} launched. Demo listings ${hideDemo ? 'hidden' : 'kept visible'}, dummy users ${hideDemo && hideDummyUsers ? 'hidden' : 'kept active'}, and real listings prioritized.`,
+        data: { city: updatedCity, demoModified: demoUpdate.modifiedCount || 0, dummyUsersModified: dummyUserUpdate.modifiedCount || 0, realModified: realUpdate.modifiedCount || 0, launchReadiness: readiness },
     })
 })
 

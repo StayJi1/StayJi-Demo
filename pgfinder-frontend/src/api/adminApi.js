@@ -37,6 +37,16 @@ const normalizeUser = (user = {}) => ({
   lastLogin: user.lastLogin || user.lastLoginAt || user.updatedAt || user.addedOn,
   createdAt: user.createdAt || user.addedOn,
   updatedAt: user.updatedAt,
+  isDummy: Boolean(user.isDummy),
+  status: user.status || (user.isDummy ? 'demo' : 'active'),
+  approvalStatus: user.approvalStatus,
+  verificationStatus: user.verificationStatus,
+  isVerified: Boolean(user.isVerified),
+  assignedCity: user.assignedCity,
+  assignedState: user.assignedState,
+  businessName: user.businessName,
+  vendorType: user.vendorType,
+  permissions: user.permissions || [],
 })
 
 const adminApi = {
@@ -66,6 +76,7 @@ const adminApi = {
   }),
   updateUser: (id, payload) => axiosClient.post(`/api/admin/users/${id}`, payload).then((res) => normalizeUser(unwrap(res, null))),
   updateUserStatus: (id, payload) => axiosClient.post(`/api/admin/users/${id}/status`, payload).then((res) => normalizeUser(unwrap(res, null))),
+  bulkUsers: (payload) => axiosClient.post('/api/admin/users/bulk', payload).then((res) => unwrap(res, null)),
   leads: (params) => axiosClient.get('/api/admin/leads', { params: paramsWithDefaults(params) }).then((res) => unwrap(res, { items: [] })),
   vendorMessages: (id, params) => axiosClient.get(`/api/admin/vendors/${id}/messages`, { params }).then((res) => unwrap(res, [])),
   ownerMessages: (id, params) => axiosClient.get(`/api/admin/vendors/${id}/messages`, { params }).then((res) => unwrap(res, [])),

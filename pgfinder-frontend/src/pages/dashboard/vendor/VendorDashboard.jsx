@@ -182,7 +182,7 @@ function OwnerDashboard() {
           <div className="mt-6 space-y-4">
             {properties.slice(0, 4).map((property) => (
               <div key={property.id || property._id} className="grid gap-4 rounded-3xl border border-slate-800 bg-slate-950/70 p-4 sm:grid-cols-[96px_1fr_auto] sm:items-center">
-                <img src={property.image} alt={property.name || 'Owner property'} className="h-24 w-full rounded-2xl object-cover sm:w-24" />
+                <img src={property.image} alt={property.name || 'Owner property'} loading="lazy" className="h-24 w-full rounded-2xl object-cover sm:w-24" />
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-white">{property.name || 'Untitled property'}</p>
                   <p className="mt-1 truncate text-sm text-slate-400">{property.area || property.areaName || property.city || property.address || 'Location not set'}</p>

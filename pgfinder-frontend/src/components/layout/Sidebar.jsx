@@ -43,7 +43,7 @@ function Sidebar() {
 
   return (
     <aside className="sticky top-0 z-[1000] flex min-w-0 flex-col border-b border-slate-800/90 bg-surface-900 p-4 text-slate-200 lg:min-h-screen lg:border-b-0 lg:border-r lg:p-6">
-      <div className="mb-0 flex items-center gap-3 lg:mb-10">
+      <div className="mb-0 flex items-center gap-3 lg:mb-4">
         <div className="inline-flex h-12 w-12 overflow-hidden rounded-3xl bg-white shadow-glow">
           <img src="/stayji-logo.png" alt="StayJi" className="h-full w-full object-cover" />
         </div>
@@ -55,6 +55,18 @@ function Sidebar() {
           <NotificationBell />
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={() => {
+          logout()
+          navigate('/login', { replace: true })
+        }}
+        className="mb-8 hidden items-center gap-3 rounded-3xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-100 transition hover:border-rose-300 hover:bg-rose-500/20 hover:text-white lg:flex"
+      >
+        <FiLogOut />
+        Logout
+      </button>
 
       <nav className="fixed inset-x-2 bottom-2 z-40 flex gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-card backdrop-blur-xl sm:inset-x-3 sm:bottom-3 sm:rounded-3xl lg:static lg:block lg:space-y-2 lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
         {links.map((link) => (
@@ -71,19 +83,19 @@ function Sidebar() {
             <span className="w-full truncate">{link.label}</span>
           </NavLink>
         ))}
+        <button
+          type="button"
+          onClick={() => {
+            logout()
+            navigate('/login', { replace: true })
+          }}
+          className="flex min-w-[4.25rem] flex-1 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-center text-[10px] font-medium text-rose-200 transition hover:bg-rose-500/10 hover:text-white sm:min-w-[4.75rem] sm:rounded-2xl sm:text-[11px] lg:hidden"
+        >
+          <span className="text-lg"><FiLogOut /></span>
+          <span className="w-full truncate">Logout</span>
+        </button>
       </nav>
 
-      <button
-        type="button"
-        onClick={() => {
-          logout()
-          navigate('/login', { replace: true })
-        }}
-        className="mt-4 hidden items-center gap-3 rounded-3xl px-4 py-3 text-sm font-medium text-slate-400 transition hover:bg-slate-800/80 hover:text-white lg:mt-auto lg:flex"
-      >
-        <FiLogOut />
-        Logout
-      </button>
     </aside>
   )
 }

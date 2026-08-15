@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { baseURL } from '../../../api/axiosClient'
 import { FiCheckSquare, FiEye, FiX } from 'react-icons/fi'
 import Card from '../../../components/common/Card'
 import AdvancedDataTable from '../../../components/admin/AdvancedDataTable'
@@ -12,9 +13,10 @@ function ManageUsersPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { role: currentRole } = useAuth()
+  const { role: currentRole, token } = useAuth()
   const initialRole = searchParams.get('role') || 'all'
-  const [filters, setFilters] = useState({ search: '', role: initialRole, ownerType: 'all', city: '', status: 'all' })
+  const initialDemoLive = searchParams.get('demoLive') || ''
+  const [filters, setFilters] = useState({ search: '', role: initialRole, ownerType: 'all', city: '', status: 'all', demoLive: initialDemoLive, verificationStatus: 'all', approvalStatus: 'all' })
   const [selectedUser, setSelectedUser] = useState(null)
   const [editUser, setEditUser] = useState(null)
   const [error, setError] = useState('')
@@ -29,6 +31,29 @@ function ManageUsersPage() {
     limit: 80,
   }
   const { data: users = [], isLoading: loading } = useQuery({ queryKey: ['admin-users', queryFilters], queryFn: () => adminApi.users(queryFilters), refetchInterval: 30_000 })
+
+  // Setup SSE for live registrations when admin is viewing this page
+  useEffect(() => {
+    if (!token || currentRole !== 'admin') return undefined
+    const streamUrl = `${baseURL.replace(/\/$/, '')}/client/admin/registrations/stream?token=${encodeURIComponent(token)}`
+    const evt = new EventSource(streamUrl)
+    const onRegistration = () => {
+      try {
+        // refresh the admin users list when a new registration arrives
+        queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      } catch {
+        // Event delivery should never interrupt the admin table.
+      }
+    }
+    evt.addEventListener('registration', onRegistration)
+    evt.onerror = () => {}
+    return () => {
+      evt.removeEventListener('registration', onRegistration)
+      try { evt.close() } catch {
+        // Ignore cleanup errors during unmount.
+      }
+    }
+  }, [token, currentRole, queryClient])
   const statusMutation = useMutation({
     mutationFn: ({ user, payload }) => adminApi.updateUserStatus(user.id || user._id, payload),
     onSuccess: (updated) => {
@@ -54,6 +79,15 @@ function ManageUsersPage() {
     },
     onError: (err) => setError(err?.message || 'Unable to reset password.'),
   })
+  const bulkUserMutation = useMutation({
+    mutationFn: (payload) => adminApi.bulkUsers(payload),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      setError('')
+      setPasswordMessage(`${result?.modifiedCount || 0} users updated.`)
+    },
+    onError: (err) => setError(err?.message || 'Unable to update selected users.'),
+  })
 
   const handleStatus = async (user, isActive) => {
     if (!user) return
@@ -70,6 +104,17 @@ function ManageUsersPage() {
     } catch (err) {
       setError(err?.message || 'Unable to verify owner.')
     }
+  }
+  const markUserMode = (user, isDummy) => {
+    if (!user) return
+    statusMutation.mutate({ user, payload: { isDummy, isActive: true, status: isDummy ? 'demo' : 'active' } })
+  }
+  const runBulkUserAction = (ids, action) => {
+    if (!ids.length) {
+      setError('Select users first, then choose a bulk action.')
+      return
+    }
+    bulkUserMutation.mutate({ ids, action })
   }
 
   const userColumns = [
@@ -100,6 +145,18 @@ function ManageUsersPage() {
       ),
     },
     { key: 'phone', label: 'Phone', value: (user) => user.contact || '-' },
+    {
+      key: 'dataMode',
+      label: 'Data mode',
+      value: (user) => (user.isDummy ? 'Dummy' : 'Live'),
+      render: (user) => (
+        <span className={`rounded-full border px-3 py-1 text-xs ${
+          user.isDummy
+            ? 'border-amber-500/50 bg-amber-500/10 text-amber-200'
+            : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
+        }`}>{user.isDummy ? 'DUMMY' : 'LIVE'}</span>
+      ),
+    },
     { key: 'verification', label: 'Verification', value: (user) => user.verificationStatus || 'Pending' },
     {
       key: 'status',
@@ -125,6 +182,13 @@ function ManageUsersPage() {
           </button>
           <button type="button" onClick={() => setEditUser(user)} className="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-cyan-400 hover:text-cyan-200">
             Edit
+          </button>
+          <button type="button" onClick={() => markUserMode(user, !user.isDummy)} className={`rounded-full border px-3 py-2 text-xs ${
+            user.isDummy
+              ? 'border-emerald-500/60 text-emerald-200'
+              : 'border-amber-500/60 text-amber-200'
+          }`}>
+            {user.isDummy ? 'Mark live' : 'Mark dummy'}
           </button>
           {['owner', 'owner'].includes(user.role) ? (
             <button type="button" onClick={() => handleOwnerVerification(user)} className="inline-flex items-center gap-2 rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">
@@ -158,7 +222,7 @@ function ManageUsersPage() {
       </header>
 
       <Card>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <input
             type="search"
             value={filters.search}
@@ -201,6 +265,38 @@ function ManageUsersPage() {
             <option value="inactive">Inactive</option>
             <option value="all">All status</option>
           </select>
+          <select
+            value={filters.demoLive}
+            onChange={(event) => setFilters((current) => ({ ...current, demoLive: event.target.value }))}
+            className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400"
+          >
+            <option value="">Live and dummy</option>
+            <option value="live">Live users only</option>
+            <option value="demo">Dummy users only</option>
+          </select>
+          <select
+            value={filters.verificationStatus}
+            onChange={(event) => setFilters((current) => ({ ...current, verificationStatus: event.target.value }))}
+            className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400"
+          >
+            <option value="all">All verification</option>
+            <option value="Pending">Pending verification</option>
+            <option value="Verified">Verified</option>
+            <option value="Rejected">Rejected</option>
+            <option value="unverified">Unverified flag</option>
+          </select>
+          <select
+            value={filters.approvalStatus}
+            onChange={(event) => setFilters((current) => ({ ...current, approvalStatus: event.target.value }))}
+            className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400"
+          >
+            <option value="all">All approvals</option>
+            <option value="Pending">Pending approval</option>
+            <option value="Approved">Approved</option>
+            <option value="Rejected">Rejected</option>
+            <option value="Suspended">Suspended</option>
+            <option value="Verified">Verified</option>
+          </select>
         </div>
       </Card>
 
@@ -218,6 +314,11 @@ function ManageUsersPage() {
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => selected.forEach((id) => handleStatus(users.find((user) => (user.id || user._id) === id), false))} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200">Suspend selected</button>
             <button type="button" onClick={() => selected.forEach((id) => handleStatus(users.find((user) => (user.id || user._id) === id), true))} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Activate selected</button>
+            <button type="button" onClick={() => runBulkUserAction(selected, 'mark_live')} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Mark selected live</button>
+            <button type="button" onClick={() => runBulkUserAction(selected, 'mark_dummy')} className="rounded-full border border-amber-500/60 px-4 py-2 text-sm text-amber-200">Mark selected dummy</button>
+            <button type="button" onClick={() => runBulkUserAction(selected, 'archive_dummy')} className="rounded-full border border-zinc-500/60 px-4 py-2 text-sm text-zinc-200">Archive dummy selected</button>
+            <button type="button" onClick={() => selected.forEach((id) => handleOwnerVerification(users.find((user) => (user.id || user._id) === id)))} className="rounded-full border border-cyan-500/60 px-4 py-2 text-sm text-cyan-200">Verify selected</button>
+            <button type="button" onClick={() => window.open(`${baseURL.replace(/\/$/, '')}/client/exportUsers?token=${encodeURIComponent(token)}`, '_blank')} className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200">Download CSV</button>
           </div>
         )}
       />
@@ -248,8 +349,17 @@ function ManageUsersPage() {
                 ['City', selectedUser.city],
                 ['Bio', selectedUser.bio],
                 ['User type', selectedUser.userType || selectedUser.role],
+                ['Data mode', selectedUser.isDummy ? 'DUMMY' : 'LIVE'],
+                ['Record status', selectedUser.status],
                 ['Verification', selectedUser.verificationStatus || 'Pending'],
+                ['Approval', selectedUser.approvalStatus || '-'],
+                ['Verified', selectedUser.isVerified ? 'Yes' : 'No'],
                 ['Account status', selectedUser.accountStatus || (selectedUser.isActive ? 'active' : 'suspended')],
+                ['Assigned city', selectedUser.assignedCity || '-'],
+                ['Assigned state', selectedUser.assignedState || '-'],
+                ['Owner business', selectedUser.businessName || '-'],
+                ['Owner type', selectedUser.vendorType || '-'],
+                ['Properties', selectedUser.propertyCount || 0],
                 ['Created', selectedUser.createdAt || selectedUser.addedOn],
                 ['Updated', selectedUser.updatedAt || '-'],
                 ['Last login', selectedUser.lastLogin || '-'],
@@ -263,10 +373,12 @@ function ManageUsersPage() {
                   <p className="mt-2 break-words text-sm text-slate-200">{value || '-'}</p>
                 </div>
               ))}
-              {selectedUser.profile ? <img src={selectedUser.profile} alt={selectedUser.name || 'Profile'} className="h-32 w-32 rounded-2xl object-cover" /> : null}
+              {selectedUser.profile ? <img src={selectedUser.profile} alt={selectedUser.name || 'Profile'} loading="lazy" className="h-32 w-32 rounded-2xl object-cover" /> : null}
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
               <button type="button" onClick={() => setEditUser(selectedUser)} className="rounded-full border border-cyan-500/60 px-4 py-2 text-sm text-cyan-200">Edit profile</button>
+              <button type="button" onClick={() => handleOwnerVerification(selectedUser)} className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200">Verify account</button>
+              <button type="button" onClick={() => markUserMode(selectedUser, !selectedUser.isDummy)} className="rounded-full border border-amber-500/60 px-4 py-2 text-sm text-amber-200">{selectedUser.isDummy ? 'Mark as live user' : 'Mark as dummy user'}</button>
               <button type="button" onClick={() => handleStatus(selectedUser, !selectedUser.isActive)} className="rounded-full border border-rose-500/60 px-4 py-2 text-sm text-rose-200">{selectedUser.isActive ? 'Suspend account' : 'Activate account'}</button>
               <button type="button" onClick={() => { setError(''); setPasswordMessage(''); resetPasswordMutation.mutate(selectedUser) }} disabled={resetPasswordMutation.isPending} className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200">{resetPasswordMutation.isPending ? 'Resetting…' : 'Generate temporary password'}</button>
             </div>
@@ -296,6 +408,8 @@ function ManageUsersPage() {
                 verificationStatus: editUser.verificationStatus || '',
                 approvalStatus: editUser.approvalStatus || '',
                 isVerified: Boolean(editUser.isVerified),
+                isDummy: Boolean(editUser.isDummy),
+                status: editUser.status || (editUser.isDummy ? 'demo' : 'active'),
                 businessName: editUser.businessName || '',
                 vendorType: editUser.vendorType || '',
               }
@@ -346,9 +460,20 @@ function ManageUsersPage() {
                 <option value="Verified">Verified</option>
                 <option value="Rejected">Rejected</option>
               </select>
+              <select value={editUser.approvalStatus || 'Pending'} onChange={(event) => setEditUser((current) => ({ ...current, approvalStatus: event.target.value }))} className="rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400">
+                <option value="Pending">Approval pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Suspended">Suspended</option>
+                <option value="Verified">Verified</option>
+              </select>
               <label className="inline-flex items-center gap-3 rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100">
                 <input type="checkbox" checked={Boolean(editUser.isVerified)} onChange={(event) => setEditUser((current) => ({ ...current, isVerified: event.target.checked }))} />
                 Platform verified
+              </label>
+              <label className="inline-flex items-center gap-3 rounded-3xl border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                <input type="checkbox" checked={Boolean(editUser.isDummy)} onChange={(event) => setEditUser((current) => ({ ...current, isDummy: event.target.checked, status: event.target.checked ? 'demo' : 'active' }))} />
+                Dummy account
               </label>
               <textarea value={editUser.bio || ''} onChange={(event) => setEditUser((current) => ({ ...current, bio: event.target.value }))} placeholder="Bio/admin notes" className="sm:col-span-2 min-h-24 rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
             </div>

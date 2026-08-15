@@ -743,7 +743,7 @@ function PropertyDetailPage() {
           {property.menuPhoto ? (
             <div className="rounded-2xl border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:p-6">
               <p className="text-sm uppercase tracking-[0.14em] text-accent-500 sm:tracking-[0.28em]">Menu</p>
-              <img src={property.menuPhoto} alt={`${property.name} menu`} className="mt-5 max-h-80 w-full rounded-xl object-cover sm:rounded-[1.5rem]" />
+              <img src={property.menuPhoto} alt={`${property.name} menu`} loading="lazy" className="mt-5 max-h-80 w-full rounded-xl object-cover sm:rounded-[1.5rem]" />
             </div>
           ) : null}
           <AdSlot placement="property-sidebar" />
