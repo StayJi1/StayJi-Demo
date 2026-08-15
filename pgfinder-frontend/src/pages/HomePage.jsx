@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import { FiArrowRight, FiCheckCircle, FiMapPin, FiNavigation, FiSearch, FiShield, FiSliders, FiStar, FiUsers } from 'react-icons/fi'
@@ -10,7 +10,6 @@ import useCurrentLocation from '../hooks/useCurrentLocation'
 import { useAuth } from '../context/AuthContext'
 import SEO from '../components/SEO'
 import { bangaloreLocalities } from '../data/seoContent'
-import AdSlot from '../components/ads/AdSlot'
 
 const cities = [
   { name: 'Whitefield', slug: 'whitefield', count: 'PGs near ITPL', tone: 'from-blue-600 to-cyan-500' },
@@ -53,28 +52,99 @@ const stats = [
 ]
 
 const PropertyMap = lazy(() => import('../components/map/PropertyMap'))
+const AdSlot = lazy(() => import('../components/ads/AdSlot'))
+
+function useDeferredSection(rootMargin = '600px') {
+  const [ready, setReady] = useState(false)
+  const observerRef = useRef(null)
+
+  const ref = useCallback((node) => {
+    if (observerRef.current) observerRef.current.disconnect()
+    if (ready) return
+    if (!node || typeof IntersectionObserver === 'undefined') {
+      if (!node) return
+      setReady(true)
+      return
+    }
+    observerRef.current = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setReady(true)
+        observerRef.current?.disconnect()
+      }
+    }, { rootMargin })
+    observerRef.current.observe(node)
+  }, [ready, rootMargin])
+
+  useEffect(() => () => observerRef.current?.disconnect(), [])
+
+  return [ref, ready]
+}
+
+function PropertyCardSkeleton() {
+  return (
+    <div className="min-h-[480px] overflow-hidden rounded-[1.5rem] border border-slate-800/70 bg-slate-950/90 shadow-card sm:rounded-[2rem]">
+      <div className="h-52 animate-pulse bg-slate-800 sm:h-64" />
+      <div className="space-y-4 p-5 sm:p-6">
+        <div className="h-4 w-24 animate-pulse rounded bg-slate-800" />
+        <div className="h-6 w-3/4 animate-pulse rounded bg-slate-800" />
+        <div className="h-4 w-2/3 animate-pulse rounded bg-slate-800" />
+        <div className="grid gap-3 md:grid-cols-3">
+          <span className="h-11 animate-pulse rounded-3xl bg-slate-800" />
+          <span className="h-11 animate-pulse rounded-3xl bg-slate-800" />
+          <span className="h-11 animate-pulse rounded-3xl bg-slate-800" />
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <span className="h-11 animate-pulse rounded-3xl bg-slate-800" />
+          <span className="h-11 animate-pulse rounded-3xl bg-slate-800" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SectionSkeleton({ className = 'min-h-[340px]' }) {
+  return (
+    <div className={`animate-pulse rounded-2xl border border-slate-200 bg-slate-100 ${className}`} aria-hidden="true" />
+  )
+}
 
 function HomePage() {
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
   const { position, loading: locationLoading, error: locationError, hasUserLocation } = useCurrentLocation()
-  const [popular, setPopular] = useState([])
+  const [featuredProperties, setFeaturedProperties] = useState([])
   const [savedPropertyIds, setSavedPropertyIds] = useState(new Set())
-  const [loading, setLoading] = useState(true)
+  const [featuredLoading, setFeaturedLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [showAds, setShowAds] = useState(false)
+  const [localityRef, showLocalities] = useDeferredSection()
+  const [reasonsRef, showReasons] = useDeferredSection()
+  const [mapRef, showMap] = useDeferredSection()
+  const [testimonialsRef, showTestimonials] = useDeferredSection()
 
   useEffect(() => {
+    let cancelled = false
     const load = async () => {
       try {
-        const data = await propertyService.fetchPopularProperties()
-        setPopular(data || [])
+        const data = await propertyService.fetchFeaturedProperties(3)
+        if (!cancelled) setFeaturedProperties(data || [])
       } catch {
-        setPopular([])
+        if (!cancelled) setFeaturedProperties([])
       } finally {
-        setLoading(false)
+        if (!cancelled) setFeaturedLoading(false)
       }
     }
     load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    const schedule = window.requestIdleCallback || ((callback) => window.setTimeout(callback, 1200))
+    const cancel = window.cancelIdleCallback || window.clearTimeout
+    const id = schedule(() => setShowAds(true))
+    return () => cancel(id)
   }, [])
 
   useEffect(() => {
@@ -101,7 +171,7 @@ function HomePage() {
     loadWishlist()
   }, [isAuthenticated, user?._id])
 
-  const featured = useMemo(() => popular.slice(0, 3), [popular])
+  const featured = useMemo(() => featuredProperties.slice(0, 3), [featuredProperties])
 
   const handleToggleSave = async (propertyIDFK, shouldSave) => {
     if (!isAuthenticated || !user?._id) {
@@ -191,7 +261,16 @@ function HomePage() {
           <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7 }} className="relative">
             <div className="glass-card rounded-2xl p-3 sm:rounded-[2.5rem] sm:p-5">
               <div className="overflow-hidden rounded-2xl bg-white shadow-2xl">
-                <img src="/stayji-logo.png" alt="StayJi logo" className="h-64 w-full object-cover sm:h-80" />
+                <img
+                  src="/stayji-logo.png"
+                  alt="StayJi logo"
+                  width="900"
+                  height="600"
+                  loading="eager"
+                  fetchPriority="high"
+                  decoding="async"
+                  className="h-64 w-full object-cover sm:h-80"
+                />
                 <div className="grid gap-4 p-5 text-slate-900">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -213,7 +292,11 @@ function HomePage() {
       </section>
 
       <aside className="fixed top-32 z-20 hidden w-56 min-[1800px]:block" style={{ right: 'calc((100vw - 80rem) / 2 - 15rem)' }} aria-label="Home page sponsored advertisements">
-        <AdSlot placement="home" className="max-h-[calc(100vh-9rem)] overflow-y-auto pr-1" />
+        {showAds ? (
+          <Suspense fallback={null}>
+            <AdSlot placement="home" className="max-h-[calc(100vh-9rem)] overflow-y-auto pr-1" />
+          </Suspense>
+        ) : null}
       </aside>
 
       <section className="bg-white px-4 py-16 sm:px-6 lg:px-8">
@@ -228,19 +311,21 @@ function HomePage() {
             </Link>
           </div>
           <div className="mt-10 grid gap-6 lg:grid-cols-3">
-            {loading ? (
+            {featuredLoading ? (
               <>
-                <Loader message="Loading StayJi stays..." />
-                <Loader message="Loading StayJi stays..." />
-                <Loader message="Loading StayJi stays..." />
+                <PropertyCardSkeleton />
+                <PropertyCardSkeleton />
+                <PropertyCardSkeleton />
               </>
             ) : featured.length ? (
-              featured.map((item) => (
+              featured.map((item, index) => (
                 <PropertyCard
                   key={item.id || item._id}
                   property={item}
                   saved={savedPropertyIds.has(item.id || item._id)}
                   onToggleSave={handleToggleSave}
+                  imageLoading={index < 3 ? 'eager' : 'lazy'}
+                  imageFetchPriority={index === 0 ? 'high' : 'auto'}
                 />
               ))
             ) : (
@@ -252,34 +337,45 @@ function HomePage() {
         </div>
       </section>
 
-      <section className="bg-slate-50 px-4 py-16 sm:px-6 lg:px-8">
+      <section ref={localityRef} className="bg-slate-50 px-4 py-16 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
-          <div className="grid min-w-0 gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-center">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-purple-600 sm:tracking-[0.24em]">Search by city</p>
-              <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Choose your Bangalore locality</h2>
-              <p className="mt-4 text-slate-600">Browse student and professional stays around Bangalore’s IT corridors, colleges, metro routes, and residential hubs.</p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {cities.map((city) => (
-                <motion.button
-                  key={city.name}
-                  whileHover={{ y: -5 }}
-                  type="button"
-                  onClick={() => navigate(`/bangalore/${city.slug}`)}
-                  className={`rounded-2xl bg-gradient-to-br ${city.tone} p-5 text-left text-white shadow-card sm:rounded-[1.75rem]`}
-                >
-                  <p className="text-xl font-semibold">{city.name}</p>
-                  <p className="mt-2 text-sm text-white/80">{city.count}</p>
-                </motion.button>
-              ))}
-            </div>
+          <div className="grid min-h-[360px] min-w-0 gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-center">
+            {showLocalities ? (
+              <>
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.12em] text-purple-600 sm:tracking-[0.24em]">Search by city</p>
+                  <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Choose your Bangalore locality</h2>
+                  <p className="mt-4 text-slate-600">Browse student and professional stays around Bangalore’s IT corridors, colleges, metro routes, and residential hubs.</p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {cities.map((city) => (
+                    <motion.button
+                      key={city.name}
+                      whileHover={{ y: -5 }}
+                      type="button"
+                      onClick={() => navigate(`/bangalore/${city.slug}`)}
+                      className={`rounded-2xl bg-gradient-to-br ${city.tone} p-5 text-left text-white shadow-card sm:rounded-[1.75rem]`}
+                    >
+                      <p className="text-xl font-semibold">{city.name}</p>
+                      <p className="mt-2 text-sm text-white/80">{city.count}</p>
+                    </motion.button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <SectionSkeleton className="min-h-[180px]" />
+                <SectionSkeleton className="min-h-[260px]" />
+              </>
+            )}
           </div>
         </div>
       </section>
 
-      <section className="bg-white px-4 py-16 sm:px-6 lg:px-8">
+      <section ref={reasonsRef} className="bg-white px-4 py-16 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
+          {showReasons ? (
+          <>
           <div className="text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.12em] text-cyan-600 sm:tracking-[0.24em]">Why StayJi</p>
             <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Built for trust, speed, and clarity</h2>
@@ -293,10 +389,12 @@ function HomePage() {
               </motion.article>
             ))}
           </div>
+          </>
+          ) : <SectionSkeleton className="min-h-[340px]" />}
         </div>
       </section>
 
-      <section className="bg-slate-950 px-4 py-16 text-white sm:px-6 lg:px-8">
+      <section ref={mapRef} className="bg-slate-950 px-4 py-16 text-white sm:px-6 lg:px-8">
         <div className="mx-auto grid max-w-7xl min-w-0 gap-8 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)] lg:items-center">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.12em] text-cyan-300 sm:tracking-[0.24em]">Google Maps nearby</p>
@@ -313,16 +411,20 @@ function HomePage() {
           </div>
           <div className="glass-card overflow-hidden rounded-2xl p-3">
             <div className="h-80 overflow-hidden rounded-xl bg-slate-900 sm:h-[420px] sm:rounded-[1.5rem]">
-              <Suspense fallback={<Loader message="Loading map..." />}>
-                <PropertyMap center={position} userLocation={hasUserLocation ? position : null} properties={popular.slice(0, 8)} />
-              </Suspense>
+              {showMap ? (
+                <Suspense fallback={<Loader message="Loading map..." />}>
+                  <PropertyMap center={position} userLocation={hasUserLocation ? position : null} properties={featuredProperties.slice(0, 8)} />
+                </Suspense>
+              ) : <div className="h-full w-full animate-pulse bg-slate-800/80" />}
             </div>
           </div>
         </div>
       </section>
 
-      <section className="bg-white px-4 py-16 sm:px-6 lg:px-8">
+      <section ref={testimonialsRef} className="bg-white px-4 py-16 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
+          {showTestimonials ? (
+          <>
           <div className="flex items-center gap-3">
             <FiUsers className="text-blue-600" />
             <p className="text-sm font-semibold uppercase tracking-[0.12em] text-blue-600 sm:tracking-[0.24em]">Testimonials</p>
@@ -345,6 +447,8 @@ function HomePage() {
               </motion.article>
             ))}
           </div>
+          </>
+          ) : <SectionSkeleton className="min-h-[360px]" />}
         </div>
       </section>
 

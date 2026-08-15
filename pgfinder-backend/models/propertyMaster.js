@@ -325,6 +325,7 @@ propertySchema.index({ isVerified: 1 });
 propertySchema.index({ status: 1 });
 propertySchema.index({ approvalStatus: 1 });
 propertySchema.index({ isPremium: -1, priority: -1, addedOn: -1 });
+propertySchema.index({ cityName: 1, isActive: 1, status: 1, isDummy: 1, isPremium: -1, priority: -1, addedOn: -1 });
 propertySchema.index({ duplicateKey: 1 }, { unique: true, partialFilterExpression: { duplicateKey: { $type: 'string' } } });
 
 propertySchema.pre('validate', function buildDuplicateKey(next) {

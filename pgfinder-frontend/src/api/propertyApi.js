@@ -223,6 +223,9 @@ const fetchRemainingPropertyPages = async (requestParams, totalPages) => {
   return pages
 }
 
+let featuredPropertiesPromise = null
+let featuredPropertiesCache = null
+
 const propertyApi = {
   page: async (params = {}) => {
     const scopedParams = { ...params, cityName: MVP_CITY }
@@ -254,7 +257,24 @@ const propertyApi = {
   // Backend expects POST with { id }
   detail: (id, options = {}) => axiosClient.post('/client/getPropertyById', { id, includePrivate: Boolean(options.includePrivate) }).then((res) => mapResponse(res.data && res.data.data)),
 
-  // Popular: backend has no featured endpoint; reuse property list and let caller slice
+  featured: (limit = 6) => {
+    const cacheKey = Number(limit) || 6
+    if (featuredPropertiesCache?.limit === cacheKey) return Promise.resolve(featuredPropertiesCache.items)
+    if (featuredPropertiesPromise?.limit === cacheKey) return featuredPropertiesPromise.promise
+    const promise = axiosClient.get('/client/featured-properties', { params: { limit: cacheKey } })
+      .then((res) => {
+        const items = mapResponse(res.data && res.data.data) || []
+        featuredPropertiesCache = { limit: cacheKey, items }
+        return items
+      })
+      .finally(() => {
+        featuredPropertiesPromise = null
+      })
+    featuredPropertiesPromise = { limit: cacheKey, promise }
+    return promise
+  },
+
+  // Popular: full marketplace list for secondary pages/sections.
   popular: () => axiosClient.get('/client/getPropertyList', { params: { cityName: MVP_CITY } }).then((res) => mapResponse(res.data && res.data.data)),
   all: (params) => axiosClient.get('/client/getAllPropertyList', { params: { ...params, cityName: MVP_CITY } }).then((res) => mapResponse(res.data && res.data.data)),
   review: ({ id, approvalStatus }) => axiosClient.post('/client/reviewProperty', { id, approvalStatus }).then((res) => {

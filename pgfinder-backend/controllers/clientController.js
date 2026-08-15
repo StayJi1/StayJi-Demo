@@ -1384,6 +1384,66 @@ router.get('/getPropertyList', async (req, res) => {
     }
 });
 
+router.get('/featured-properties', async (req, res) => {
+    await expirePremiumListings()
+    const parsedLimit = Number.parseInt(req.query.limit, 10)
+    const requestedLimit = Number.isFinite(parsedLimit) ? parsedLimit : 6
+    const limit = Math.min(12, Math.max(1, requestedLimit))
+    const availableNow = req.query.availableNow
+    const publicFilters = buildPropertyFilters({ cityName: MVP_CITY, availableNow: req.query.availableNow })
+    publicFilters.cityName = MVP_CITY_REGEX
+    if (req.query.includeDummy === 'false') publicFilters.isDummy = false
+    const cityGate = await publicCityGate()
+    const filters = { $and: [publicPropertyQuery, publicFilters, ...(cityGate ? [cityGate] : [])] }
+    const cacheKey = JSON.stringify({ route: 'featured-properties', limit, availableNow: availableNow || '', includeDummy: req.query.includeDummy || '' })
+    const cached = propertyListCache.get(cacheKey)
+    if (cached && (Date.now() - cached.ts) < PROPERTY_CACHE_TTL_MS) {
+        res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=120')
+        return res.json({ result: 'success', msg: 'Featured properties found (cached)', data: cached.data, meta: cached.meta })
+    }
+
+    const projection = {
+        propertyName: 1,
+        propertyCategory: 1,
+        propertyType: 1,
+        cityName: 1,
+        areaName: 1,
+        rent: 1,
+        depositAmount: 1,
+        sharing: 1,
+        sharingAvailability: 1,
+        genderType: 1,
+        rating: 1,
+        availableBeds: 1,
+        vacancyStatus: 1,
+        isPremium: 1,
+        premiumEndDate: 1,
+        priority: 1,
+        isVerified: 1,
+        approvalStatus: 1,
+        propertyImage: 1,
+        propertyImageUrls: { $slice: 1 },
+        mealsAvailable: 1,
+        perDayCheckIn: 1,
+        dailyRate: 1,
+        isDummy: 1,
+        status: 1,
+        isActive: 1,
+        addedOn: 1
+    }
+    const rows = await Property.find(filters, projection)
+        .sort({ isPremium: -1, priority: -1, isFeatured: -1, localityPriority: -1, addedOn: -1 })
+        .limit(limit)
+        .lean()
+
+    const meta = { page: 1, limit, total: rows.length, pages: 1, lightweight: true }
+    try {
+        propertyListCache.set(cacheKey, { ts: Date.now(), data: rows, meta })
+    } catch (e) { /* ignore cache set failures */ }
+    res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=120')
+    res.json({ result: 'success', msg: 'Featured properties found', data: rows, meta })
+});
+
 router.post('/getAreaListByCity', async (req, res) => {
     const cityName = canonicalLocationName(req.body.cityName || req.body.city || MVP_CITY)
     if (!assertBangaloreRequest(res, cityName)) return
