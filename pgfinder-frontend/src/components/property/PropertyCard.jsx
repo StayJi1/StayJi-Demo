@@ -6,7 +6,26 @@ import { useAuth } from '../../context/AuthContext'
 import propertyService from '../../services/propertyService'
 import { formatDistance } from '../../utils/distance'
 
-function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSave = false, compareSelected = false, onToggleCompare }) {
+const optimizedRemoteImage = (url, width = 900) => {
+  if (!url || !/^https:\/\/images\.unsplash\.com\//i.test(url)) return url
+  try {
+    const nextUrl = new URL(url)
+    nextUrl.searchParams.set('auto', 'format')
+    nextUrl.searchParams.set('fit', 'crop')
+    nextUrl.searchParams.set('w', String(width))
+    nextUrl.searchParams.set('q', width > 900 ? '78' : '72')
+    return nextUrl.toString()
+  } catch {
+    return url
+  }
+}
+
+const responsiveSources = (url) => {
+  if (!url || !/^https:\/\/images\.unsplash\.com\//i.test(url)) return ''
+  return [480, 720, 960, 1200].map((width) => `${optimizedRemoteImage(url, width)} ${width}w`).join(', ')
+}
+
+function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSave = false, compareSelected = false, onToggleCompare, imageLoading = 'lazy', imageFetchPriority = 'auto' }) {
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
   const [internalSaved, setInternalSaved] = useState(Boolean(savedProp))
@@ -79,11 +98,16 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSa
           {property.availableBeds ? `${property.availableBeds} beds live` : property.vacancyStatus || property.status || 'Verified'}
         </div>
         <img
-          src={property.image || 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=80'}
+          src={optimizedRemoteImage(property.image || 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=80', 900)}
+          srcSet={responsiveSources(property.image)}
           alt={property.name}
           title={`${property.name || 'StayJi PG'} in ${property.area || property.locationLabel || property.city || 'Bangalore'}`}
-          loading="lazy"
-          sizes="(min-width: 1024px) 50vw, 100vw"
+          loading={imageLoading}
+          fetchPriority={imageFetchPriority}
+          decoding="async"
+          width="900"
+          height="640"
+          sizes="(min-width: 1280px) 384px, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
           className="h-52 w-full object-cover transition duration-500 group-hover:scale-105 sm:h-64"
         />
       </div>
