@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { FiColumns, FiMapPin, FiSearch } from 'react-icons/fi'
+import { FiColumns, FiFilter, FiMap, FiMapPin, FiSearch, FiX } from 'react-icons/fi'
 import SectionHeading from '../components/common/SectionHeading'
 import Button from '../components/common/Button'
 import Loader from '../components/common/Loader'
@@ -131,6 +131,7 @@ function PropertiesPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState(initialSavedSearchState.searchQuery)
   const [activeFilters, setActiveFilters] = useState(initialSavedSearchState.activeFilters)
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [priceRange, setPriceRange] = useState(initialSavedSearchState.priceRange)
   const [sortBy, setSortBy] = useState(initialSavedSearchState.sortBy)
   const [nearbyMode, setNearbyMode] = useState(initialSavedSearchState.nearbyMode)
@@ -358,6 +359,13 @@ function PropertiesPage() {
     requestLocation()
   }
 
+  const toggleFilter = (option) => {
+    setActiveFilters((current) =>
+      current.includes(option) ? current.filter((item) => item !== option) : [...current, option],
+    )
+    setPage(1)
+  }
+
   const handleSearchLocation = async () => {
     setMapSearchError('')
     setMapSearchMessage('')
@@ -517,8 +525,11 @@ function PropertiesPage() {
       .slice(0, 5)
   }, [filteredProperties, properties])
 
+  const quickMobileFilters = ['PG', 'Boys', 'Girls', 'Co-ed', 'Available now', 'Food included']
+  const activeFilterCount = activeFilters.length + Number(Boolean(priceRange.min)) + Number(Boolean(priceRange.max)) + Number(nearbyMode)
+
   return (
-    <div className="mx-auto max-w-7xl overflow-x-hidden px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl overflow-x-hidden px-3 pb-24 pt-5 sm:px-6 sm:py-8 lg:px-8">
       <SEO
         title="Search PG in Bangalore"
         description="Search verified PGs, boys PG, girls PG, hostels, and co-living rooms across Bangalore localities with filters, maps, wishlist, and visit booking."
@@ -527,8 +538,15 @@ function PropertiesPage() {
       />
       <div className="grid gap-10 lg:grid-cols-[0.95fr_0.45fr]">
         <section>
-          <SectionHeading title="Search Bangalore PGs" description="Explore Bangalore PGs, hostels, and co-living rooms with price filters, maps, and visit requests." />
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="sm:hidden">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-400">Explore stays</p>
+            <h1 className="mt-2 text-2xl font-semibold text-white">Find PGs fast</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-400">Search, filter, and compare Bangalore stays without long scrolling.</p>
+          </div>
+          <div className="hidden sm:block">
+            <SectionHeading title="Search Bangalore PGs" description="Explore Bangalore PGs, hostels, and co-living rooms with price filters, maps, and visit requests." />
+          </div>
+          <div className="mt-5 hidden gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-4">
             {[
               { label: 'Live listings', value: filteredProperties.length },
               { label: 'Vacant now', value: filteredProperties.filter((item) => item.status === 'Available').length },
@@ -541,7 +559,7 @@ function PropertiesPage() {
               </div>
             ))}
           </div>
-          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="mt-8 rounded-2xl border border-slate-800/80 bg-surface-800/90 p-4 shadow-card sm:p-8">
+          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="sticky top-2 z-30 mt-5 rounded-2xl border border-slate-800/80 bg-surface-800/95 p-3 shadow-card backdrop-blur-xl sm:static sm:mt-8 sm:p-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-slate-700/80 bg-slate-950/80 px-4 py-3 sm:rounded-3xl">
                 <FiSearch className="text-accent-400" />
@@ -556,15 +574,69 @@ function PropertiesPage() {
                   className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
                 />
               </div>
-              <Button variant="secondary" className="w-full sm:w-auto" onClick={handleUseLocation} disabled={locationLoading}>
+              <div className="grid grid-cols-3 gap-2 sm:hidden">
+                <button
+                  type="button"
+                  onClick={handleUseLocation}
+                  disabled={locationLoading}
+                  className="inline-flex min-h-11 items-center justify-center gap-1 rounded-2xl border border-white/15 bg-white/10 px-3 text-xs font-semibold text-white disabled:opacity-60"
+                >
+                  <FiMapPin /> {hasUserLocation && nearbyMode ? 'Nearby' : 'Near me'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileFiltersOpen(true)}
+                  className="inline-flex min-h-11 items-center justify-center gap-1 rounded-2xl bg-cyan-400 px-3 text-xs font-semibold text-slate-950"
+                >
+                  <FiFilter /> Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
+                </button>
+                <a
+                  href="#map-view"
+                  className="inline-flex min-h-11 items-center justify-center gap-1 rounded-2xl border border-white/15 bg-white/10 px-3 text-xs font-semibold text-white"
+                >
+                  <FiMap /> Map
+                </a>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1 sm:hidden">
+                {quickMobileFilters.map((option) => {
+                  const active = activeFilters.includes(option)
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => toggleFilter(option)}
+                      className={`shrink-0 rounded-full border px-3 py-2 text-xs font-semibold ${
+                        active
+                          ? 'border-accent-400 bg-accent-500/10 text-accent-100'
+                          : 'border-slate-700/80 text-slate-300'
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  )
+                })}
+              </div>
+              <Button variant="secondary" className="hidden w-full sm:inline-flex sm:w-auto" onClick={handleUseLocation} disabled={locationLoading}>
                 <span className="inline-flex items-center gap-2">
                   <FiMapPin /> {locationLoading ? 'Finding nearby...' : hasUserLocation && nearbyMode ? 'Showing nearby' : 'Use my location'}
                 </span>
               </Button>
-              <Button className="w-full sm:w-auto" onClick={handleSaveSearch}>Save search</Button>
+              <Button className="hidden w-full sm:inline-flex sm:w-auto" onClick={handleSaveSearch}>Save search</Button>
             </div>
             {saveSearchMessage ? <p className={`mt-3 text-sm ${saveSearchMessage.startsWith('Unable') ? 'text-rose-300' : 'text-emerald-300'}`}>{saveSearchMessage}</p> : null}
             {locationError ? <p className="mt-3 text-sm text-rose-300">{locationError}</p> : null}
+            <div className={`${mobileFiltersOpen ? 'block' : 'hidden'} sm:block`}>
+            <div className="mt-4 flex items-center justify-between gap-3 sm:hidden">
+              <p className="text-sm font-semibold text-white">Advanced filters</p>
+              <button
+                type="button"
+                onClick={() => setMobileFiltersOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-white"
+                aria-label="Close filters"
+              >
+                <FiX />
+              </button>
+            </div>
             <div className="mt-4 grid gap-4 md:grid-cols-[1.8fr_0.9fr]">
               <input
                 type="search"
@@ -672,10 +744,7 @@ function PropertiesPage() {
                     key={option}
                     type="button"
                     onClick={() => {
-                      setActiveFilters((current) =>
-                        current.includes(option) ? current.filter((item) => item !== option) : [...current, option],
-                      )
-                      setPage(1)
+                      toggleFilter(option)
                     }}
                     className={`max-w-full rounded-full border px-3 py-2 text-sm transition sm:px-4 ${
                       active
@@ -687,6 +756,18 @@ function PropertiesPage() {
                   </button>
                 )
               })}
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:hidden">
+              <Button variant="secondary" onClick={() => {
+                setActiveFilters([])
+                setPriceRange({ min: '', max: '' })
+                setNearbyMode(false)
+                setPage(1)
+              }}>
+                Clear
+              </Button>
+              <Button onClick={() => setMobileFiltersOpen(false)}>Show stays</Button>
+            </div>
             </div>
             {compareMessage ? <p className="mt-3 text-sm text-amber-200">{compareMessage}</p> : null}
           </motion.div>
@@ -714,6 +795,36 @@ function PropertiesPage() {
               </div>
             </div>
           ) : null}
+
+          <div id="map-view" className="mt-6 rounded-2xl border border-slate-800/80 bg-surface-800/90 p-3 shadow-card lg:hidden">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-400">Map view</p>
+                <p className="mt-1 text-sm text-slate-400">{filteredProperties.length} stays around your search</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleUseLocation}
+                disabled={locationLoading}
+                className="rounded-full border border-white/15 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                {hasUserLocation && nearbyMode ? 'Nearby on' : 'Near me'}
+              </button>
+            </div>
+            <div className="h-56 overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-950/80">
+              <PropertyMap
+                properties={filteredProperties}
+                userLocation={hasUserLocation ? position : null}
+                center={hasUserLocation ? position : filteredProperties[0]?.location}
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 flex items-center justify-between gap-3 rounded-2xl border border-slate-800/80 bg-surface-800/90 p-3 text-sm text-slate-300 sm:hidden">
+            <span>{paginationMeta.total || filteredProperties.length} stays</span>
+            <span>{filteredProperties.filter((item) => item.status === 'Available').length} vacant now</span>
+            <span>{searchRadiusKm} km</span>
+          </div>
 
           <div className="mt-10 grid gap-6 lg:grid-cols-2">
             {loading ? (
@@ -794,7 +905,7 @@ function PropertiesPage() {
           </div>
         </section>
 
-        <aside className="space-y-6">
+        <aside className="hidden space-y-6 lg:block">
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
             <p className="text-sm uppercase tracking-[0.24em] text-accent-500">Map view</p>
             <div className="mt-5 h-80 overflow-hidden rounded-[1.75rem] border border-slate-700/80 bg-slate-950/80">

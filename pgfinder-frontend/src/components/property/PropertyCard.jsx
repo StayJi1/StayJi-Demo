@@ -82,7 +82,7 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSa
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') openProperty()
       }}
-      className="group min-w-0 cursor-pointer overflow-hidden rounded-[1.5rem] border border-slate-800/70 bg-slate-950/90 shadow-card sm:rounded-[2rem]"
+      className="group min-w-0 cursor-pointer overflow-hidden rounded-[1.25rem] border border-slate-800/70 bg-slate-950/90 shadow-card sm:rounded-[2rem]"
     >
       <div className="relative overflow-hidden">
         {property.displayBadges?.length ? (
@@ -108,14 +108,14 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSa
           width="900"
           height="640"
           sizes="(min-width: 1280px) 384px, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-          className="h-52 w-full object-cover transition duration-500 group-hover:scale-105 sm:h-64"
+          className="h-44 w-full object-cover transition duration-500 group-hover:scale-105 sm:h-64"
         />
       </div>
-      <div className="space-y-4 p-5 sm:p-6">
+      <div className="space-y-3 p-4 sm:space-y-4 sm:p-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-accent-500">{property.category || property.type || 'PG'}</p>
-            <h3 className="mt-2 line-clamp-2 text-xl font-semibold text-white">{property.name}</h3>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-500 sm:text-sm sm:tracking-[0.28em]">{property.category || property.type || 'PG'}</p>
+            <h3 className="mt-1 line-clamp-2 text-lg font-semibold text-white sm:mt-2 sm:text-xl">{property.name}</h3>
           </div>
           {hideSave ? null : (
             <button
@@ -136,26 +136,26 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSa
           <span className="truncate">{property.locationLabel || property.city}</span>
           {property.distanceKm !== undefined ? <span>• {formatDistance(property.distanceKm)}</span> : null}
         </div>
-        <div className="grid gap-3 md:grid-cols-3">
-          <span className="rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">{property.gender || 'Co-ed'}</span>
-          <span className="rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">{property.rent ? `₹${property.rent}/mo` : '₹8,500'}</span>
-          <span className="rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">{property.depositAmount ? `₹${property.depositAmount} deposit` : 'No deposit'}</span>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-3">
+          <span className="rounded-2xl bg-slate-900/80 px-3 py-2 text-sm text-slate-300 sm:rounded-3xl sm:px-4 sm:py-3">{property.gender || 'Co-ed'}</span>
+          <span className="rounded-2xl bg-slate-900/80 px-3 py-2 text-sm font-semibold text-white sm:rounded-3xl sm:px-4 sm:py-3">{property.rent ? `₹${property.rent}/mo` : '₹8,500'}</span>
+          <span className="hidden rounded-3xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300 md:block">{property.depositAmount ? `₹${property.depositAmount} deposit` : 'No deposit'}</span>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <span className="rounded-3xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+        <div className="grid gap-2 md:grid-cols-2 md:gap-3">
+          <span className="rounded-2xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200 sm:rounded-3xl sm:px-4 sm:py-3">
             {property.vacancyStatus || (property.availableBeds ? `${property.availableBeds} beds available` : 'Live vacancy')}
           </span>
-          <span className="rounded-3xl bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
+          <span className="line-clamp-1 rounded-2xl bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100 sm:rounded-3xl sm:px-4 sm:py-3">
             {property.sharingAvailability || property.sharing || 'Sharing options'}
           </span>
         </div>
         {property.perDayCheckIn ? (
-          <p className="rounded-3xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+          <p className="rounded-2xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200 sm:rounded-3xl sm:px-4 sm:py-3">
             Per-day check-in available{property.dailyRate ? ` at ₹${property.dailyRate}/day` : ''}
           </p>
         ) : null}
         {property.mealsAvailable?.length ? (
-          <p className="rounded-3xl bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          <p className="hidden rounded-3xl bg-amber-500/10 px-4 py-3 text-sm text-amber-100 sm:block">
             Food: {property.mealsAvailable.join(', ')}
           </p>
         ) : null}
