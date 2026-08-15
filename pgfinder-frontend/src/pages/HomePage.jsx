@@ -102,12 +102,6 @@ function PropertyCardSkeleton() {
   )
 }
 
-function SectionSkeleton({ className = 'min-h-[340px]' }) {
-  return (
-    <div className={`animate-pulse rounded-2xl border border-slate-200 bg-slate-100 ${className}`} aria-hidden="true" />
-  )
-}
-
 function HomePage() {
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
@@ -117,16 +111,13 @@ function HomePage() {
   const [featuredLoading, setFeaturedLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showAds, setShowAds] = useState(false)
-  const [localityRef, showLocalities] = useDeferredSection()
-  const [reasonsRef, showReasons] = useDeferredSection()
   const [mapRef, showMap] = useDeferredSection()
-  const [testimonialsRef, showTestimonials] = useDeferredSection()
 
   useEffect(() => {
     let cancelled = false
     const load = async () => {
       try {
-        const data = await propertyService.fetchFeaturedProperties(3)
+        const data = await propertyService.fetchFeaturedProperties(8)
         if (!cancelled) setFeaturedProperties(data || [])
       } catch {
         if (!cancelled) setFeaturedProperties([])
@@ -337,45 +328,34 @@ function HomePage() {
         </div>
       </section>
 
-      <section ref={localityRef} className="bg-slate-50 px-4 py-16 sm:px-6 lg:px-8">
+      <section className="bg-slate-50 px-4 py-16 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="grid min-h-[360px] min-w-0 gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-center">
-            {showLocalities ? (
-              <>
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.12em] text-purple-600 sm:tracking-[0.24em]">Search by city</p>
-                  <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Choose your Bangalore locality</h2>
-                  <p className="mt-4 text-slate-600">Browse student and professional stays around Bangalore’s IT corridors, colleges, metro routes, and residential hubs.</p>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {cities.map((city) => (
-                    <motion.button
-                      key={city.name}
-                      whileHover={{ y: -5 }}
-                      type="button"
-                      onClick={() => navigate(`/bangalore/${city.slug}`)}
-                      className={`rounded-2xl bg-gradient-to-br ${city.tone} p-5 text-left text-white shadow-card sm:rounded-[1.75rem]`}
-                    >
-                      <p className="text-xl font-semibold">{city.name}</p>
-                      <p className="mt-2 text-sm text-white/80">{city.count}</p>
-                    </motion.button>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <SectionSkeleton className="min-h-[180px]" />
-                <SectionSkeleton className="min-h-[260px]" />
-              </>
-            )}
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-purple-600 sm:tracking-[0.24em]">Search by city</p>
+              <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Choose your Bangalore locality</h2>
+              <p className="mt-4 text-slate-600">Browse student and professional stays around Bangalore’s IT corridors, colleges, metro routes, and residential hubs.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {cities.map((city) => (
+                <motion.button
+                  key={city.name}
+                  whileHover={{ y: -5 }}
+                  type="button"
+                  onClick={() => navigate(`/bangalore/${city.slug}`)}
+                  className={`rounded-2xl bg-gradient-to-br ${city.tone} p-5 text-left text-white shadow-card sm:rounded-[1.75rem]`}
+                >
+                  <p className="text-xl font-semibold">{city.name}</p>
+                  <p className="mt-2 text-sm text-white/80">{city.count}</p>
+                </motion.button>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      <section ref={reasonsRef} className="bg-white px-4 py-16 sm:px-6 lg:px-8">
+      <section className="bg-white px-4 py-16 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
-          {showReasons ? (
-          <>
           <div className="text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.12em] text-cyan-600 sm:tracking-[0.24em]">Why StayJi</p>
             <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">Built for trust, speed, and clarity</h2>
@@ -389,8 +369,6 @@ function HomePage() {
               </motion.article>
             ))}
           </div>
-          </>
-          ) : <SectionSkeleton className="min-h-[340px]" />}
         </div>
       </section>
 
@@ -421,10 +399,8 @@ function HomePage() {
         </div>
       </section>
 
-      <section ref={testimonialsRef} className="bg-white px-4 py-16 sm:px-6 lg:px-8">
+      <section className="bg-white px-4 py-16 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
-          {showTestimonials ? (
-          <>
           <div className="flex items-center gap-3">
             <FiUsers className="text-blue-600" />
             <p className="text-sm font-semibold uppercase tracking-[0.12em] text-blue-600 sm:tracking-[0.24em]">Testimonials</p>
@@ -447,8 +423,6 @@ function HomePage() {
               </motion.article>
             ))}
           </div>
-          </>
-          ) : <SectionSkeleton className="min-h-[360px]" />}
         </div>
       </section>
 
