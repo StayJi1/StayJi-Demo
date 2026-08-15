@@ -264,6 +264,15 @@ const propertyApi = {
     const promise = axiosClient.get('/client/featured-properties', { params: { limit: cacheKey } })
       .then((res) => {
         const items = mapResponse(res.data && res.data.data) || []
+        if (items.length) return items
+        return axiosClient
+          .get('/client/getPropertyList', { params: { cityName: MVP_CITY, limit: cacheKey } })
+          .then((fallbackRes) => mapResponse(fallbackRes.data && fallbackRes.data.data) || [])
+      })
+      .catch(() => axiosClient
+        .get('/client/getPropertyList', { params: { cityName: MVP_CITY, limit: cacheKey } })
+        .then((fallbackRes) => mapResponse(fallbackRes.data && fallbackRes.data.data) || []))
+      .then((items) => {
         featuredPropertiesCache = { limit: cacheKey, items }
         return items
       })
