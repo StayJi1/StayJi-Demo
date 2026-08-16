@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { FaWhatsapp } from 'react-icons/fa'
 import { FiMail, FiPhoneCall } from 'react-icons/fi'
@@ -8,6 +9,7 @@ import { buildSeoArticle, faqGroups, getFaqItems, getFaqRecords, siteConfig } fr
 const slugify = (value = '') => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 
 export default function FAQPage() {
+  const [showAllFaqs, setShowAllFaqs] = useState(false)
   const { category } = useParams()
   const groupKey = category || 'general'
   const group = faqGroups[groupKey]
@@ -86,11 +88,12 @@ export default function FAQPage() {
         </header>
 
         <section className="mt-8 grid gap-4 md:grid-cols-2">
-          {items.slice(0, 48).map(([question, answer]) => (
+          {items.slice(0, showAllFaqs ? items.length : 48).map(([question, answer]) => (
             <SeoContentCard key={question} item={{ title: question, summary: answer }} to={groupKey === 'general' ? `/faq/${slugify(question)}` : `${path}/${slugify(question)}`} eyebrow="FAQ" />
           ))}
           {groupKey === 'general' ? records.slice(0, 1).map((item) => <SeoContentCard key={item.slug} item={item} to={`/faq/${item.slug}`} eyebrow="Featured guide" />) : null}
         </section>
+        {items.length > 48 ? <div className="mt-6 text-center"><button type="button" onClick={() => setShowAllFaqs((current) => !current)} className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:border-blue-500 hover:text-blue-700">{showAllFaqs ? 'Show fewer FAQs' : `Show all ${items.length} FAQs`}</button></div> : null}
 
         <section className="mt-10 rounded-2xl bg-slate-950 p-6 text-white">
           <h2 className="text-2xl font-semibold">Need help finding a Bangalore PG?</h2>

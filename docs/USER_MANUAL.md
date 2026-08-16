@@ -38,7 +38,7 @@ Amenities on property pages show the owner-selected amenities, custom features, 
 
 ## Support
 
-The Support card includes clickable email, phone, and WhatsApp options. Click `hello.stayji@gmail.com` to open a mail app, click `+91 79677 292` to start a phone call on supported devices, or click WhatsApp support to open a message to `9179677292`.
+The Support card includes clickable email, phone, and WhatsApp options. Click `hello.stayji@gmail.com` to open a mail app, click `+91 91796 77292` to start a phone call on supported devices, or click WhatsApp support to open a message to `919179677292`.
 
 ## Password Security
 

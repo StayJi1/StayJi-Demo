@@ -17,7 +17,7 @@ function SeoContentCard({ item, to, eyebrow }) {
       ) : null}
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" onClick={() => setOpen((current) => !current)} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">
-          {open ? 'Show Less' : 'Preview'}
+          {open ? 'Show Less' : 'Show More'}
         </button>
         <Link to={to} className="rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white">Read More</Link>
       </div>

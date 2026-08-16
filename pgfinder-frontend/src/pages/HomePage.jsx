@@ -51,6 +51,15 @@ const stats = [
   { label: 'Avg. rating', value: '4.8' },
 ]
 
+// Keeps the featured section useful on the first paint while the live API warms
+// up. These are intentionally styled like real cards, but lead to Browse Stays
+// rather than pretending to be bookable listings.
+const featuredPreviewProperties = [
+  { id: 'preview-whitefield', name: 'Premium PG near ITPL', category: 'PG', area: 'Whitefield', locationLabel: 'Whitefield, Bangalore', rent: 10500, depositAmount: 10500, gender: 'Co-ed', rating: 4.8, availableBeds: 3, vacancyStatus: 'Available now', sharingAvailability: 'Double sharing · Food included', mealsAvailable: ['Breakfast', 'Dinner'], image: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=78' },
+  { id: 'preview-hsr', name: 'Verified Co-living in HSR Layout', category: 'Co-living', area: 'HSR Layout', locationLabel: 'HSR Layout, Bangalore', rent: 12000, depositAmount: 12000, gender: 'Girls', rating: 4.7, availableBeds: 2, vacancyStatus: 'Available now', sharingAvailability: 'Single & double sharing', mealsAvailable: ['Breakfast', 'Dinner'], image: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=78' },
+  { id: 'preview-electronic-city', name: 'Comfort Stay near Electronic City', category: 'PG', area: 'Electronic City', locationLabel: 'Electronic City, Bangalore', rent: 8500, depositAmount: 8500, gender: 'Boys', rating: 4.6, availableBeds: 4, vacancyStatus: 'Available now', sharingAvailability: 'Triple sharing · WiFi', mealsAvailable: ['Dinner'], image: 'https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=900&q=78' },
+]
+
 const PropertyMap = lazy(() => import('../components/map/PropertyMap'))
 const AdSlot = lazy(() => import('../components/ads/AdSlot'))
 
@@ -78,28 +87,6 @@ function useDeferredSection(rootMargin = '600px') {
   useEffect(() => () => observerRef.current?.disconnect(), [])
 
   return [ref, ready]
-}
-
-function PropertyCardSkeleton() {
-  return (
-    <div className="min-h-[480px] overflow-hidden rounded-[1.5rem] border border-slate-800/70 bg-slate-950/90 shadow-card sm:rounded-[2rem]">
-      <div className="h-52 animate-pulse bg-slate-800 sm:h-64" />
-      <div className="space-y-4 p-5 sm:p-6">
-        <div className="h-4 w-24 animate-pulse rounded bg-slate-800" />
-        <div className="h-6 w-3/4 animate-pulse rounded bg-slate-800" />
-        <div className="h-4 w-2/3 animate-pulse rounded bg-slate-800" />
-        <div className="grid gap-3 md:grid-cols-3">
-          <span className="h-11 animate-pulse rounded-3xl bg-slate-800" />
-          <span className="h-11 animate-pulse rounded-3xl bg-slate-800" />
-          <span className="h-11 animate-pulse rounded-3xl bg-slate-800" />
-        </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <span className="h-11 animate-pulse rounded-3xl bg-slate-800" />
-          <span className="h-11 animate-pulse rounded-3xl bg-slate-800" />
-        </div>
-      </div>
-    </div>
-  )
 }
 
 function HomePage() {
@@ -163,6 +150,7 @@ function HomePage() {
   }, [isAuthenticated, user?._id])
 
   const featured = useMemo(() => featuredProperties.slice(0, 3), [featuredProperties])
+  const featuredToDisplay = featured.length ? featured : featuredPreviewProperties
 
   const handleToggleSave = async (propertyIDFK, shouldSave) => {
     if (!isAuthenticated || !user?._id) {
@@ -302,29 +290,20 @@ function HomePage() {
             </Link>
           </div>
           <div className="mt-10 grid gap-6 lg:grid-cols-3">
-            {featuredLoading ? (
-              <>
-                <PropertyCardSkeleton />
-                <PropertyCardSkeleton />
-                <PropertyCardSkeleton />
-              </>
-            ) : featured.length ? (
-              featured.map((item, index) => (
+            {featuredToDisplay.map((item, index) => (
                 <PropertyCard
                   key={item.id || item._id}
                   property={item}
+                  preview={!featured.length}
                   saved={savedPropertyIds.has(item.id || item._id)}
-                  onToggleSave={handleToggleSave}
+                  onToggleSave={featured.length ? handleToggleSave : undefined}
+                  hideSave={!featured.length}
                   imageLoading={index < 3 ? 'eager' : 'lazy'}
                   imageFetchPriority={index === 0 ? 'high' : 'auto'}
                 />
-              ))
-            ) : (
-              <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-10 text-center text-slate-600">
-                No featured StayJi properties available yet.
-              </div>
-            )}
+              ))}
           </div>
+          {featuredLoading ? <p className="mt-5 text-sm text-slate-500" aria-live="polite">Loading the latest verified stays…</p> : null}
         </div>
       </section>
 
