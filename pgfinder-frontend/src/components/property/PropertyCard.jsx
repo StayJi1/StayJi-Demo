@@ -25,7 +25,7 @@ const responsiveSources = (url) => {
   return [480, 720, 960, 1200].map((width) => `${optimizedRemoteImage(url, width)} ${width}w`).join(', ')
 }
 
-function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSave = false, compareSelected = false, onToggleCompare, imageLoading = 'lazy', imageFetchPriority = 'auto' }) {
+function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSave = false, compareSelected = false, onToggleCompare, imageLoading = 'lazy', imageFetchPriority = 'auto', preview = false }) {
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
   const [internalSaved, setInternalSaved] = useState(Boolean(savedProp))
@@ -35,7 +35,7 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSa
   const propertyPath = `/properties/${property.id || property._id || 'detail'}`
 
   const openProperty = () => {
-    navigate(propertyPath)
+    navigate(preview ? '/properties' : propertyPath)
   }
 
   const handleShortlist = async (event) => {

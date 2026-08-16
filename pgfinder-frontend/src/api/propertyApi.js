@@ -261,17 +261,20 @@ const propertyApi = {
     const cacheKey = Number(limit) || 6
     if (featuredPropertiesCache?.limit === cacheKey) return Promise.resolve(featuredPropertiesCache.items)
     if (featuredPropertiesPromise?.limit === cacheKey) return featuredPropertiesPromise.promise
-    const promise = axiosClient.get('/client/featured-properties', { params: { limit: cacheKey } })
+    // Some deployed backend revisions do not expose the lightweight endpoint yet.
+    // Start the compatible list request at the same time, rather than waiting for
+    // a failed featured request before loading the cards shown on the home page.
+    const featuredRequest = axiosClient.get('/client/featured-properties', { params: { limit: cacheKey } })
       .then((res) => {
-        const items = mapResponse(res.data && res.data.data) || []
-        if (items.length) return items
-        return axiosClient
-          .get('/client/getPropertyList', { params: { cityName: MVP_CITY, limit: cacheKey } })
-          .then((fallbackRes) => mapResponse(fallbackRes.data && fallbackRes.data.data) || [])
+        const items = mapResponse(res.data?.data) || []
+        if (!items.length) throw new Error('No featured properties returned')
+        return items
       })
-      .catch(() => axiosClient
-        .get('/client/getPropertyList', { params: { cityName: MVP_CITY, limit: cacheKey } })
-        .then((fallbackRes) => mapResponse(fallbackRes.data && fallbackRes.data.data) || []))
+    const listRequest = axiosClient
+      .get('/client/getPropertyList', { params: { cityName: MVP_CITY, limit: cacheKey } })
+      .then((res) => mapResponse(res.data?.data) || [])
+
+    const promise = Promise.any([featuredRequest, listRequest])
       .then((items) => {
         featuredPropertiesCache = { limit: cacheKey, items }
         return items
