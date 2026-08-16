@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { FiHome, FiLayers, FiUsers, FiPlusCircle, FiShield, FiUser, FiLogOut, FiMessageSquare } from 'react-icons/fi'
+import { FiHome, FiLayers, FiUsers, FiPlusCircle, FiShield, FiUser, FiLogOut, FiMessageSquare, FiBell } from 'react-icons/fi'
 import NotificationBell from '../notifications/NotificationBell'
 
 function Sidebar() {
@@ -38,6 +38,7 @@ function Sidebar() {
   }
 
   if (role) {
+    links.push({ label: 'Notifications', to: `/dashboard/${dashboardRole}/notifications`, icon: <FiBell /> })
     links.push({ label: 'Profile', to: '/dashboard/profile', icon: <FiUser /> })
   }
 

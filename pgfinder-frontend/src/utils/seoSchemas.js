@@ -15,6 +15,7 @@ export function organizationSchema() {
     logo: defaultSeoImage,
     description: 'StayJi is a PG accommodation platform for verified PGs, hostels, co-living rooms, flats, and short stays in Bangalore, Karnataka, India.',
     email: siteConfig.email,
+    telephone: siteConfig.phone,
     areaServed: {
       '@type': 'City',
       name: 'Bangalore',
@@ -25,6 +26,7 @@ export function organizationSchema() {
       '@type': 'ContactPoint',
       contactType: 'customer support',
       email: siteConfig.email,
+      telephone: siteConfig.phone,
       areaServed: 'IN',
       availableLanguage: ['English', 'Hindi', 'Kannada'],
     }],
@@ -54,6 +56,7 @@ export function localBusinessSchema() {
     url: siteConfig.domain,
     image: defaultSeoImage,
     email: siteConfig.email,
+    telephone: siteConfig.phone,
     priceRange: '₹₹',
     address: {
       '@type': 'PostalAddress',

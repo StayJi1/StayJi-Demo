@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { FiArrowLeft, FiClock, FiColumns, FiMessageSquare, FiShield, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome, FiStar, FiShare2, FiFlag } from 'react-icons/fi'
+import { FiArrowLeft, FiClock, FiColumns, FiMessageSquare, FiShield, FiWifi, FiCoffee, FiTruck, FiVideo, FiDroplet, FiZap, FiActivity, FiHome, FiStar, FiShare2, FiFlag, FiX } from 'react-icons/fi'
+import { FaWhatsapp } from 'react-icons/fa'
 import Loader from '../components/common/Loader'
 import Button from '../components/common/Button'
 import SEO from '../components/SEO'
@@ -13,6 +14,7 @@ import { formatDistance, getDistanceKm } from '../utils/distance'
 import { readCompareIds, writeCompareIds } from '../utils/compareStorage'
 import { breadcrumbSchema, faqSchema, graphSchema, propertySchema, propertySeo } from '../utils/seoSchemas'
 import AdSlot from '../components/ads/AdSlot'
+import { siteConfig } from '../data/seoContent'
 
 const getAmenityIcon = (amenity) => {
   const value = amenity.toLowerCase()
@@ -84,6 +86,8 @@ function PropertyDetailPage() {
   const [reviewMessage, setReviewMessage] = useState('')
   const [editingReviewId, setEditingReviewId] = useState(null)
   const [actionMessage, setActionMessage] = useState('')
+  const [isWhatsAppEnquiryOpen, setIsWhatsAppEnquiryOpen] = useState(false)
+  const [whatsAppEnquiry, setWhatsAppEnquiry] = useState({ name: '', email: '', message: '' })
   const [compareIds, setCompareIds] = useState([])
   const { user, role, isAuthenticated } = useAuth()
   const { position, loading: locationLoading, error: locationError, hasUserLocation, requestLocation } = useCurrentLocation()
@@ -231,6 +235,37 @@ function PropertyDetailPage() {
     } catch (err) {
       setActionMessage(err?.message || 'Unable to request callback right now.')
     }
+  }
+
+  const openWhatsAppEnquiry = () => {
+    setWhatsAppEnquiry({
+      name: user?.name || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.userFname || '',
+      email: user?.userEmail || user?.email || '',
+      message: `I would like to enquire about ${property?.name || property?.propertyName || 'this property'}.`,
+    })
+    setIsWhatsAppEnquiryOpen(true)
+  }
+
+  const handleWhatsAppEnquiry = (event) => {
+    event.preventDefault()
+    const propertyCode = property?._id || property?.id || activePropertyId
+    const propertyName = property?.name || property?.propertyName || 'StayJi property'
+    const enquiryMessage = [
+      'Hello StayJi team,',
+      '',
+      'I would like to enquire about a property.',
+      `Name: ${whatsAppEnquiry.name.trim()}`,
+      `Registered email: ${whatsAppEnquiry.email.trim()}`,
+      `Message: ${whatsAppEnquiry.message.trim()}`,
+      '',
+      `Property name: ${propertyName}`,
+      `Property unique code: ${propertyCode}`,
+      `Property link: ${window.location.href}`,
+    ].join('\n')
+    const whatsappNumber = siteConfig.phoneNational.replace(/\D/g, '')
+    window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(enquiryMessage)}`, '_blank', 'noopener,noreferrer')
+    setIsWhatsAppEnquiryOpen(false)
+    setActionMessage('Your WhatsApp enquiry is ready to send to the StayJi team.')
   }
 
   const handleBookVisit = async () => {
@@ -584,6 +619,7 @@ function PropertyDetailPage() {
                   <Button onClick={handleShortlist} className="w-full sm:w-auto">Shortlist</Button>
                   <Button onClick={handleToggleCompare} variant="secondary" className="w-full sm:w-auto"><FiColumns className="mr-2" /> {compareIds.includes(property?._id || property?.id) ? 'Added to compare' : 'Compare'}</Button>
                   <Button onClick={handleExpressInterest} variant="secondary" className="w-full sm:w-auto">Message owner</Button>
+                  <Button onClick={openWhatsAppEnquiry} variant="secondary" className="w-full border-emerald-500/60 text-emerald-200 hover:bg-emerald-500/10 sm:w-auto"><FaWhatsapp className="mr-2" /> Enquire on WhatsApp</Button>
                   <Button onClick={handleRequestCallback} className="w-full sm:w-auto">Request callback</Button>
                   <Button onClick={handleBookVisit} variant="secondary" className="w-full sm:w-auto">Book visit</Button>
                   <Button onClick={handleShare} variant="secondary" className="w-full sm:w-auto"><FiShare2 /> Share</Button>
@@ -696,9 +732,14 @@ function PropertyDetailPage() {
               ) : null}
               <p className="rounded-3xl bg-slate-950/80 p-4 text-sm text-slate-300">Available from: {property.availableFrom || 'Immediately'}</p>
               {isConsumerView ? (
-                <button type="button" onClick={handleExpressInterest} className="rounded-3xl bg-emerald-500 px-5 py-3 text-center text-sm font-semibold text-white">
-                  Message owner privately
-                </button>
+                <>
+                  <button type="button" onClick={handleExpressInterest} className="rounded-3xl bg-emerald-500 px-5 py-3 text-center text-sm font-semibold text-white">
+                    Message owner privately
+                  </button>
+                  <button type="button" onClick={openWhatsAppEnquiry} className="inline-flex items-center justify-center gap-2 rounded-3xl border border-emerald-500/60 px-5 py-3 text-center text-sm font-semibold text-emerald-200 hover:bg-emerald-500/10">
+                    <FaWhatsapp /> Enquire with StayJi
+                  </button>
+                </>
               ) : null}
             </div>
           </div>
@@ -749,6 +790,30 @@ function PropertyDetailPage() {
           <AdSlot placement="property-sidebar" />
         </aside>
       </div>
+      {isWhatsAppEnquiryOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/80 p-4 backdrop-blur-sm sm:items-center sm:justify-center" role="dialog" aria-modal="true" aria-labelledby="whatsapp-enquiry-title">
+          <form onSubmit={handleWhatsAppEnquiry} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-slate-700 bg-surface-800 p-5 shadow-2xl sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm uppercase tracking-[0.16em] text-emerald-300">Property enquiry</p>
+                <h2 id="whatsapp-enquiry-title" className="mt-2 text-2xl font-semibold text-white">Message the StayJi team</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-400">We’ll add this property’s name and unique code so the team can find it in the backend and help you.</p>
+              </div>
+              <button type="button" onClick={() => setIsWhatsAppEnquiryOpen(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-700 hover:text-white" aria-label="Close enquiry form"><FiX size={20} /></button>
+            </div>
+            <div className="mt-6 grid gap-4">
+              <label className="text-sm text-slate-300">Your name<input required value={whatsAppEnquiry.name} onChange={(event) => setWhatsAppEnquiry((current) => ({ ...current, name: event.target.value }))} className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-emerald-400" /></label>
+              <label className="text-sm text-slate-300">{isAuthenticated ? 'Registered email' : 'Email address'}<input required type="email" value={whatsAppEnquiry.email} onChange={(event) => setWhatsAppEnquiry((current) => ({ ...current, email: event.target.value }))} className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-emerald-400" /></label>
+              <label className="text-sm text-slate-300">Your message<textarea required rows="4" value={whatsAppEnquiry.message} onChange={(event) => setWhatsAppEnquiry((current) => ({ ...current, message: event.target.value }))} className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none focus:border-emerald-400" /></label>
+              <div className="rounded-2xl bg-slate-950/80 p-4 text-sm text-slate-300"><p>Property: <span className="font-medium text-white">{property.name || property.propertyName}</span></p><p className="mt-1 break-all">Unique code: <span className="font-medium text-white">{property._id || property.id || activePropertyId}</span></p></div>
+            </div>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button type="button" variant="secondary" onClick={() => setIsWhatsAppEnquiryOpen(false)}>Cancel</Button>
+              <Button type="submit" className="bg-emerald-500 text-white hover:bg-emerald-400"><FaWhatsapp className="mr-2" /> Continue to WhatsApp</Button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   )
 }

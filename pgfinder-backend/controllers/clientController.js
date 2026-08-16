@@ -482,6 +482,12 @@ const createNotification = async (payload = {}) => {
             ? 'owner'
             : normalizeAccountType(payload.recipientRole || 'user')
         if (!['user', 'owner', 'admin'].includes(recipientRole)) return null
+        // A notification must belong to the recipient's actual dashboard role.
+        // This prevents a user, owner, or admin panel from receiving another
+        // role's events even if an upstream call passes an incorrect role.
+        const roleType = recipientRole === 'owner' ? 'Owner' : recipientRole === 'admin' ? 'Admin' : 'User'
+        const recipient = await User.findOne({ _id: recipientId, isActive: true, userType: { $in: accountTypeVariants(roleType) } }).select('_id').lean()
+        if (!recipient) return null
         return Notification.create({
             recipientId,
             recipientRole,
@@ -3759,7 +3765,9 @@ router.post('/properties/:id/occupancy', attachAuthenticatedUser, requireRoles([
     if (req.body.roomTypes !== undefined) update.roomTypes = parseJsonValue(req.body.roomTypes, [])
     if (req.body.isAvailable !== undefined) update.isAvailable = toBoolean(req.body.isAvailable)
     const updated = await Property.findOneAndUpdate(propertyQuery, { $set: update }, { new: true }).populate(propertyPopulate())
-    await createNotification({ recipientRole: 'all', propertyId: updated._id, type: 'vacancy_alert', title: 'Vacancy updated', message: `${updated.propertyName || 'A StayJi property'} updated room availability.`, link: `/properties/${updated._id}` })
+    // Vacancy updates are useful only to users whose saved search matches this
+    // property. Do not broadcast them to every account or to the owner/admin.
+    await notifySavedSearchMatches(updated)
     res.json({ result: 'success', msg: 'Occupancy updated.', data: propertyDto(updated) })
 })
 

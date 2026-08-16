@@ -2,6 +2,12 @@ export const siteConfig = {
   name: 'StayJi',
   domain: 'https://stayji.com',
   email: 'hello.stayji@gmail.com',
+  phone: '+9179677292',
+  phoneDisplay: '+91 79677 292',
+  phoneNational: '9179677292',
+  telUrl: 'tel:+9179677292',
+  whatsappUrl: 'https://wa.me/9179677292?text=Hello%20StayJi%2C%20I%20need%20support.',
+  mailtoUrl: 'mailto:hello.stayji@gmail.com',
   city: 'Bangalore',
 }
 
@@ -229,7 +235,7 @@ const baseQuestions = [
   ['How are prices shown?', 'Prices are shown from the owner listing data and may vary by sharing type, meals, AC, deposit, and room availability.'],
   ['Are properties verified?', 'StayJi supports admin verification workflows for photos, pricing, owner details, location, safety basics, and availability before featuring listings.'],
   ['Can I compare PGs?', 'Yes. Compare pricing, amenities, occupancy, reviews, locality, and distance to choose the best stay.'],
-  ['How do I contact StayJi?', `You can email ${siteConfig.email} for business, support, or listing queries.`],
+  ['How do I contact StayJi?', `You can email ${siteConfig.email}, call ${siteConfig.phoneDisplay}, or message StayJi on WhatsApp for business, support, or listing queries.`],
 ]
 
 export function getFaqItems(groupKey = 'general') {

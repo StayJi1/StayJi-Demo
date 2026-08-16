@@ -295,6 +295,7 @@ function PropertiesPage() {
   }
 
   const backendFilterParams = useMemo(() => {
+    const liveVacancySearch = /\b(live\s*(listing|listings|vacancy)|vacant(\s+now)?|available\s+now)\b/i.test(searchQuery)
     const gender = activeFilters.filter((filter) => ['Boys', 'Girls', 'Co-ed'].includes(filter)).join(',')
     const categories = activeFilters.filter((filter) => propertyCategories.includes(filter)).join(',')
     const amenities = activeFilters.filter((filter) => ['AC', 'Parking', 'Attached bathroom'].includes(filter)).join(',')
@@ -317,20 +318,30 @@ function PropertiesPage() {
       ac: activeFilters.includes('AC'),
       parking: activeFilters.includes('Parking'),
       attachedBathroom: activeFilters.includes('Attached bathroom'),
-      availableNow: activeFilters.includes('Available now'),
+      // A natural-language "live listings" or "vacant now" search is an
+      // availability filter too, not just text to match against a property name.
+      availableNow: activeFilters.includes('Available now') || liveVacancySearch,
       rating: activeFilters.includes('Rating 4+') ? 4 : '',
       page,
       limit: pageSize,
     }
   }, [activeFilters, mapSearchQuery, page, pageSize, priceRange.max, priceRange.min, searchQuery])
 
+  const showCompleteLiveVacancyResults = Boolean(backendFilterParams.availableNow)
+
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true)
-        const data = await propertyService.fetchPropertyPage(backendFilterParams)
-        setProperties(data.items || [])
-        setPaginationMeta(data.meta || { page, limit: pageSize, total: data.items?.length || 0, pages: 1 })
+        if (showCompleteLiveVacancyResults) {
+          const items = await propertyService.fetchProperties({ ...backendFilterParams, page: 1, allPages: true })
+          setProperties(items || [])
+          setPaginationMeta({ page: 1, limit: items?.length || 0, total: items?.length || 0, pages: 1 })
+        } else {
+          const data = await propertyService.fetchPropertyPage(backendFilterParams)
+          setProperties(data.items || [])
+          setPaginationMeta(data.meta || { page, limit: pageSize, total: data.items?.length || 0, pages: 1 })
+        }
       } catch {
         setProperties([])
         setPaginationMeta({ page, limit: pageSize, total: 0, pages: 1 })
@@ -339,7 +350,7 @@ function PropertiesPage() {
       }
     }
     load()
-  }, [backendFilterParams, page, pageSize])
+  }, [backendFilterParams, page, pageSize, showCompleteLiveVacancyResults])
 
   useEffect(() => {
     if (searchParams.get('nearby') === 'true' && !hasUserLocation && !locationLoading) {
@@ -869,10 +880,10 @@ function PropertiesPage() {
           </div>
           <div className="mt-8 flex flex-col gap-4 rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-4 text-sm text-slate-300 sm:flex-row sm:items-center sm:justify-between">
             <p>
-              Showing page {paginationMeta.page || page} of {paginationMeta.pages || 1}
+              {showCompleteLiveVacancyResults ? 'Showing all live vacant results' : `Showing page ${paginationMeta.page || page} of ${paginationMeta.pages || 1}`}
               {paginationMeta.total ? ` (${paginationMeta.total} matching Bangalore PGs)` : ''}
             </p>
-            <div className="flex flex-wrap items-center gap-3">
+            {!showCompleteLiveVacancyResults ? <div className="flex flex-wrap items-center gap-3">
               <select
                 value={pageSize}
                 onChange={(event) => {
@@ -901,7 +912,7 @@ function PropertiesPage() {
               >
                 Next
               </button>
-            </div>
+            </div> : null}
           </div>
         </section>
 
