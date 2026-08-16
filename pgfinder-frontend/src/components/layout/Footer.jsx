@@ -1,4 +1,7 @@
 import { Link } from 'react-router-dom'
+import { FaWhatsapp } from 'react-icons/fa'
+import { FiMail, FiPhoneCall } from 'react-icons/fi'
+import { siteConfig } from '../../data/seoContent'
 
 function Footer() {
   return (
@@ -39,8 +42,17 @@ function Footer() {
           </div>
           <div>
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-[0.24em] text-slate-900">Contact</h3>
-            <p className="text-sm leading-6">hello.stayji@gmail.com</p>
-            <p className="text-sm leading-6">1234567899</p>
+            <div className="grid gap-3 text-sm">
+              <a href={siteConfig.mailtoUrl} className="inline-flex items-center gap-2 leading-6 hover:text-blue-600">
+                <FiMail className="shrink-0" /> {siteConfig.email}
+              </a>
+              <a href={siteConfig.telUrl} className="inline-flex items-center gap-2 leading-6 hover:text-blue-600">
+                <FiPhoneCall className="shrink-0" /> {siteConfig.phoneDisplay}
+              </a>
+              <a href={siteConfig.whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 leading-6 text-emerald-700 hover:text-emerald-600">
+                <FaWhatsapp className="shrink-0" /> WhatsApp support
+              </a>
+            </div>
           </div>
         </div>
         <div className="mt-10 border-t border-slate-200 pt-6 text-sm text-slate-500">

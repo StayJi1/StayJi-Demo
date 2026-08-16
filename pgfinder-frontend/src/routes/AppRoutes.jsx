@@ -6,8 +6,8 @@ import DashboardLayout from '../layouts/DashboardLayout'
 import Loader from '../components/common/Loader'
 import ProtectedRoute from '../components/common/ProtectedRoute'
 import RoleProtectedRoute from '../components/common/RoleProtectedRoute'
+import HomePage from '../pages/HomePage'
 
-const HomePage = lazy(() => import('../pages/HomePage'))
 const PropertiesPage = lazy(() => import('../pages/PropertiesPage'))
 const PropertyDetailPage = lazy(() => import('../pages/PropertyDetailPage'))
 const ComparePage = lazy(() => import('../pages/ComparePage'))
@@ -31,6 +31,7 @@ const AdminAdsPage = lazy(() => import('../pages/dashboard/admin/AdminAdsPage'))
 const AdminVendorDetailPage = lazy(() => import('../pages/dashboard/admin/AdminVendorDetailPage'))
 const AdminPropertyDetailPage = lazy(() => import('../pages/dashboard/admin/AdminPropertyDetailPage'))
 const MessagesPage = lazy(() => import('../pages/dashboard/MessagesPage'))
+const NotificationsPage = lazy(() => import('../pages/dashboard/NotificationsPage'))
 
 function DashboardRedirect() {
   const { role } = useAuth()
@@ -218,6 +219,9 @@ function AppRoutes() {
             </RoleProtectedRoute>
           }
         />
+        <Route path="user/notifications" element={<RoleProtectedRoute role="user"><NotificationsPage /></RoleProtectedRoute>} />
+        <Route path="owner/notifications" element={<RoleProtectedRoute role="owner"><NotificationsPage /></RoleProtectedRoute>} />
+        <Route path="admin/notifications" element={<RoleProtectedRoute role="admin"><NotificationsPage /></RoleProtectedRoute>} />
         <Route path="profile" element={<UserProfilePage />} />
       </Route>
         <Route path="*" element={<NotFoundPage />} />

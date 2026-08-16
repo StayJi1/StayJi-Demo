@@ -80,9 +80,7 @@ function NotificationBell() {
         <div className="absolute right-0 top-14 z-[99999] w-[min(92vw,24rem)] overflow-hidden rounded-2xl border border-slate-800 bg-surface-900 shadow-card">
           <div className="flex items-center justify-between gap-3 border-b border-slate-800 p-4">
             <p className="text-sm font-semibold text-white">{roleLabel} notifications</p>
-            <button type="button" onClick={handleMarkAllRead} className="text-xs font-semibold text-accent-400 hover:text-accent-300">
-              Mark all read
-            </button>
+            <div className="flex items-center gap-3"><button type="button" onClick={() => { setOpen(false); navigate(`/dashboard/${role === 'owner' ? 'owner' : role}/notifications`) }} className="text-xs font-semibold text-slate-300 hover:text-white">View all</button><button type="button" onClick={handleMarkAllRead} className="text-xs font-semibold text-accent-400 hover:text-accent-300">Mark all read</button></div>
           </div>
           <div className="max-h-96 overflow-y-auto">
             {visibleItems.length ? visibleItems.map((notification) => (

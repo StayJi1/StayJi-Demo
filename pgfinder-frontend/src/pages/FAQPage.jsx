@@ -1,4 +1,6 @@
 import { Link, Navigate, useParams } from 'react-router-dom'
+import { FaWhatsapp } from 'react-icons/fa'
+import { FiMail, FiPhoneCall } from 'react-icons/fi'
 import SEO from '../components/SEO'
 import SeoContentCard from '../components/seo/SeoContentCard'
 import { buildSeoArticle, faqGroups, getFaqItems, getFaqRecords, siteConfig } from '../data/seoContent'
@@ -93,11 +95,20 @@ export default function FAQPage() {
         <section className="mt-10 rounded-2xl bg-slate-950 p-6 text-white">
           <h2 className="text-2xl font-semibold">Need help finding a Bangalore PG?</h2>
           <p className="mt-3 text-sm leading-6 text-slate-300">
-            Search verified stays by locality, rent, sharing, food, and visit availability, or contact {siteConfig.email}.
+            Search verified stays by locality, rent, sharing, food, and visit availability, or contact StayJi support.
           </p>
-            <div className="mt-5 flex flex-wrap gap-3">
+          <div className="mt-5 flex flex-wrap gap-3">
             <Link to="/bangalore" className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950">Explore Bangalore PGs</Link>
             <Link to="/bangalore" className="rounded-full border border-white/20 px-5 py-3 text-sm font-semibold text-white">Bangalore guide</Link>
+            <a href={siteConfig.telUrl} className="inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10">
+              <FiPhoneCall /> {siteConfig.phoneDisplay}
+            </a>
+            <a href={siteConfig.whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-400">
+              <FaWhatsapp /> WhatsApp
+            </a>
+            <a href={siteConfig.mailtoUrl} className="inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10">
+              <FiMail /> {siteConfig.email}
+            </a>
           </div>
         </section>
       </div>
