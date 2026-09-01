@@ -203,23 +203,33 @@ function UserProfilePage() {
         </form>
       </Card>
 
-      <Card className="p-8">
-        <form onSubmit={handlePasswordChange} className="space-y-6">
+      {!user?.isDummy ? (
+        <Card className="p-8">
+          <form onSubmit={handlePasswordChange} className="space-y-6">
+            <div>
+              <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Password</p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">Update login password</h2>
+            </div>
+            <div className="grid gap-6 sm:grid-cols-3">
+              <input type="password" value={passwordForm.oldPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, oldPassword: event.target.value }))} placeholder="Current password" className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+              <input type="password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))} placeholder="New password" className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+              <input type="password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))} placeholder="Confirm new password" className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
+            </div>
+            {passwordMessage ? <p className={`text-sm ${passwordMessage.startsWith('Password changed') ? 'text-emerald-300' : 'text-rose-300'}`}>{passwordMessage}</p> : null}
+            <Button type="submit" disabled={!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}>
+              Change password
+            </Button>
+          </form>
+        </Card>
+      ) : (
+        <Card className="p-8">
           <div>
             <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Password</p>
-            <h2 className="mt-3 text-2xl font-semibold text-white">Update login password</h2>
+            <h2 className="mt-3 text-2xl font-semibold text-white">Shared demo account</h2>
+            <p className="mt-2 text-sm text-slate-400">Password changes are disabled for shared demo accounts to keep them usable for multiple visitors.</p>
           </div>
-          <div className="grid gap-6 sm:grid-cols-3">
-            <input type="password" value={passwordForm.oldPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, oldPassword: event.target.value }))} placeholder="Current password" className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
-            <input type="password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))} placeholder="New password" className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
-            <input type="password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))} placeholder="Confirm new password" className="w-full rounded-3xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-accent-400" />
-          </div>
-          {passwordMessage ? <p className={`text-sm ${passwordMessage.startsWith('Password changed') ? 'text-emerald-300' : 'text-rose-300'}`}>{passwordMessage}</p> : null}
-          <Button type="submit" disabled={!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}>
-            Change password
-          </Button>
-        </form>
-      </Card>
+        </Card>
+      )}
     </div>
   )
 }

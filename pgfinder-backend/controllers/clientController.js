@@ -38,6 +38,22 @@ const MVP_CITY = 'Bangalore'
 const MVP_STATE = 'Karnataka'
 const MVP_CITY_REGEX = /^(bangalore|bengaluru)$/i
 
+// Nearby area mapping for Bangalore — used to include relevant nearby localities
+// when a user searches for an area with limited results. Keep names human-readable.
+const nearbyAreaMap = {
+    'electronic city': ['Bellandur', 'Hsr Layout', 'Koramangala'],
+    'hsr layout': ['Koramangala', 'Bellandur', 'Btm Layout', 'Electronic City'],
+    'koramangala': ['Hsr Layout', 'Btm Layout', 'Jayanagar', 'Indiranagar'],
+    'btm layout': ['Koramangala', 'Jayanagar', 'Jp Nagar'],
+    'bellandur': ['Electronic City', 'Hsr Layout', 'Marathahalli'],
+    'marathahalli': ['Bellandur', 'Whitefield'],
+    'whitefield': ['Marathahalli', 'Brookefield'],
+    'indiranagar': ['Koramangala'],
+    'jp nagar': ['Jayanagar', 'Btm Layout'],
+    'jayanagar': ['Jp Nagar', 'Btm Layout'],
+    'hebbal': ['Manyata Tech Park', 'Yelahanka']
+}
+
 // Simple in-memory cache for property lists to speed up repeated public requests.
 // Key: cacheKey derived from request query (page/limit/filters). Value: { ts, data, meta }
 const propertyListCache = new Map();
@@ -1352,8 +1368,13 @@ router.post('/updateUser', attachAuthenticatedUser, async (req, res) => {
 
 router.get('/getPropertyList', async (req, res) => {
     await expirePremiumListings()
-    const publicFilters = buildPropertyFilters({ ...req.query, cityName: MVP_CITY })
     const { page, limit, skip } = pageOptions(req.query)
+    // Build filters without applying areaName here so we can control area-prioritization logic below
+    const queryCopy = { ...req.query }
+    delete queryCopy.areaName
+    delete queryCopy.area
+    delete queryCopy.locality
+    const publicFilters = buildPropertyFilters({ ...queryCopy, cityName: MVP_CITY })
     publicFilters.cityName = MVP_CITY_REGEX
     if (req.query.analyticsMode === 'real' || req.query.includeDummy === 'false') publicFilters.isDummy = false
     if (req.query.analyticsMode === 'demo') publicFilters.isDummy = true
@@ -1367,17 +1388,115 @@ router.get('/getPropertyList', async (req, res) => {
         return res.json({ result: 'success', msg: 'Property List Found (cached)', data: cached.data, meta: cached.meta })
     }
 
-    const [total, objProperty] = await Promise.all([
-        Property.countDocuments(filters),
-        Property.find(filters)
-            .populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact'])
-            .populate('vendorId', ['userFname', 'userLname', 'userType', 'contact'])
-            .populate('propertyTypeIDFK', ['typeName'])
-            .sort({ isPremium: -1, priority: -1, isFeatured: -1, localityPriority: -1, addedOn: -1 })
-            .skip(skip)
-            .limit(limit)
-            .lean()
-    ])
+    // Use a lightweight projection for list views to reduce payload size and speed up queries.
+    const listProjection = {
+        propertyName: 1,
+        rent: 1,
+        areaName: 1,
+        cityName: 1,
+        propertyImage: 1,
+        propertyImageUrls: 1,
+        propertyTypeIDFK: 1,
+        propertyCategory: 1,
+        pricingUnit: 1,
+        availableBeds: 1,
+        roomInventory: 1,
+        roomTypes: 1,
+        sharing: 1,
+        sharingAvailability: 1,
+        genderType: 1,
+        isDummy: 1,
+        isVerified: 1,
+        approvalStatus: 1,
+        isAvailable: 1,
+        addedOn: 1,
+        priority: 1,
+        isPremium: 1,
+        localityPriority: 1,
+        vendorId: 1,
+        userIDFK: 1,
+    }
+
+    // If areaName is provided and city is Bangalore, apply prioritized area search:
+    let objProperty = []
+    let total = await Property.countDocuments(filters)
+    const areaQuery = normalizeText(req.query.areaName || req.query.area || req.query.locality || '')
+    if (areaQuery && isBangaloreValue(req.query.cityName || req.query.city || MVP_CITY)) {
+        const exactArea = areaQuery
+        const nearbyList = (nearbyAreaMap[exactArea.toLowerCase()] || []).map((a) => a)
+        const areasToInclude = [exactArea, ...nearbyList].filter(Boolean)
+        // Build regex list for area matching (anchored, case-insensitive)
+        const areaRegexes = areasToInclude.map((a) => new RegExp(`^${normalizedRegexSource(a)}$`, 'i'))
+
+        // Count documents matching exact+nearby (for pagination meta)
+        const combinedCount = await Property.countDocuments({ $and: [publicPropertyQuery, publicFilters, ...(cityGate ? [cityGate] : []), { areaName: { $in: areaRegexes } }] })
+        total = combinedCount
+
+        // Count exact matches separately to prioritize them
+        const exactCount = await Property.countDocuments({ $and: [publicPropertyQuery, publicFilters, ...(cityGate ? [cityGate] : []), { areaName: new RegExp(`^${normalizedRegexSource(exactArea)}$`, 'i') }] })
+
+        const startIndex = Math.max(0, skip)
+        const endIndex = startIndex + limit
+
+        // Helper to fetch documents with filters and area constraint
+        const fetchProps = async (areaFilter, _skip = 0, _limit = 24) => {
+            return Property.find({ $and: [publicPropertyQuery, publicFilters, ...(cityGate ? [cityGate] : []), areaFilter] })
+                .select(listProjection)
+                .populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact'])
+                .populate('vendorId', ['userFname', 'userLname', 'userType', 'contact'])
+                .populate('propertyTypeIDFK', ['typeName'])
+                .sort({ isPremium: -1, priority: -1, isFeatured: -1, localityPriority: -1, addedOn: -1 })
+                .skip(_skip)
+                .limit(_limit)
+                .lean()
+        }
+
+        if (startIndex >= exactCount) {
+            // All requested items fall into nearby area range
+            const skipNearby = startIndex - exactCount
+            // Exclude exact area from nearby fetch
+            const nearbyRegexes = nearbyList.length ? nearbyList.map((a) => new RegExp(`^${normalizedRegexSource(a)}$`, 'i')) : []
+            if (nearbyRegexes.length) {
+                objProperty = await fetchProps({ areaName: { $in: nearbyRegexes } }, skipNearby, limit)
+            } else {
+                objProperty = []
+            }
+        } else {
+            // Part or all of requested page includes exact matches
+            const takeFromExact = Math.min(limit, Math.max(0, exactCount - startIndex))
+            const exactSkip = startIndex
+            const exactRows = await fetchProps({ areaName: { $in: [new RegExp(`^${normalizedRegexSource(exactArea)}$`, 'i')] } }, exactSkip, takeFromExact)
+            objProperty = exactRows
+            if (objProperty.length < limit) {
+                const need = limit - objProperty.length
+                // Fetch nearby excluding exact
+                const nearbyRegexes = nearbyList.length ? nearbyList.map((a) => new RegExp(`^${normalizedRegexSource(a)}$`, 'i')) : []
+                if (nearbyRegexes.length) {
+                    // When some exact rows were taken from the start, nearby skip is zero for page1; if exact consumed earlier pages, compute nearest skip
+                    const nearbySkip = Math.max(0, startIndex + limit > exactCount ? startIndex + limit - exactCount - (limit - need) : 0)
+                    const nearbyRows = await fetchProps({ areaName: { $in: nearbyRegexes } }, 0, need)
+                    // Append nearby rows after exact
+                    objProperty = objProperty.concat(nearbyRows)
+                }
+            }
+        }
+    } else {
+        // Default list (no area prioritization requested)
+        const [countRes, rows] = await Promise.all([
+            Property.countDocuments(filters),
+            Property.find(filters)
+                .select(listProjection)
+                .populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact'])
+                .populate('vendorId', ['userFname', 'userLname', 'userType', 'contact'])
+                .populate('propertyTypeIDFK', ['typeName'])
+                .sort({ isPremium: -1, priority: -1, isFeatured: -1, localityPriority: -1, addedOn: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean()
+        ])
+        total = countRes
+        objProperty = rows
+    }
     if (objProperty != null) {
         try {
             propertyListCache.set(cacheKey, { ts: Date.now(), data: objProperty, meta: { page, limit, total, pages: Math.ceil(total / limit) } })
@@ -2497,6 +2616,7 @@ router.post('/resetPassword', attachAuthenticatedUser, async (req, res) => {
     const targetEmail = (req.body.userEmail || req.body.email || '').trim()
     const target = await User.findOne({ userEmail: new RegExp(`^${targetEmail}$`, 'i'), isActive: true })
     if (!target) return res.json({ result: "failure", msg: "User not found.", data: 0 });
+    if (isDemoAccount(target)) return res.status(403).json({ result: "failure", msg: "Password changes are disabled for shared demo accounts.", data: 0 });
     const sameUser = target._id.toString() === req.auth.user._id.toString()
     if (!sameUser && !isAdminRequest(req)) {
         return res.status(403).json({ result: "failure", msg: "Only Admin can reset another user's password.", data: 0 });
@@ -3180,6 +3300,11 @@ const selectUserSafe = (u = {}) => ({
     userType: u.userType,
     profile: u.profile,
 })
+
+const isDemoAccount = (user) => {
+    if (!user) return false
+    return user.isDummy === true || (user.status && user.status.toString().toLowerCase() === 'demo')
+}
 
 const toObjectIdIfValid = (id) => {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) return null
@@ -4287,6 +4412,9 @@ router.post('/users/:id', async (req, res) => {
     const previous = await User.findOne({ _id: req.params.id }).select('-userPassword')
     const access = assertAdminCanManageUser(req, previous)
     if (!access.ok) return res.status(access.status).json({ result: 'failure', msg: access.msg, data: null })
+    if (previous && isDemoAccount(previous) && (updateFields.userEmail !== undefined || updateFields.contact !== undefined)) {
+        return res.status(403).json({ result: 'failure', msg: 'Demo accounts cannot change email or contact to preserve shared access.', data: null })
+    }
     const previousRole = normalizeAccountType(previous?.userType)
     const nextRole = updateFields.userType ? normalizeAccountType(updateFields.userType) : previousRole
     if (previousRole === 'admin' && nextRole !== 'admin') {
@@ -4310,6 +4438,7 @@ router.post('/requestPasswordReset', async (req, res) => {
     if (!email) return res.status(422).json({ result: 'failure', msg: 'Enter your registered email address.', data: 0 })
     const user = await User.findOne({ userEmail: new RegExp(`^${email}$`, 'i'), isActive: true })
     if (!user) return res.status(404).json({ result: 'failure', msg: 'No active StayJi account was found with this email.', data: 0 })
+    if (isDemoAccount(user)) return res.status(403).json({ result: 'failure', msg: 'Password changes are disabled for shared demo accounts.', data: 0 })
     const otp = `${Math.floor(100000 + Math.random() * 900000)}`
     await User.updateOne({ _id: user._id }, { resetOtp: hashPassword(otp), resetOtpExpiresAt: new Date(Date.now() + 10 * 60 * 1000) })
     res.json({ result: 'success', msg: 'Account found. A verification code has been generated for password reset.', data: 1 })
@@ -4318,7 +4447,9 @@ router.post('/requestPasswordReset', async (req, res) => {
 router.post('/resetPasswordWithOtp', async (req, res) => {
     const email = (req.body.userEmail || req.body.email || '').trim()
     const user = await User.findOne({ userEmail: new RegExp(`^${email}$`, 'i'), isActive: true })
-    if (!user || !user.resetOtp || !user.resetOtpExpiresAt || user.resetOtpExpiresAt < new Date() || !verifyPassword(req.body.otp || '', user.resetOtp)) {
+    if (!user) return res.json({ result: 'failure', msg: 'Invalid or expired verification code.', data: 0 })
+    if (isDemoAccount(user)) return res.json({ result: 'failure', msg: 'Password changes are disabled for shared demo accounts.', data: 0 })
+    if (!user.resetOtp || !user.resetOtpExpiresAt || user.resetOtpExpiresAt < new Date() || !verifyPassword(req.body.otp || '', user.resetOtp)) {
         return res.json({ result: 'failure', msg: 'Invalid or expired verification code.', data: 0 })
     }
     if (!strongPasswordPattern.test(req.body.userPassword || req.body.password || '')) {
@@ -4329,6 +4460,7 @@ router.post('/resetPasswordWithOtp', async (req, res) => {
 })
 
 router.post('/changePassword', attachAuthenticatedUser, async (req, res) => {
+    if (isDemoAccount(req.auth.user)) return res.json({ result: 'failure', msg: 'Password changes are disabled for shared demo accounts.', data: 0 })
     const user = await User.findOne({ _id: req.auth.user._id, isActive: true }).select('userPassword')
     if (!user || !verifyPassword(req.body.oldPassword || '', user.userPassword)) {
         return res.json({ result: 'failure', msg: 'Old password is incorrect.', data: 0 })
@@ -4345,6 +4477,9 @@ router.post('/users/:id/reset-password', requireAdminGovernance, async (req, res
     if (!strongPasswordPattern.test(temporaryPassword)) {
         return res.json({ result: 'failure', msg: 'Temporary password must be at least 8 characters and include uppercase, lowercase, and a number.', data: null })
     }
+    const targetUser = await User.findOne({ _id: req.params.id }).select('-userPassword -resetOtp -resetOtpExpiresAt')
+    if (!targetUser) return res.json({ result: 'failure', msg: 'User not found or cannot be reset through this workflow.', data: null })
+    if (isDemoAccount(targetUser)) return res.status(403).json({ result: 'failure', msg: 'Password changes are disabled for shared demo accounts.', data: null })
     const user = await User.findOneAndUpdate(
         { _id: req.params.id },
         { $set: { userPassword: hashPassword(temporaryPassword), forceLogoutAt: new Date(), resetOtp: '', resetOtpExpiresAt: null } },
