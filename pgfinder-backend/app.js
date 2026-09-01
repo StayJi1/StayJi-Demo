@@ -54,6 +54,7 @@ const corsOrigins = [
     "https://stayji-stayji.vercel.app",
     "https://stayji.com",
     "https://www.stayji.com",
+    "https://stayji-demo.vercel.app",
     ...configuredCorsOrigins
 ].filter((origin, index, origins) => origins.indexOf(origin) === index);
 
@@ -180,6 +181,10 @@ app.get('/', (req, res) => {
 
     res.send('StayJi Backend Running Successfully 🚀');
 });
+
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', uptime: process.uptime(), env: process.env.NODE_ENV || 'development' })
+})
 
 /*
 |--------------------------------------------------------------------------
