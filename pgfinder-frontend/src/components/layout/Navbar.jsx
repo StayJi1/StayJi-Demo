@@ -18,7 +18,7 @@ function Navbar() {
     ? 'owner'
     : role || 'user'
   const visibleNavItems = navItems
-    .filter((item) => !(isAuthenticated && dashboardRole === 'owner' && item.to === '/compare'))
+    .filter((item) => !(isAuthenticated && dashboardRole !== 'user' && item.to === '/compare'))
     .map((item) => {
       if (dashboardRole === 'owner' && item.to === '/properties') {
         return { ...item, label: 'My stays', to: '/dashboard/owner/properties' }

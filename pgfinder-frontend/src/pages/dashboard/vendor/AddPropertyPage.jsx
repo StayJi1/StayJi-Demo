@@ -422,7 +422,11 @@ function AddPropertyPage() {
     }
   }
 
-  if (user?.isDummy && role === 'owner') {
+  const isSharedDemoOwner = role === 'owner' && (
+    user?.isDummy || String(user?.status || '').toLowerCase() === 'demo'
+  )
+
+  if (isSharedDemoOwner) {
     return (
       <div className="space-y-8">
         <Card className="p-8">
