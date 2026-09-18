@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { FiColumns, FiFilter, FiMap, FiMapPin, FiSearch, FiX } from 'react-icons/fi'
@@ -6,7 +6,6 @@ import SectionHeading from '../components/common/SectionHeading'
 import Button from '../components/common/Button'
 import Loader from '../components/common/Loader'
 import PropertyCard from '../components/property/PropertyCard'
-import PropertyMap from '../components/map/PropertyMap'
 import AdSlot from '../components/ads/AdSlot'
 import propertyService from '../services/propertyService'
 import dashboardService from '../services/dashboardService'
@@ -15,7 +14,11 @@ import { useAuth } from '../context/AuthContext'
 import { getDistanceKm } from '../utils/distance'
 import SEO from '../components/SEO'
 import { MVP_CITY } from '../config/mvp'
-import { readCompareIds, writeCompareIds } from '../utils/compareStorage'
+import { clearCompareIds, readCompareIds, writeCompareIds } from '../utils/compareStorage'
+import useDebouncedValue from '../hooks/useDebouncedValue'
+import { isDemoPropertyMode } from '../config/demoPropertyMode'
+
+const PropertyMap = lazy(() => import('../components/map/PropertyMap'))
 
 const filterOptions = [
   'PG',
@@ -123,13 +126,31 @@ const isSimilarToken = (token, value) => {
   return true
 }
 
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
+  ))
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)')
+    const update = () => setIsDesktop(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+
+  return isDesktop
+}
+
 function PropertiesPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const initialSavedSearchState = getSavedSearchStateFromParams(searchParams)
+  const demoPropertyMode = isDemoPropertyMode({ demo: searchParams.get('demo') })
   const [properties, setProperties] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState(initialSavedSearchState.searchQuery)
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 350)
   const [activeFilters, setActiveFilters] = useState(initialSavedSearchState.activeFilters)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [priceRange, setPriceRange] = useState(initialSavedSearchState.priceRange)
@@ -140,14 +161,19 @@ function PropertiesPage() {
   const [pageSize, setPageSize] = useState(Number(initialSavedSearchState.pagination?.pageSize) || 24)
   const [paginationMeta, setPaginationMeta] = useState({ page: Number(initialSavedSearchState.pagination?.page) || 1, limit: 24, total: 0, pages: 1 })
   const [mapSearchQuery, setMapSearchQuery] = useState(initialSavedSearchState.mapSearchQuery)
+  const debouncedMapSearchQuery = useDebouncedValue(mapSearchQuery, 350)
   const [mapSearchLoading, setMapSearchLoading] = useState(false)
   const [mapSearchError, setMapSearchError] = useState('')
   const [mapSearchMessage, setMapSearchMessage] = useState('')
   const { user, isAuthenticated, role } = useAuth()
+  const accountRole = (role || user?.role || user?.userType || '').toString().toLowerCase()
+  const canCompare = !isAuthenticated || accountRole === 'user'
   const [savedPropertyIds, setSavedPropertyIds] = useState(new Set())
   const [compareIds, setCompareIds] = useState(() => new Set(readCompareIds(user)))
   const [compareMessage, setCompareMessage] = useState('')
   const [saveSearchMessage, setSaveSearchMessage] = useState('')
+  const [mapReady, setMapReady] = useState(false)
+  const isDesktop = useIsDesktop()
   const {
     position,
     loading: locationLoading,
@@ -263,6 +289,7 @@ function PropertiesPage() {
   }
 
   const toggleCompare = (property) => {
+    if (!canCompare) return
     if (!isAuthenticated || !user?._id) {
       navigate('/login', { replace: true })
       return
@@ -271,31 +298,35 @@ function PropertiesPage() {
     const propertyId = property.id || property._id
     if (!propertyId) return
     setCompareMessage('')
-    setCompareIds((current) => {
-      const next = new Set(current)
-      if (next.has(propertyId)) {
-        next.delete(propertyId)
-        writeCompareIds(user, [...next])
-        return next
-      }
-      if (next.size >= 3) {
-        setCompareMessage('You can compare up to 3 properties at once.')
-        return current
-      }
+    const next = new Set(compareIds)
+    if (next.has(propertyId)) {
+      next.delete(propertyId)
+    } else if (next.size >= 3) {
+      setCompareMessage('You can compare up to 3 properties at once.')
+      return
+    } else {
       next.add(propertyId)
-      writeCompareIds(user, [...next])
-      return next
-    })
+    }
+    const nextIds = [...next]
+    writeCompareIds(user, nextIds)
+    setCompareIds(new Set(nextIds))
   }
 
   const clearCompare = () => {
-    writeCompareIds(user, [])
+    clearCompareIds(user)
     setCompareIds(new Set())
     setCompareMessage('')
   }
 
+  const openCompare = () => {
+    const ids = [...compareIds]
+    if (!ids.length || !canCompare) return
+    writeCompareIds(user, ids)
+    navigate(`/compare?ids=${encodeURIComponent(ids.join(','))}`)
+  }
+
   const backendFilterParams = useMemo(() => {
-    const liveVacancySearch = /\b(live\s*(listing|listings|vacancy)|vacant(\s+now)?|available\s+now)\b/i.test(searchQuery)
+    const liveVacancySearch = /\b(live\s*(listing|listings|vacancy)|vacant(\s+now)?|available\s+now)\b/i.test(debouncedSearchQuery)
     const gender = activeFilters.filter((filter) => ['Boys', 'Girls', 'Co-ed'].includes(filter)).join(',')
     const categories = activeFilters.filter((filter) => propertyCategories.includes(filter)).join(',')
     const amenities = activeFilters.filter((filter) => ['AC', 'Parking', 'Attached bathroom'].includes(filter)).join(',')
@@ -306,8 +337,8 @@ function PropertiesPage() {
 
     return {
       cityName: MVP_CITY,
-      search: searchQuery,
-      area: mapSearchQuery,
+      search: debouncedSearchQuery,
+      area: debouncedMapSearchQuery,
       minPrice: priceRange.min,
       maxPrice: priceRange.max,
       gender,
@@ -324,24 +355,18 @@ function PropertiesPage() {
       rating: activeFilters.includes('Rating 4+') ? 4 : '',
       page,
       limit: pageSize,
+      demo: demoPropertyMode,
+      fallbackToDemo: true,
     }
-  }, [activeFilters, mapSearchQuery, page, pageSize, priceRange.max, priceRange.min, searchQuery])
-
-  const showCompleteLiveVacancyResults = Boolean(backendFilterParams.availableNow)
+  }, [activeFilters, debouncedMapSearchQuery, debouncedSearchQuery, demoPropertyMode, page, pageSize, priceRange.max, priceRange.min])
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true)
-        if (showCompleteLiveVacancyResults) {
-          const items = await propertyService.fetchProperties({ ...backendFilterParams, page: 1, allPages: true })
-          setProperties(items || [])
-          setPaginationMeta({ page: 1, limit: items?.length || 0, total: items?.length || 0, pages: 1 })
-        } else {
-          const data = await propertyService.fetchPropertyPage(backendFilterParams)
-          setProperties(data.items || [])
-          setPaginationMeta(data.meta || { page, limit: pageSize, total: data.items?.length || 0, pages: 1 })
-        }
+        const data = await propertyService.fetchPropertyPage(backendFilterParams)
+        setProperties(data.items || [])
+        setPaginationMeta(data.meta || { page, limit: pageSize, total: data.items?.length || 0, pages: 1 })
       } catch {
         setProperties([])
         setPaginationMeta({ page, limit: pageSize, total: 0, pages: 1 })
@@ -350,7 +375,7 @@ function PropertiesPage() {
       }
     }
     load()
-  }, [backendFilterParams, page, pageSize, showCompleteLiveVacancyResults])
+  }, [backendFilterParams, page, pageSize])
 
   useEffect(() => {
     if (searchParams.get('nearby') === 'true' && !hasUserLocation && !locationLoading) {
@@ -539,6 +564,16 @@ function PropertiesPage() {
   const quickMobileFilters = ['PG', 'Boys', 'Girls', 'Co-ed', 'Available now', 'Food included']
   const activeFilterCount = activeFilters.length + Number(Boolean(priceRange.min)) + Number(Boolean(priceRange.max)) + Number(nearbyMode)
 
+  useEffect(() => {
+    if (mapReady || loading || !filteredProperties.length) return undefined
+    const schedule = window.requestIdleCallback || ((callback) => window.setTimeout(callback, 250))
+    const cancel = window.cancelIdleCallback || window.clearTimeout
+    const id = schedule(() => setMapReady(true))
+    return () => cancel(id)
+  }, [filteredProperties.length, loading, mapReady])
+
+  const showMap = mapReady && !loading && filteredProperties.length > 0
+
   return (
     <div className="mx-auto max-w-7xl overflow-x-hidden px-3 pb-24 pt-5 sm:px-6 sm:py-8 lg:px-8">
       <SEO
@@ -557,6 +592,11 @@ function PropertiesPage() {
           <div className="hidden sm:block">
             <SectionHeading title="Search Bangalore PGs" description="Explore Bangalore PGs, hostels, and co-living rooms with price filters, maps, and visit requests." />
           </div>
+          {paginationMeta.demo ? (
+            <div className="mt-5 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 p-4 text-sm text-cyan-100">
+              Demo inventory is shown from a frontend-only sample dataset. Real owner listings remain available through the production API outside demo mode.
+            </div>
+          ) : null}
           <div className="mt-5 hidden gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-4">
             {[
               { label: 'Live listings', value: filteredProperties.length },
@@ -783,7 +823,7 @@ function PropertiesPage() {
             {compareMessage ? <p className="mt-3 text-sm text-amber-200">{compareMessage}</p> : null}
           </motion.div>
 
-          {compareIds.size ? (
+          {canCompare && compareIds.size ? (
             <div className="fixed inset-x-3 bottom-3 z-50 mx-auto flex max-h-[45vh] max-w-5xl flex-col gap-3 overflow-y-auto rounded-2xl border border-cyan-400/30 bg-slate-950/95 p-4 text-sm text-cyan-100 shadow-card backdrop-blur-xl sm:inset-x-4 sm:bottom-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <p className="font-semibold">{compareIds.size}/3 properties selected for comparison</p>
@@ -800,7 +840,7 @@ function PropertiesPage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" className="w-full sm:w-auto" onClick={clearCompare}>Clear</Button>
-                <Button className="w-full sm:w-auto" onClick={() => navigate('/compare')}>
+                <Button className="w-full sm:w-auto" onClick={openCompare}>
                   <FiColumns className="mr-2" /> Open compare
                 </Button>
               </div>
@@ -823,11 +863,15 @@ function PropertiesPage() {
               </button>
             </div>
             <div className="h-56 overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-950/80">
-              <PropertyMap
-                properties={filteredProperties}
-                userLocation={hasUserLocation ? position : null}
-                center={hasUserLocation ? position : filteredProperties[0]?.location}
-              />
+              {showMap && !isDesktop ? (
+                <Suspense fallback={<Loader message="Loading map..." />}>
+                  <PropertyMap
+                    properties={filteredProperties}
+                    userLocation={hasUserLocation ? position : null}
+                    center={hasUserLocation ? position : filteredProperties[0]?.location}
+                  />
+                </Suspense>
+              ) : <div className="flex h-full items-center justify-center text-sm text-slate-500">{loading ? 'Loading results...' : 'Preparing map...'}</div>}
             </div>
           </div>
 
@@ -847,8 +891,8 @@ function PropertiesPage() {
                   property={property}
                   saved={savedPropertyIds.has(property.id || property._id)}
                   onToggleSave={handleToggleSave}
-                  compareSelected={compareIds.has(property.id || property._id)}
-                  onToggleCompare={toggleCompare}
+                  compareSelected={canCompare && compareIds.has(property.id || property._id)}
+                  onToggleCompare={canCompare ? toggleCompare : undefined}
                 />
               ))
             ) : (
@@ -868,8 +912,8 @@ function PropertiesPage() {
                           property={property}
                           saved={savedPropertyIds.has(property.id || property._id)}
                           onToggleSave={handleToggleSave}
-                          compareSelected={compareIds.has(property.id || property._id)}
-                          onToggleCompare={toggleCompare}
+                          compareSelected={canCompare && compareIds.has(property.id || property._id)}
+                          onToggleCompare={canCompare ? toggleCompare : undefined}
                         />
                       ))}
                     </div>
@@ -880,10 +924,10 @@ function PropertiesPage() {
           </div>
           <div className="mt-8 flex flex-col gap-4 rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-4 text-sm text-slate-300 sm:flex-row sm:items-center sm:justify-between">
             <p>
-              {showCompleteLiveVacancyResults ? 'Showing all live vacant results' : `Showing page ${paginationMeta.page || page} of ${paginationMeta.pages || 1}`}
+              {`Showing page ${paginationMeta.page || page} of ${paginationMeta.pages || 1}`}
               {paginationMeta.total ? ` (${paginationMeta.total} matching Bangalore PGs)` : ''}
             </p>
-            {!showCompleteLiveVacancyResults ? <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <select
                 value={pageSize}
                 onChange={(event) => {
@@ -912,7 +956,7 @@ function PropertiesPage() {
               >
                 Next
               </button>
-            </div> : null}
+            </div>
           </div>
         </section>
 
@@ -920,11 +964,15 @@ function PropertiesPage() {
           <div className="rounded-[2rem] border border-slate-800/80 bg-surface-800/90 p-6 shadow-card">
             <p className="text-sm uppercase tracking-[0.24em] text-accent-500">Map view</p>
             <div className="mt-5 h-80 overflow-hidden rounded-[1.75rem] border border-slate-700/80 bg-slate-950/80">
-              <PropertyMap
-                properties={filteredProperties}
-                userLocation={hasUserLocation ? position : null}
-                center={hasUserLocation ? position : filteredProperties[0]?.location}
-              />
+              {showMap && isDesktop ? (
+                <Suspense fallback={<Loader message="Loading map..." />}>
+                  <PropertyMap
+                    properties={filteredProperties}
+                    userLocation={hasUserLocation ? position : null}
+                    center={hasUserLocation ? position : filteredProperties[0]?.location}
+                  />
+                </Suspense>
+              ) : <div className="flex h-full items-center justify-center text-sm text-slate-500">{loading ? 'Loading results...' : 'Preparing map...'}</div>}
             </div>
           </div>
 

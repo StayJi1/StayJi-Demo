@@ -5,7 +5,8 @@ import Button from '../components/common/Button'
 import Loader from '../components/common/Loader'
 import propertyService from '../services/propertyService'
 import { useAuth } from '../context/AuthContext'
-import { readCompareIds, writeCompareIds } from '../utils/compareStorage'
+import { clearCompareIds, readCompareIds, writeCompareIds } from '../utils/compareStorage'
+import { isStaticDemoPropertyId } from '../data/demoProperties'
 
 const hasAmenity = (item, pattern) => [
   ...(item.amenities || []),
@@ -56,11 +57,13 @@ function ComparePage() {
 
       if (!ids.length) {
         setProperties([])
+        setError('')
         setLoading(false)
         return
       }
 
       try {
+        setError('')
         const results = await Promise.allSettled(ids.map((id) => propertyService.fetchPropertyById(id)))
         const loaded = results
           .filter((result) => result.status === 'fulfilled' && result.value)
@@ -71,11 +74,17 @@ function ComparePage() {
         if (loaded.length) {
           const nextIds = loaded.map((item) => item.id || item._id).filter(Boolean)
           writeCompareIds(user, nextIds)
-          setSearchParams((current) => {
-            const next = new URLSearchParams(current)
-            next.set('ids', nextIds.join(','))
-            return next
-          }, { replace: true })
+          if ((searchParams.get('ids') || '') !== nextIds.join(',')) {
+            setSearchParams((current) => {
+              const next = new URLSearchParams(current)
+              next.set('ids', nextIds.join(','))
+              return next
+            }, { replace: true })
+          }
+        }
+
+        if (loaded.length !== ids.length) {
+          setError('One or more selected properties are no longer available. The available stays are shown below.')
         }
 
         if (isAuthenticated && user?._id && loaded.length >= 2) {
@@ -111,6 +120,17 @@ function ComparePage() {
     }, { replace: true })
   }
 
+  const clearComparison = () => {
+    clearCompareIds(user)
+    setProperties([])
+    setError('')
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      next.delete('ids')
+      return next
+    }, { replace: true })
+  }
+
   if (loading) return <div className="mx-auto max-w-7xl px-4 py-10"><Loader message="Building comparison..." /></div>
 
   if (!isAuthenticated) {
@@ -140,7 +160,10 @@ function ComparePage() {
           <h1 className="mt-3 text-3xl font-semibold leading-tight text-white sm:text-4xl">Side-by-side property comparison</h1>
           <p className="mt-3 text-slate-400">Compare rent, food, sharing, vacancy, amenities, and resident score before contacting an owner.</p>
         </div>
-        <Link to="/properties"><Button variant="secondary">Add more stays</Button></Link>
+        <div className="flex flex-wrap gap-3">
+          {properties.length ? <Button variant="secondary" onClick={clearComparison}>Clear comparison</Button> : null}
+          <Link to="/properties"><Button variant="secondary">Add more stays</Button></Link>
+        </div>
       </div>
 
       {error ? <div className="rounded-[2rem] border border-rose-500/30 bg-rose-500/10 p-6 text-rose-200">{error}</div> : null}
@@ -194,7 +217,7 @@ function ComparePage() {
             <div className="p-5 font-semibold text-white">Action</div>
             {properties.map((property) => (
               <div key={`${property.id || property._id}-action`} className="border-l border-slate-800 p-5">
-                <Link to={`/properties/${property.id || property._id}`}>
+                <Link to={`/properties/${property.id || property._id}${isStaticDemoPropertyId(property.id || property._id) ? '?demo=true' : ''}`}>
                   <Button className="w-full"><FiHome className="mr-2" /> View stay</Button>
                 </Link>
               </div>

@@ -37,9 +37,13 @@ function FitBounds({ bounds }) {
   return null
 }
 
-function PropertyMap({ properties = [], center, userLocation, showRouteTo }) {
+function PropertyMap({ properties = [], center, userLocation, showRouteTo, maxMarkers = 30 }) {
   const mapCenter = center || userLocation || properties.find((property) => property.location)?.location || { lat: 12.9716, lng: 77.5946 }
-  const visibleProperties = properties.filter((property) => property.location?.lat && property.location?.lng)
+  // List pages can contain many results; rendering a bounded marker set keeps
+  // Leaflet responsive while cards and pagination still expose every result.
+  const visibleProperties = properties
+    .filter((property) => property.location?.lat && property.location?.lng)
+    .slice(0, Math.max(1, maxMarkers))
   const groupedProperties = Object.values(
     visibleProperties.reduce((groups, property) => {
       const key = `${property.location.lat.toFixed(5)},${property.location.lng.toFixed(5)}`

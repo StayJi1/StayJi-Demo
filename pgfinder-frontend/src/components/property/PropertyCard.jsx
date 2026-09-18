@@ -5,6 +5,7 @@ import { FiColumns, FiHeart, FiMapPin, FiStar } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import propertyService from '../../services/propertyService'
 import { formatDistance } from '../../utils/distance'
+import { isStaticDemoPropertyId } from '../../data/demoProperties'
 
 const optimizedRemoteImage = (url, width = 900) => {
   if (!url || !/^https:\/\/images\.unsplash\.com\//i.test(url)) return url
@@ -32,7 +33,8 @@ function PropertyCard({ property, saved: savedProp = false, onToggleSave, hideSa
   const [saving, setSaving] = useState(false)
   const saved = onToggleSave ? Boolean(savedProp) : internalSaved
 
-  const propertyPath = `/properties/${property.id || property._id || 'detail'}`
+  const propertyId = property.id || property._id || 'detail'
+  const propertyPath = `/properties/${propertyId}${isStaticDemoPropertyId(propertyId) ? '?demo=true' : ''}`
 
   const openProperty = () => {
     navigate(preview ? '/properties' : propertyPath)

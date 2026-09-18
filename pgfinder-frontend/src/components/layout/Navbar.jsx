@@ -17,12 +17,14 @@ function Navbar() {
   const dashboardRole = ['owner', 'host', 'hostel', 'vendor'].includes(role)
     ? 'owner'
     : role || 'user'
-  const visibleNavItems = navItems.map((item) => {
-    if (dashboardRole === 'owner' && item.to === '/properties') {
-      return { ...item, label: 'My stays', to: '/dashboard/owner/properties' }
-    }
-    return item
-  })
+  const visibleNavItems = navItems
+    .filter((item) => !(isAuthenticated && dashboardRole === 'owner' && item.to === '/compare'))
+    .map((item) => {
+      if (dashboardRole === 'owner' && item.to === '/properties') {
+        return { ...item, label: 'My stays', to: '/dashboard/owner/properties' }
+      }
+      return item
+    })
   const authNavItems = !isAuthenticated
     ? [
         { label: 'Login', to: '/login' },
