@@ -422,6 +422,19 @@ function AddPropertyPage() {
     }
   }
 
+  if (user?.isDummy && role === 'owner') {
+    return (
+      <div className="space-y-8">
+        <Card className="p-8">
+          <p className="text-sm uppercase tracking-[0.24em] text-accent-400">Shared demo account</p>
+          <h1 className="mt-3 text-3xl font-semibold text-white">Listing changes are disabled</h1>
+          <p className="mt-3 max-w-2xl text-slate-400">This owner account is shared for demonstrations. Its properties stay read-only so every visitor sees the same inventory.</p>
+          <div className="mt-6"><Button onClick={() => navigate('/dashboard/owner/properties')}>View demo properties</Button></div>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="min-w-0 space-y-8">
       <header className="rounded-2xl border border-slate-800/80 bg-surface-800/90 p-5 shadow-card sm:rounded-[2rem] sm:p-8">

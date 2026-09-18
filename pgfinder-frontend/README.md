@@ -19,6 +19,13 @@ VITE_API_BASE_URL=http://localhost:3000
 VITE_GOOGLE_MAPS_API_KEY=optional-google-maps-key
 ```
 
+### Demo inventory
+
+Set `VITE_DEMO_PROPERTY_MODE=true` only for the demo frontend deployment (or
+open `/properties?demo=true`). This uses the curated frontend-only sample
+properties for browsing, filters, maps, details, comparison, and local demo
+favourites. The normal production setting remains API-backed owner listings.
+
 ## Active Roles
 
 - User dashboard

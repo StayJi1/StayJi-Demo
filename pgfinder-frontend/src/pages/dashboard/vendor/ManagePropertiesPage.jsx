@@ -9,6 +9,7 @@ import { useAuth } from '../../../context/AuthContext'
 
 function ManagePropertiesPage() {
   const { user } = useAuth()
+  const isDemoOwner = Boolean(user?.isDummy || String(user?.status || '').toLowerCase() === 'demo')
   const navigate = useNavigate()
   const ownerId = user?._id || user?.id
   const [properties, setProperties] = useState([])
@@ -109,6 +110,8 @@ function ManagePropertiesPage() {
         </div>
       </header>
 
+      {isDemoOwner ? <Card className="border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">Shared demo properties are read-only. Availability, edits, and delete requests are disabled.</Card> : null}
+
       <Card>
         <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_0.65fr_0.65fr_0.65fr_auto]">
           <input
@@ -161,9 +164,11 @@ function ManagePropertiesPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" onClick={() => navigate(`/dashboard/owner/leads?propertyId=${property.id || property._id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiBarChart2 /> Analytics</button>
-                  <button type="button" onClick={() => openQuickEdit(property)} className="inline-flex items-center gap-2 rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200 hover:bg-emerald-500/10">Availability</button>
-                  <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}/edit`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEdit2 /> Edit</button>
-                  <button type="button" onClick={() => handleDelete(property.id || property._id)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-rose-400"><FiTrash2 /> Delete</button>
+                  {!isDemoOwner ? <>
+                    <button type="button" onClick={() => openQuickEdit(property)} className="inline-flex items-center gap-2 rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200 hover:bg-emerald-500/10">Availability</button>
+                    <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}/edit`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEdit2 /> Edit</button>
+                    <button type="button" onClick={() => handleDelete(property.id || property._id)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-rose-400"><FiTrash2 /> Delete</button>
+                  </> : null}
                 </div>
               </Card>
             </div>

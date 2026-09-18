@@ -58,6 +58,9 @@ const nearbyAreaMap = {
 // Key: cacheKey derived from request query (page/limit/filters). Value: { ts, data, meta }
 const propertyListCache = new Map();
 const PROPERTY_CACHE_TTL_MS = Number(process.env.PROPERTY_LIST_CACHE_TTL_MS || 15000) // 15s default
+const PREMIUM_EXPIRY_SWEEP_INTERVAL_MS = Number(process.env.PREMIUM_EXPIRY_SWEEP_INTERVAL_MS || 60000)
+let premiumExpirySweepPromise = null
+let lastPremiumExpirySweepAt = 0
 
 const wrapAsync = (handler) => (req, res, next) => {
     try {
@@ -700,10 +703,27 @@ const notifySavedSearchMatches = async (property = {}) => {
     })))
 }
 
-const expirePremiumListings = () => Property.updateMany(
-    { isPremium: true, premiumEndDate: { $lt: new Date() } },
-    { $set: { isPremium: false, priority: 0 } }
-)
+// A public list request should not synchronously write to MongoDB. Sweep expired
+// premium flags in the background at a bounded interval instead; frontend
+// normalization already treats an expired premiumEndDate as non-premium.
+const schedulePremiumExpirySweep = () => {
+    const now = Date.now()
+    if (premiumExpirySweepPromise || now - lastPremiumExpirySweepAt < PREMIUM_EXPIRY_SWEEP_INTERVAL_MS) return
+    lastPremiumExpirySweepAt = now
+    premiumExpirySweepPromise = Property.updateMany(
+        { isPremium: true, premiumEndDate: { $lt: new Date() } },
+        { $set: { isPremium: false, priority: 0 } }
+    )
+        .then((result) => {
+            if (result.modifiedCount) propertyListCache.clear()
+        })
+        .catch((error) => {
+            console.warn('Unable to sweep expired premium listings:', error.message)
+        })
+        .finally(() => {
+            premiumExpirySweepPromise = null
+        })
+}
 
 const notifyPropertyOwner = async (propertyId, payload = {}) => {
     const property = await Property.findOne({ _id: propertyId }).select('userIDFK vendorId propertyName')
@@ -1333,6 +1353,10 @@ router.post('/authStatus', async (req, res) => {
 router.post('/updateUser', attachAuthenticatedUser, async (req, res) => {
     const targetId = req.body._id || req.body.id
     if (!assertSelfOrRoles(req, res, targetId, ['admin'])) return
+    const targetUser = await User.findOne({ _id: targetId }).select('isDummy status')
+    if (isDemoAccount(targetUser)) {
+        return res.status(403).json({ result: 'failure', msg: 'Shared demo accounts are read-only.', data: null })
+    }
     const updateFields = {}
     if (req.body.userFname !== undefined) updateFields.userFname = req.body.userFname
     if (req.body.userLname !== undefined) updateFields.userLname = req.body.userLname
@@ -1367,7 +1391,7 @@ router.post('/updateUser', attachAuthenticatedUser, async (req, res) => {
 
 
 router.get('/getPropertyList', async (req, res) => {
-    await expirePremiumListings()
+    schedulePremiumExpirySweep()
     const { page, limit, skip } = pageOptions(req.query)
     // Build filters without applying areaName here so we can control area-prioritization logic below
     const queryCopy = { ...req.query }
@@ -1385,26 +1409,41 @@ router.get('/getPropertyList', async (req, res) => {
     const cacheKey = JSON.stringify({ q: req.query, page, limit })
     const cached = propertyListCache.get(cacheKey)
     if (cached && (Date.now() - cached.ts) < PROPERTY_CACHE_TTL_MS) {
+        res.set('Cache-Control', 'public, max-age=15, stale-while-revalidate=60')
         return res.json({ result: 'success', msg: 'Property List Found (cached)', data: cached.data, meta: cached.meta })
     }
 
     // Use a lightweight projection for list views to reduce payload size and speed up queries.
     const listProjection = {
         propertyName: 1,
+        description: 1,
         rent: 1,
+        depositAmount: 1,
         areaName: 1,
         cityName: 1,
+        stateName: 1,
+        latitude: 1,
+        longitude: 1,
         propertyImage: 1,
-        propertyImageUrls: 1,
-        propertyTypeIDFK: 1,
+        propertyImageUrls: { $slice: 1 },
         propertyCategory: 1,
+        propertyType: 1,
         pricingUnit: 1,
+        dailyRate: 1,
+        perDayCheckIn: 1,
         availableBeds: 1,
+        vacancyStatus: 1,
+        availableFrom: 1,
         roomInventory: 1,
         roomTypes: 1,
         sharing: 1,
         sharingAvailability: 1,
         genderType: 1,
+        aminityFeatures: 1,
+        mealsAvailable: 1,
+        acAvailable: 1,
+        parkingAvailable: 1,
+        rating: 1,
         isDummy: 1,
         isVerified: 1,
         approvalStatus: 1,
@@ -1413,13 +1452,11 @@ router.get('/getPropertyList', async (req, res) => {
         priority: 1,
         isPremium: 1,
         localityPriority: 1,
-        vendorId: 1,
-        userIDFK: 1,
     }
 
     // If areaName is provided and city is Bangalore, apply prioritized area search:
     let objProperty = []
-    let total = await Property.countDocuments(filters)
+    let total = 0
     const areaQuery = normalizeText(req.query.areaName || req.query.area || req.query.locality || '')
     if (areaQuery && isBangaloreValue(req.query.cityName || req.query.city || MVP_CITY)) {
         const exactArea = areaQuery
@@ -1428,23 +1465,20 @@ router.get('/getPropertyList', async (req, res) => {
         // Build regex list for area matching (anchored, case-insensitive)
         const areaRegexes = areasToInclude.map((a) => new RegExp(`^${normalizedRegexSource(a)}$`, 'i'))
 
-        // Count documents matching exact+nearby (for pagination meta)
-        const combinedCount = await Property.countDocuments({ $and: [publicPropertyQuery, publicFilters, ...(cityGate ? [cityGate] : []), { areaName: { $in: areaRegexes } }] })
+        // These independent counts are needed for area-first pagination. Run
+        // them together so locality search does not add a second DB round trip.
+        const [combinedCount, exactCount] = await Promise.all([
+            Property.countDocuments({ $and: [publicPropertyQuery, publicFilters, ...(cityGate ? [cityGate] : []), { areaName: { $in: areaRegexes } }] }),
+            Property.countDocuments({ $and: [publicPropertyQuery, publicFilters, ...(cityGate ? [cityGate] : []), { areaName: new RegExp(`^${normalizedRegexSource(exactArea)}$`, 'i') }] }),
+        ])
         total = combinedCount
 
-        // Count exact matches separately to prioritize them
-        const exactCount = await Property.countDocuments({ $and: [publicPropertyQuery, publicFilters, ...(cityGate ? [cityGate] : []), { areaName: new RegExp(`^${normalizedRegexSource(exactArea)}$`, 'i') }] })
-
         const startIndex = Math.max(0, skip)
-        const endIndex = startIndex + limit
 
         // Helper to fetch documents with filters and area constraint
         const fetchProps = async (areaFilter, _skip = 0, _limit = 24) => {
             return Property.find({ $and: [publicPropertyQuery, publicFilters, ...(cityGate ? [cityGate] : []), areaFilter] })
                 .select(listProjection)
-                .populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact'])
-                .populate('vendorId', ['userFname', 'userLname', 'userType', 'contact'])
-                .populate('propertyTypeIDFK', ['typeName'])
                 .sort({ isPremium: -1, priority: -1, isFeatured: -1, localityPriority: -1, addedOn: -1 })
                 .skip(_skip)
                 .limit(_limit)
@@ -1472,8 +1506,6 @@ router.get('/getPropertyList', async (req, res) => {
                 // Fetch nearby excluding exact
                 const nearbyRegexes = nearbyList.length ? nearbyList.map((a) => new RegExp(`^${normalizedRegexSource(a)}$`, 'i')) : []
                 if (nearbyRegexes.length) {
-                    // When some exact rows were taken from the start, nearby skip is zero for page1; if exact consumed earlier pages, compute nearest skip
-                    const nearbySkip = Math.max(0, startIndex + limit > exactCount ? startIndex + limit - exactCount - (limit - need) : 0)
                     const nearbyRows = await fetchProps({ areaName: { $in: nearbyRegexes } }, 0, need)
                     // Append nearby rows after exact
                     objProperty = objProperty.concat(nearbyRows)
@@ -1486,9 +1518,6 @@ router.get('/getPropertyList', async (req, res) => {
             Property.countDocuments(filters),
             Property.find(filters)
                 .select(listProjection)
-                .populate('userIDFK', ['userFname', 'userLname', 'userType', 'contact'])
-                .populate('vendorId', ['userFname', 'userLname', 'userType', 'contact'])
-                .populate('propertyTypeIDFK', ['typeName'])
                 .sort({ isPremium: -1, priority: -1, isFeatured: -1, localityPriority: -1, addedOn: -1 })
                 .skip(skip)
                 .limit(limit)
@@ -1501,6 +1530,7 @@ router.get('/getPropertyList', async (req, res) => {
         try {
             propertyListCache.set(cacheKey, { ts: Date.now(), data: objProperty, meta: { page, limit, total, pages: Math.ceil(total / limit) } })
         } catch (e) { /* ignore cache set failures */ }
+        res.set('Cache-Control', 'public, max-age=15, stale-while-revalidate=60')
         res.json({ result: "success", msg: "Property List Found", data: objProperty, meta: { page, limit, total, pages: Math.ceil(total / limit) } });
 
     } else {
@@ -1510,7 +1540,7 @@ router.get('/getPropertyList', async (req, res) => {
 });
 
 router.get('/featured-properties', async (req, res) => {
-    await expirePremiumListings()
+    schedulePremiumExpirySweep()
     const parsedLimit = Number.parseInt(req.query.limit, 10)
     const requestedLimit = Number.isFinite(parsedLimit) ? parsedLimit : 6
     const limit = Math.min(12, Math.max(1, requestedLimit))
@@ -2185,8 +2215,16 @@ router.post('/addInterest', attachAuthenticatedUser, requireRoles(['user']), asy
     }
 });
 
-router.post('/addPropertyImages', upload.single('propertyImage'), async (req, res) => {
-
+router.post('/addPropertyImages', attachAuthenticatedUser, requireRoles(['owner', 'admin']), upload.single('propertyImage'), async (req, res) => {
+    if (blockSharedDemoMutation(req, res)) return
+    const propertyQuery = { _id: req.body.propertyIDFK }
+    if (req.auth.role === 'owner') {
+        propertyQuery.$or = [{ userIDFK: req.auth.user._id }, { vendorId: req.auth.user._id }]
+    } else {
+        Object.assign(propertyQuery, adminCityScope(req))
+    }
+    const property = await Property.findOne(propertyQuery).select('_id')
+    if (!property || !req.file) return res.status(404).json({ result: 'failure', msg: 'Property or image not found.', data: 0 })
     const objPropertyImage = new PropertyImage();
     objPropertyImage.propertyIDFK = req.body.propertyIDFK,
     objPropertyImage.image = req.file.filename,
@@ -2487,6 +2525,7 @@ router.get('/getPropertyType', async (req, res) => {
 });
 
 router.post('/addProperty', attachAuthenticatedUser, requireRoles(['owner']), upload.fields([{ name: 'propertyImage', maxCount: 10 }, { name: 'video', maxCount: 1 }]), async (req, res) => {
+    if (blockSharedDemoMutation(req, res)) return
     req.body.userIDFK = req.auth.user._id.toString()
     req.body.vendorId = req.auth.user._id.toString()
     req.body.cityName = MVP_CITY
@@ -2861,7 +2900,10 @@ router.get('/moveIns', attachAuthenticatedUser, requireRoles(['admin']), async (
 })
 
 router.post('/moveIns/:id/owner-confirm', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
-    const ownerId = asObjectId(req.body.ownerId || req.body.vendorId)
+    if (blockSharedDemoMutation(req, res)) return
+    const ownerId = req.auth.role === 'owner'
+        ? req.auth.user._id
+        : asObjectId(req.body.ownerId || req.body.vendorId)
     if (!ownerId) return res.json({ result: 'failure', msg: 'Owner ID is required.', data: null })
     const moveIn = await MoveInConfirmation.findOneAndUpdate(
         { _id: req.params.id, vendorId: ownerId, isActive: true },
@@ -2940,6 +2982,7 @@ router.post('/payment-requests/:id/review', attachAuthenticatedUser, requireRole
 })
 
 router.post('/reactivateProperty', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
+    if (blockSharedDemoMutation(req, res)) return
     const propertyQuery = { _id: req.body.id }
     if (req.auth?.role === 'admin') {
         Object.assign(propertyQuery, adminCityScope(req))
@@ -2956,6 +2999,7 @@ router.post('/reactivateProperty', attachAuthenticatedUser, requireRoles(['owner
 })
 
 router.post('/updateProperty', attachAuthenticatedUser, requireRoles(['owner', 'admin']), upload.fields([{ name: 'propertyImage', maxCount: 10 }, { name: 'video', maxCount: 1 }]), async (req, res) => {
+    if (blockSharedDemoMutation(req, res)) return
     if (req.auth.role === 'owner') {
         req.body.userIDFK = req.auth.user._id.toString()
         req.body.vendorId = req.auth.user._id.toString()
@@ -3143,6 +3187,7 @@ router.post('/updateProperty', attachAuthenticatedUser, requireRoles(['owner', '
 })
 
 router.post('/deleteProperty', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
+    if (blockSharedDemoMutation(req, res)) return
     const ownerId = req.auth.role === 'owner' ? req.auth.user._id : asObjectId(req.body.ownerId || req.body.vendorId || req.body.userIDFK)
     const propertyQuery = { _id: req.body.id }
     if (req.auth?.role === 'admin') {
@@ -3304,6 +3349,15 @@ const selectUserSafe = (u = {}) => ({
 const isDemoAccount = (user) => {
     if (!user) return false
     return user.isDummy === true || (user.status && user.status.toString().toLowerCase() === 'demo')
+}
+
+// Seeded user and owner accounts are shared during demos. Their state must not
+// change just because several viewers use the same credentials concurrently.
+// Admin review actions remain available for the approval walkthrough.
+const blockSharedDemoMutation = (req, res) => {
+    if (!isDemoAccount(req.auth?.user) || req.auth?.role === 'admin') return false
+    res.status(403).json({ result: 'failure', msg: 'Shared demo accounts are read-only. Use a non-demo account to make changes.', data: null })
+    return true
 }
 
 const toObjectIdIfValid = (id) => {
@@ -3873,6 +3927,7 @@ router.post('/wallet/payouts/:id/review', attachAuthenticatedUser, requireRoles(
 })
 
 router.post('/properties/:id/occupancy', attachAuthenticatedUser, requireRoles(['owner', 'admin']), async (req, res) => {
+    if (blockSharedDemoMutation(req, res)) return
     const propertyQuery = { _id: req.params.id }
     if (req.auth?.role === 'admin') {
         Object.assign(propertyQuery, adminCityScope(req))
@@ -3897,6 +3952,7 @@ router.post('/properties/:id/occupancy', attachAuthenticatedUser, requireRoles([
 })
 
 router.post('/properties/:id/update-request', attachAuthenticatedUser, requireRoles(['owner']), async (req, res) => {
+    if (blockSharedDemoMutation(req, res)) return
     const ownerId = req.auth.user._id
     const property = await Property.findOne({ _id: req.params.id, $or: [{ userIDFK: ownerId }, { vendorId: ownerId }] })
     if (!ownerId || !property) return res.json({ result: 'failure', msg: 'Only the property owner can request protected updates.', data: null })
@@ -5396,12 +5452,21 @@ router.post('/getPropertyListByTypeId', async (req, res) => {
     }
 });
 
-router.post('/updateuserPassword', async (req, res) => {
-    const objUser = await User.findOne({ _id: req.body.id, isActive: true });
+router.post('/updateuserPassword', attachAuthenticatedUser, async (req, res) => {
+    const targetId = req.body.id || req.body._id
+    if (!assertSelfOrRoles(req, res, targetId, ['admin'])) return
+    const objUser = await User.findOne({ _id: targetId, isActive: true }).select('userPassword isDummy status');
+    if (isDemoAccount(req.auth.user) || isDemoAccount(objUser)) {
+        return res.status(403).json({ result: 'failure', msg: 'Password changes are disabled for shared demo accounts.', data: 0 })
+    }
 
     if (objUser != null && verifyPassword(req.body.oldPassword, objUser.userPassword)) {
-        const updated = await User.updateOne({ _id: req.body.id }, {
+        if (!strongPasswordPattern.test(req.body.userPassword || '')) {
+            return res.json({ result: 'failure', msg: 'Password must be at least 8 characters and include uppercase, lowercase, and a number.', data: 0 })
+        }
+        const updated = await User.updateOne({ _id: targetId }, {
             userPassword: hashPassword(req.body.userPassword),
+            forceLogoutAt: new Date(),
         });
         if (updated != null) {
             res.json({ result: "success", msg: "User password updated Successfully", data: 1 });

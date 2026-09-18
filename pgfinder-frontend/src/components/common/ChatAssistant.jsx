@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FiArrowUpRight, FiMessageCircle, FiMessageSquare, FiSend, FiStar, FiX } from 'react-icons/fi'
+import { FiMessageCircle, FiMessageSquare, FiSend, FiX } from 'react-icons/fi'
 import axiosClient from '../../api/axiosClient'
 import { useAuth } from '../../context/AuthContext'
 
@@ -66,6 +66,10 @@ const extractAssistantReply = (payload) => {
     return payload.msg
   }
 
+  return 'I am ready to help you find the right stay.'
+}
+
+const getPropertyMatchReply = (payload) => {
   if (Array.isArray(payload?.data?.propertyMatches) && payload.data.propertyMatches.length) {
     return payload.data.propertyMatches
       .slice(0, 3)
@@ -73,11 +77,34 @@ const extractAssistantReply = (payload) => {
       .join('\n')
   }
 
-  return 'I am ready to help you find the right stay.'
+  return ''
+}
+
+const getFallbackActions = (message, payload) => {
+  const matches = Array.isArray(payload?.data?.propertyMatches) ? payload.data.propertyMatches : []
+  if (matches.length) {
+    return [
+      ...matches.slice(0, 2).map((property) => ({
+        label: `View ${property.name || 'stay'}`,
+        to: `/properties/${property.id}`,
+      })),
+      { label: 'Advanced Search', to: '/properties' },
+    ]
+  }
+
+  if (/(faq|refund|privacy|terms|policy)/i.test(message)) {
+    return [{ label: 'Open FAQ', to: '/faq' }]
+  }
+
+  if (/(pg|hostel|flat|room|property|stay|rent|budget|boys|girls|area|near)/i.test(message)) {
+    return [{ label: 'Advanced Search', to: '/properties' }]
+  }
+
+  return []
 }
 
 function ChatAssistant() {
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const [input, setInput] = useState('')
@@ -88,10 +115,16 @@ function ChatAssistant() {
       text: 'Hi! I am StayJi Assistant. Ask me for PGs, prices, localities, or help getting started.',
     },
   ])
+  const messageIdRef = useRef(0)
+
+  const nextMessageId = (suffix) => {
+    messageIdRef.current += 1
+    return `message-${messageIdRef.current}-${suffix}`
+  }
 
   const addAuthHelp = (reason = 'You need to sign in to continue.') => {
     const authMessage = {
-      id: `${Date.now()}-auth-guide`,
+      id: nextMessageId('auth-guide'),
       role: 'assistant',
       text: `${reason} ${authGuidance.message}`,
       steps: authGuidance.steps,
@@ -105,16 +138,11 @@ function ChatAssistant() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isOpen])
 
-  const promptText = useMemo(
-    () => (user?.name ? `Hi ${user.name.split(' ')[0]}!` : 'Hi!'),
-    [user?.name],
-  )
-
   const sendMessage = async (messageText) => {
     const trimmed = (messageText || '').trim()
     if (!trimmed) return
 
-    const userMessage = { id: `${Date.now()}-user`, role: 'user', text: trimmed }
+    const userMessage = { id: nextMessageId('user'), role: 'user', text: trimmed }
     setMessages((current) => [...current, userMessage])
     setInput('')
 
@@ -133,18 +161,22 @@ function ChatAssistant() {
       const reply = extractAssistantReply(response?.data)
       setMessages((current) => [
         ...current,
-        { id: `${Date.now()}-assistant`, role: 'assistant', text: reply },
+        { id: nextMessageId('assistant'), role: 'assistant', text: reply },
       ])
     } catch (error) {
       const replySource = error?.response?.data || error?.response || {}
+      const propertyMatchReply = getPropertyMatchReply(replySource)
+      const providerUnavailable = replySource?.code === 'AI_PROVIDER_NOT_CONFIGURED'
       const fallbackReply = extractAssistantReply(replySource)
-      const finalReply = fallbackReply && fallbackReply !== 'I am ready to help you find the right stay.'
-        ? fallbackReply
-        : buildFallbackReply(trimmed)
+      const finalReply = providerUnavailable
+        ? (propertyMatchReply || buildFallbackReply(trimmed))
+        : (fallbackReply && fallbackReply !== 'I am ready to help you find the right stay.'
+          ? fallbackReply
+          : buildFallbackReply(trimmed))
 
       setMessages((current) => [
         ...current,
-        { id: `${Date.now()}-assistant`, role: 'assistant', text: finalReply },
+        { id: nextMessageId('assistant'), role: 'assistant', text: finalReply, actions: getFallbackActions(trimmed, replySource) },
       ])
     } finally {
       setIsSending(false)

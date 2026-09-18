@@ -51,7 +51,7 @@ function AppRoutes() {
           <Route path="/properties" element={<PropertiesPage />} />
           <Route path="/properties/:id" element={<PropertyDetailPage />} />
           <Route path="/property/:id" element={<PropertyDetailPage />} />
-          <Route path="/compare" element={<ProtectedRoute><ComparePage /></ProtectedRoute>} />
+          <Route path="/compare" element={<RoleProtectedRoute role="user"><ComparePage /></RoleProtectedRoute>} />
           <Route path="/bangalore" element={<LocalityPage />} />
           <Route path="/bangalore/:localitySlug" element={<LocalityPage />} />
           <Route path="/faq" element={<FAQPage />} />

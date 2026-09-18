@@ -1,5 +1,7 @@
 import axiosClient, { baseURL } from './axiosClient'
 import { MVP_CITY } from '../config/mvp'
+import { demoProperties, getDemoPropertyById, isStaticDemoPropertyId } from '../data/demoProperties'
+import { isDemoPropertyMode } from '../config/demoPropertyMode'
 
 export const toAssetUrl = (value) => {
   if (!value) return ''
@@ -182,11 +184,53 @@ export const normalizeProperty = (property) => {
     displayBadges: [
       property.isDummy ? 'Demo Property' : '',
       property.status === 'demo' ? 'Sample Listing' : '',
-      property.isDummy && property.isActive !== false ? 'Coming Soon Area' : '',
+      property.isDummy && property.isActive !== false && !property.isStaticDemo ? 'Coming Soon Area' : '',
       isPremium ? 'Premium' : '',
       property.isVerified ? 'Verified' : '',
     ].filter(Boolean),
     isDummy: Boolean(property.isDummy),
+  }
+}
+
+// Listing cards already contain the public fields needed by the detail and
+// comparison views. Keep a per-tab copy so a briefly unavailable detail API
+// cannot turn a listing the user just selected into an "unavailable" page.
+// This deliberately uses sessionStorage (not the owner/private API response)
+// and is only a fallback; the API remains the source of truth.
+const propertyPreviewCache = new Map()
+const propertyPreviewStorageKey = (id) => `stayji-public-property-preview:${id}`
+
+const cachePublicProperty = (property) => {
+  const normalized = normalizeProperty(property)
+  const id = normalized?.id || normalized?._id
+  if (!id) return normalized
+
+  propertyPreviewCache.set(String(id), normalized)
+  if (typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.setItem(propertyPreviewStorageKey(id), JSON.stringify(normalized))
+    } catch {
+      // Storage can be disabled or full; the in-memory fallback still works.
+    }
+  }
+  return normalized
+}
+
+const getCachedPublicProperty = (id) => {
+  if (!id) return null
+  const key = String(id)
+  const inMemory = propertyPreviewCache.get(key)
+  if (inMemory) return inMemory
+  if (typeof window === 'undefined') return null
+
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem(propertyPreviewStorageKey(key)) || 'null')
+    if (!stored) return null
+    const property = normalizeProperty(stored)
+    propertyPreviewCache.set(key, property)
+    return property
+  } catch {
+    return null
   }
 }
 
@@ -195,6 +239,98 @@ const mapResponse = (response) => {
   if (Array.isArray(response)) return response.map(normalizeProperty)
   return normalizeProperty(response)
 }
+
+const mapPublicResponse = (response) => {
+  if (!response) return response
+  if (Array.isArray(response)) return response.map(cachePublicProperty)
+  return cachePublicProperty(response)
+}
+
+const contains = (value, query) => String(value || '').toLowerCase().includes(String(query || '').trim().toLowerCase())
+const isEnabled = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
+
+const filterDemoProperties = (params = {}) => {
+  const search = String(params.search || params.q || '').trim()
+  const area = String(params.area || params.areaName || params.locality || '').trim()
+  const categories = String(params.categories || params.category || '').split(',').map((item) => item.trim()).filter(Boolean)
+  const genders = String(params.gender || '').split(',').map((item) => item.trim()).filter(Boolean)
+  const sharingTypes = String(params.sharingType || params.sharing || '').split(',').map((item) => item.trim()).filter(Boolean)
+  const amenities = String(params.amenities || '').split(',').map((item) => item.trim()).filter(Boolean)
+  const minimumRent = Number(params.minPrice || params.minBudget) || 0
+  const maximumRent = Number(params.maxPrice || params.maxBudget) || Infinity
+
+  return demoProperties.filter((property) => {
+    const haystack = [
+      property.name,
+      property.description,
+      property.area,
+      property.city,
+      property.category,
+      property.gender,
+      property.sharing,
+      ...(property.amenities || []),
+    ].join(' ').toLowerCase()
+    if (search && !search.toLowerCase().split(/\s+/).every((token) => haystack.includes(token))) return false
+    if (area && !contains(property.area, area)) return false
+    if (categories.length && !categories.some((category) => contains(property.category, category))) return false
+    if (genders.length && !genders.some((gender) => contains(property.gender, gender))) return false
+    if (sharingTypes.length && !sharingTypes.some((sharing) => contains(property.sharing, sharing))) return false
+    if (Number(property.rent) < minimumRent || Number(property.rent) > maximumRent) return false
+    if (isEnabled(params.foodIncluded || params.food) && !property.foodIncluded) return false
+    if (isEnabled(params.ac) && !property.acAvailable) return false
+    if (isEnabled(params.parking) && !property.parkingAvailable) return false
+    if (isEnabled(params.attachedBathroom) && !property.amenities.some((amenity) => /attached bathroom/i.test(amenity))) return false
+    if (isEnabled(params.availableNow) && (!property.isAvailable || property.availableBeds <= 0)) return false
+    if (params.rating && Number(property.rating) < Number(params.rating)) return false
+    if (amenities.length && !amenities.every((amenity) => property.amenities.some((item) => contains(item, amenity)))) return false
+    return true
+  })
+}
+
+const getDemoPropertyPage = (params = {}) => {
+  const items = filterDemoProperties(params)
+  const requestedLimit = Number(params.limit) || 24
+  const limit = Math.min(100, Math.max(1, requestedLimit))
+  const page = Math.max(1, Number(params.page) || 1)
+  const start = (page - 1) * limit
+  return {
+    items: mapPublicResponse(items.slice(start, start + limit)),
+    meta: {
+      page,
+      limit,
+      total: items.length,
+      pages: Math.max(1, Math.ceil(items.length / limit)),
+      demo: true,
+      source: 'static-demo',
+    },
+  }
+}
+
+const demoShortlistStorageKey = (userIDFK) => `stayji-demo-shortlist:${userIDFK || 'anonymous'}`
+
+const readDemoShortlistIds = (userIDFK) => {
+  if (typeof window === 'undefined') return []
+  try {
+    const value = JSON.parse(window.localStorage.getItem(demoShortlistStorageKey(userIDFK)) || '[]')
+    return Array.isArray(value) ? value.filter(isStaticDemoPropertyId) : []
+  } catch {
+    return []
+  }
+}
+
+const writeDemoShortlistIds = (userIDFK, ids) => {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(demoShortlistStorageKey(userIDFK), JSON.stringify([...new Set(ids.filter(isStaticDemoPropertyId))]))
+}
+
+const demoShortlistItems = (userIDFK) => readDemoShortlistIds(userIDFK)
+  .map(getDemoPropertyById)
+  .filter(Boolean)
+  .map((property) => ({
+    id: `demo-shortlist-${property.id}`,
+    propertyIDFK: property.id,
+    property: normalizeProperty(property),
+  }))
 
 const normalizeShortlistItem = (item) => {
   const property = item.propertyIDFK || item.property || item
@@ -206,7 +342,7 @@ const normalizeShortlistItem = (item) => {
 }
 
 const fetchPropertyPage = (params) => axiosClient.get('/client/getPropertyList', { params }).then((res) => ({
-  items: mapResponse(res.data && res.data.data) || [],
+  items: mapPublicResponse(res.data && res.data.data) || [],
   meta: res.data?.meta || {},
 }))
 
@@ -228,17 +364,28 @@ let featuredPropertiesCache = null
 
 const propertyApi = {
   page: async (params = {}) => {
-    const scopedParams = { ...params, cityName: MVP_CITY }
-    const page = await fetchPropertyPage({
-      ...scopedParams,
-      page: scopedParams.page || 1,
-    })
-    return page
+    if (isDemoPropertyMode(params)) return getDemoPropertyPage(params)
+    const { fallbackToDemo, ...requestParams } = params
+    delete requestParams.demo
+    const scopedParams = { ...requestParams, cityName: MVP_CITY }
+    try {
+      return await fetchPropertyPage({
+        ...scopedParams,
+        page: scopedParams.page || 1,
+      })
+    } catch (error) {
+      if (fallbackToDemo) return getDemoPropertyPage(params)
+      throw error
+    }
   },
 
   // Return full property list from backend
   list: async (params = {}) => {
     const { allPages, ...requestParams } = params || {}
+    if (isDemoPropertyMode(requestParams)) {
+      const page = getDemoPropertyPage({ ...requestParams, limit: allPages ? 100 : requestParams.limit })
+      return page.items
+    }
     const scopedParams = { ...requestParams, cityName: MVP_CITY }
     const firstPage = await fetchPropertyPage({
       ...scopedParams,
@@ -254,27 +401,42 @@ const propertyApi = {
     return [...firstPage.items, ...remainingPages.flatMap((page) => page.items)]
   },
 
-  // Backend expects POST with { id }
-  detail: (id, options = {}) => axiosClient.post('/client/getPropertyById', { id, includePrivate: Boolean(options.includePrivate) }).then((res) => mapResponse(res.data && res.data.data)),
+  // Backend expects POST with { id }. Static demo IDs are resolved locally and
+  // cannot expose or depend on production owner records.
+  detail: (id, options = {}) => {
+    const demoProperty = getDemoPropertyById(id)
+    if (demoProperty) return Promise.resolve(normalizeProperty(demoProperty))
+    const cachedProperty = options.includePrivate ? null : getCachedPublicProperty(id)
+    return axiosClient.post('/client/getPropertyById', { id, includePrivate: Boolean(options.includePrivate) })
+      .then((res) => {
+        const property = mapResponse(res.data && res.data.data)
+        return property?.id || property?._id ? property : cachedProperty || property
+      })
+      .catch((error) => {
+        if (cachedProperty) return cachedProperty
+        throw error
+      })
+  },
 
   featured: (limit = 6) => {
+    if (isDemoPropertyMode()) return Promise.resolve(mapResponse(demoProperties.slice(0, Math.max(1, Number(limit) || 6))))
     const cacheKey = Number(limit) || 6
     if (featuredPropertiesCache?.limit === cacheKey) return Promise.resolve(featuredPropertiesCache.items)
     if (featuredPropertiesPromise?.limit === cacheKey) return featuredPropertiesPromise.promise
-    // Some deployed backend revisions do not expose the lightweight endpoint yet.
-    // Start the compatible list request at the same time, rather than waiting for
-    // a failed featured request before loading the cards shown on the home page.
+    // Use the lightweight endpoint first. The legacy request remains a
+    // compatibility fallback for older deployments, rather than a duplicate
+    // request on every homepage view.
     const featuredRequest = axiosClient.get('/client/featured-properties', { params: { limit: cacheKey } })
       .then((res) => {
-        const items = mapResponse(res.data?.data) || []
+        const items = mapPublicResponse(res.data?.data) || []
         if (!items.length) throw new Error('No featured properties returned')
         return items
       })
-    const listRequest = axiosClient
-      .get('/client/getPropertyList', { params: { cityName: MVP_CITY, limit: cacheKey } })
-      .then((res) => mapResponse(res.data?.data) || [])
 
-    const promise = Promise.any([featuredRequest, listRequest])
+    const promise = featuredRequest.catch(() => axiosClient
+      .get('/client/getPropertyList', { params: { cityName: MVP_CITY, limit: cacheKey } })
+      .then((res) => mapPublicResponse(res.data?.data) || [])
+      .catch(() => mapPublicResponse(demoProperties.slice(0, cacheKey))))
       .then((items) => {
         featuredPropertiesCache = { limit: cacheKey, items }
         return items
@@ -287,8 +449,12 @@ const propertyApi = {
   },
 
   // Popular: full marketplace list for secondary pages/sections.
-  popular: () => axiosClient.get('/client/getPropertyList', { params: { cityName: MVP_CITY } }).then((res) => mapResponse(res.data && res.data.data)),
-  all: (params) => axiosClient.get('/client/getAllPropertyList', { params: { ...params, cityName: MVP_CITY } }).then((res) => mapResponse(res.data && res.data.data)),
+  popular: () => isDemoPropertyMode()
+    ? Promise.resolve(mapPublicResponse(demoProperties))
+    : axiosClient.get('/client/getPropertyList', { params: { cityName: MVP_CITY } }).then((res) => mapPublicResponse(res.data && res.data.data)),
+  all: (params = {}) => isDemoPropertyMode(params)
+    ? Promise.resolve(mapPublicResponse(filterDemoProperties(params)))
+    : axiosClient.get('/client/getAllPropertyList', { params: { ...params, cityName: MVP_CITY } }).then((res) => mapPublicResponse(res.data && res.data.data)),
   review: ({ id, approvalStatus }) => axiosClient.post('/client/reviewProperty', { id, approvalStatus }).then((res) => {
     if (res.data?.result === 'failure') {
       throw new Error(res.data?.msg || 'Property review was not updated')
@@ -299,21 +465,44 @@ const propertyApi = {
 
   // Try city/area lookups if provided, otherwise return full list
   nearby: (coords) => {
-    if (!coords) return axiosClient.get('/client/getPropertyList', { params: { cityName: MVP_CITY } }).then((res) => mapResponse(res.data && res.data.data))
-    if (coords.areaName) return axiosClient.post('/client/getPropertyByArea', { cityName: MVP_CITY, areaName: coords.areaName }).then((res) => mapResponse(res.data && res.data.data))
-    return axiosClient.post('/client/getPropertyByCity', { cityName: MVP_CITY }).then((res) => mapResponse(res.data && res.data.data))
+    if (isDemoPropertyMode(coords || {})) return Promise.resolve(mapPublicResponse(filterDemoProperties(coords || {})))
+    if (!coords) return axiosClient.get('/client/getPropertyList', { params: { cityName: MVP_CITY } }).then((res) => mapPublicResponse(res.data && res.data.data))
+    if (coords.areaName) return axiosClient.post('/client/getPropertyByArea', { cityName: MVP_CITY, areaName: coords.areaName }).then((res) => mapPublicResponse(res.data && res.data.data))
+    return axiosClient.post('/client/getPropertyByCity', { cityName: MVP_CITY }).then((res) => mapPublicResponse(res.data && res.data.data))
   },
 
   // Shortlist expects userIDFK and propertyIDFK
-  shortlist: ({ userIDFK, propertyIDFK }) => axiosClient.post('/client/addShortlist', { userIDFK, propertyIDFK }).then((res) => res.data && res.data.data),
-  removeShortlist: ({ userIDFK, propertyIDFK }) => axiosClient.post('/client/deleteShortlist', { userIDFK, propertyIDFK }).then((res) => res.data && res.data.data),
+  shortlist: ({ userIDFK, propertyIDFK }) => {
+    if (isStaticDemoPropertyId(propertyIDFK)) {
+      writeDemoShortlistIds(userIDFK, [...readDemoShortlistIds(userIDFK), propertyIDFK])
+      return Promise.resolve(getDemoPropertyById(propertyIDFK))
+    }
+    return axiosClient.post('/client/addShortlist', { userIDFK, propertyIDFK }).then((res) => res.data && res.data.data)
+  },
+  removeShortlist: ({ userIDFK, propertyIDFK }) => {
+    if (isStaticDemoPropertyId(propertyIDFK)) {
+      writeDemoShortlistIds(userIDFK, readDemoShortlistIds(userIDFK).filter((id) => id !== propertyIDFK))
+      return Promise.resolve(1)
+    }
+    return axiosClient.post('/client/deleteShortlist', { userIDFK, propertyIDFK }).then((res) => res.data && res.data.data)
+  },
 
-  shortlistByUser: (userIDFK) => axiosClient.post('/client/getShortlistById', { userIDFK }).then((res) => (res.data?.data || []).map(normalizeShortlistItem)),
+  shortlistByUser: (userIDFK) => {
+    const staticItems = demoShortlistItems(userIDFK)
+    return axiosClient.post('/client/getShortlistById', { userIDFK })
+      .then((res) => [...(res.data?.data || []).map(normalizeShortlistItem), ...staticItems])
+      .catch((error) => {
+        if (staticItems.length) return staticItems
+        throw error
+      })
+  },
 
   // Book visit uses /addVisit (expects userIDFK, propertyIDFK, visitDate)
   bookVisit: ({ userIDFK, propertyIDFK, visitDate, visitTime, moveInPreference }) => axiosClient.post('/client/addVisit', { userIDFK, propertyIDFK, visitDate, visitTime, moveInPreference }).then((res) => res.data && res.data.data),
   expressInterest: ({ userIDFK, propertyIDFK, subject, description, preferredVisitTime, moveInPreference }) => axiosClient.post('/client/addInterest', { userIDFK, propertyIDFK, subject, description, preferredVisitTime, moveInPreference }).then((res) => res.data && res.data.data),
-  reviews: (params) => axiosClient.get('/client/reviews', { params }).then((res) => res.data?.data || []),
+  reviews: (params = {}) => isStaticDemoPropertyId(params.propertyId || params.propertyIDFK)
+    ? Promise.resolve([])
+    : axiosClient.get('/client/reviews', { params }).then((res) => res.data?.data || []),
   addReview: (payload) => axiosClient.post('/client/addReview', payload).then((res) => {
     if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Review could not be saved')
     return res.data?.data
@@ -332,8 +521,12 @@ const propertyApi = {
     if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Property report could not be submitted')
     return res.data?.data
   }),
-  recordViewed: (payload) => axiosClient.post('/client/user/viewed-properties', payload).then((res) => res.data?.data || []),
-  recordComparison: (payload) => axiosClient.post('/client/user/comparison-history', payload).then((res) => {
+  recordViewed: (payload) => isStaticDemoPropertyId(payload?.propertyId)
+    ? Promise.resolve([])
+    : axiosClient.post('/client/user/viewed-properties', payload).then((res) => res.data?.data || []),
+  recordComparison: (payload) => (payload?.propertyIds || []).some(isStaticDemoPropertyId)
+    ? Promise.resolve([])
+    : axiosClient.post('/client/user/comparison-history', payload).then((res) => {
     if (res.data?.result === 'failure') throw new Error(res.data?.msg || 'Comparison history could not be saved')
     return res.data?.data || []
   }),

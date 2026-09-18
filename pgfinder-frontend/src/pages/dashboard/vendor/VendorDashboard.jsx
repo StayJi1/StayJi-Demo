@@ -19,6 +19,7 @@ function OwnerDashboard() {
   const [loading, setLoading] = useState(false)
   const [reply, setReply] = useState('')
   const ownerId = user?._id || user?.id
+  const isDemoOwner = Boolean(user?.isDummy || String(user?.status || '').toLowerCase() === 'demo')
   const { data: messages = [] } = useQuery({
     queryKey: ['owner-admin-messages', ownerId],
     queryFn: () => adminApi.ownerMessages(ownerId, { viewer: 'owner' }),
@@ -84,9 +85,11 @@ function OwnerDashboard() {
             <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">Manage your stay listings and inquiries</h1>
             <p className="mt-2 text-xs text-slate-500">Owner ID: {user?._id ? `SJ-${user._id.toString().slice(-6).toUpperCase()}` : '-'}</p>
           </div>
-          <Button onClick={() => navigate('/dashboard/owner/add-property')}>New property</Button>
+          {isDemoOwner ? <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-2 text-sm text-amber-100">Shared demo · read-only listings</span> : <Button onClick={() => navigate('/dashboard/owner/add-property')}>New property</Button>}
         </div>
       </header>
+
+      {isDemoOwner ? <Card className="border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">Property creation, edits, vacancy changes, and deletion are disabled for this shared demo owner account.</Card> : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
@@ -98,7 +101,7 @@ function OwnerDashboard() {
           { label: 'Subscription', icon: <FiCreditCard />, onClick: () => document.getElementById('owner-subscription')?.scrollIntoView({ behavior: 'smooth' }) },
           { label: 'Profile', icon: <FiUser />, onClick: () => navigate('/dashboard/profile') },
           { label: 'Settings', icon: <FiSettings />, onClick: () => navigate('/dashboard/profile') },
-        ].map((item) => (
+        ].filter((item) => !isDemoOwner || item.label !== 'Add Property').map((item) => (
           <button key={item.label} type="button" onClick={item.onClick} className="rounded-2xl border border-slate-800 bg-surface-800/90 p-4 text-left text-slate-200 transition hover:border-accent-500">
             <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-accent-400">{item.icon}</span>
             <p className="mt-3 font-semibold text-white">{item.label}</p>
@@ -193,7 +196,7 @@ function OwnerDashboard() {
                 </div>
                 <div className="flex flex-wrap gap-2 sm:justify-end">
                   <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEye /> View</button>
-                  <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}/edit`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEdit2 /> Edit</button>
+                  {!isDemoOwner ? <button type="button" onClick={() => navigate(`/dashboard/owner/properties/${property.id || property._id}/edit`)} className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-accent-500"><FiEdit2 /> Edit</button> : null}
                 </div>
               </div>
             ))}
@@ -239,7 +242,7 @@ function OwnerDashboard() {
               <p className="font-semibold text-white">{item.propertyId?.propertyName || 'StayJi property'} · {item.status}</p>
               <p className="mt-1">Commission ₹{item.commissionAmount || 0} · Cashback ₹{item.cashbackAmount || 0}</p>
               <p className="mt-1 text-slate-500">Joining: {item.joiningDate || '-'} · Owner confirmation: {item.ownerConfirmed ? 'Done' : 'Pending'}</p>
-              {!item.ownerConfirmed ? (
+              {!item.ownerConfirmed && !isDemoOwner ? (
                 <button type="button" onClick={() => ownerConfirmMutation.mutate(item._id)} className="mt-3 rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200">
                   Tenant joined successfully
                 </button>

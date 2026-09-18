@@ -6,6 +6,7 @@ import authService from '../../../services/authService'
 
 function UserProfilePage() {
   const { user, updateProfile, status, error, logout } = useAuth()
+  const isSharedDemoAccount = Boolean(user?.isDummy || String(user?.status || '').toLowerCase() === 'demo')
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -48,6 +49,10 @@ function UserProfilePage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (isSharedDemoAccount) {
+      setSuccess('This shared demo profile is read-only.')
+      return
+    }
     const cleanContact = form.contact.replace(/\D/g, '')
     if (cleanContact && !/^[6-9]\d{9}$/.test(cleanContact)) {
       setSuccess('Enter a valid 10 digit Indian mobile number.')
@@ -99,6 +104,8 @@ function UserProfilePage() {
 
       <Card className="p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {isSharedDemoAccount ? <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">This shared demo profile is read-only so it remains consistent for every visitor.</p> : null}
+          <fieldset disabled={isSharedDemoAccount} className="space-y-6 disabled:opacity-70">
           <div className="grid gap-6 sm:grid-cols-2">
             <label className="block text-sm text-slate-200">
               <span className="mb-2 block text-slate-300">First name</span>
@@ -200,10 +207,11 @@ function UserProfilePage() {
           <Button type="submit" className="w-full">
             {status === 'loading' ? 'Saving…' : 'Save changes'}
           </Button>
+          </fieldset>
         </form>
       </Card>
 
-      {!user?.isDummy ? (
+      {!isSharedDemoAccount ? (
         <Card className="p-8">
           <form onSubmit={handlePasswordChange} className="space-y-6">
             <div>

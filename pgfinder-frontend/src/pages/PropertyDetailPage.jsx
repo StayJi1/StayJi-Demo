@@ -194,6 +194,11 @@ function PropertyDetailPage() {
       navigate('/login', { replace: true })
       return
     }
+    if (property?.isStaticDemo) {
+      setActionMessage('This is a sample listing. Send your enquiry to the StayJi team to continue the demo.')
+      openWhatsAppEnquiry()
+      return
+    }
     try {
       const ownerId = property.ownerId || property.vendorId?._id || property.vendorId || property.userIDFK?._id || property.userIDFK
       const chat = await propertyService.sendChat({
@@ -220,6 +225,11 @@ function PropertyDetailPage() {
     setActionMessage('')
     if (!user || !user._id) {
       navigate('/login', { replace: true })
+      return
+    }
+    if (property?.isStaticDemo) {
+      setActionMessage('This is a sample listing. Send your callback request to the StayJi team to continue the demo.')
+      openWhatsAppEnquiry()
       return
     }
     try {
@@ -274,6 +284,11 @@ function PropertyDetailPage() {
       navigate('/login', { replace: true })
       return
     }
+    if (property?.isStaticDemo) {
+      setActionMessage('This is a sample listing. Send your preferred visit time to the StayJi team to continue the demo.')
+      openWhatsAppEnquiry()
+      return
+    }
     if (!leadPrefs.preferredVisitTime) {
       setActionMessage('Select a visit date and time before booking.')
       return
@@ -313,6 +328,10 @@ function PropertyDetailPage() {
       return
     }
     setActionMessage('')
+    if (property?.isStaticDemo) {
+      setActionMessage('This is a frontend-only sample listing and cannot be reported to an owner record.')
+      return
+    }
     try {
       await propertyService.reportProperty({
         reportedBy: user._id,
@@ -331,6 +350,10 @@ function PropertyDetailPage() {
     event.preventDefault()
     if (!user || !user._id) {
       navigate('/login', { replace: true })
+      return
+    }
+    if (property?.isStaticDemo) {
+      setMoveInMessage('Move-in records are available only for live owner listings. This sample listing remains frontend-only.')
       return
     }
     const payload = new FormData()
@@ -357,6 +380,10 @@ function PropertyDetailPage() {
       return
     }
     setReviewMessage('')
+    if (property?.isStaticDemo) {
+      setReviewMessage('Reviews are available only for live owner listings. This sample listing remains frontend-only.')
+      return
+    }
     try {
       const payload = {
         userIDFK: user._id,
