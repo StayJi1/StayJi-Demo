@@ -134,6 +134,9 @@ function PropertyDetailPage() {
   const isAdmin = role === 'admin'
   const isOwnerView = role === 'owner'
   const isConsumerView = !isAdmin && !isOwnerView
+  const isSharedDemoAccount = Boolean(
+    user?.isDummy || String(user?.status || '').toLowerCase() === 'demo'
+  )
 
   useEffect(() => {
     if (!property || role !== 'owner') return
@@ -611,10 +614,14 @@ function PropertyDetailPage() {
               <div className="mt-6 rounded-3xl border border-accent-500/40 bg-accent-500/10 p-5 text-slate-200">
                 <p className="font-semibold text-white">Owner visit-slot controls</p>
                 <p className="mt-2 text-sm text-slate-400">Users see your live vacancy and availability from the listing. Update beds, vacancy status, and available-from date from your owner property edit or occupancy controls.</p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <Button onClick={() => navigate(`/dashboard/owner/properties/${property._id || property.id}/edit`)}>Update listing</Button>
-                  <Button variant="secondary" onClick={() => navigate(`/dashboard/owner/leads?propertyId=${property._id || property.id}`)}>Open leads</Button>
-                </div>
+                {isSharedDemoAccount ? (
+                  <p className="mt-4 text-sm font-medium text-amber-200">This shared demo listing is read-only.</p>
+                ) : (
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <Button onClick={() => navigate(`/dashboard/owner/properties/${property._id || property.id}/edit`)}>Update listing</Button>
+                    <Button variant="secondary" onClick={() => navigate(`/dashboard/owner/leads?propertyId=${property._id || property.id}`)}>Open leads</Button>
+                  </div>
+                )}
               </div>
             ) : (
               <>
